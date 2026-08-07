@@ -1,18 +1,60 @@
 # MindVault
 
+AI-powered personal knowledge management platform for developers. Goes beyond a bookmark manager: captures resources from multiple sources, enriches them with AI-generated summaries/tags/embeddings, and makes them retrievable via semantic search instead of manual folders.
+
+Built solo — as both a portfolio piece and a university project proposal.
+
 ## Stack
-- Runtime: Bun
-- Backend: Express + TypeScript
-- ORM: Drizzle (Postgres + pgvector)
-- Queue: BullMQ + Redis
-- Storage: Cloudinary
-- AI: Gemini API (free tier) via Google AI Studio
-- Frontend: Next.js + shadcn/ui
+
+- **Runtime**: Bun
+- **Backend**: Express + TypeScript
+- **ORM**: Drizzle (raw SQL access for pgvector queries, no generated client)
+- **Database**: PostgreSQL 18 (`pgvector/pgvector:pg18` Docker image), pgvector extension for embeddings
+- **Queue**: BullMQ + Redis (planned — not yet implemented)
+- **Object storage**: Cloudinary (planned — not yet implemented; only needed for uploaded files like PDFs/screenshots)
+- **AI**: Gemini API free tier (Flash model) via Google AI Studio
+- **Frontend**: Next.js + shadcn/ui (kept at defaults for now — visual polish deferred until backend is solid)
+- **Validation**: Zod
+- **Future**: browser extension (after core web app is complete), built as a thin client against the same API
 
 ## Structure
-- /server — Express API
-- /client — Next.js frontend
 
-## Commands
-- `bun run dev` (in /server) — start dev server
-- `bunx drizzle-kit generate` / `migrate` — schema migrations
+```
+mindvault/
+  api/               Express API
+    src/
+      controllers/      Request handlers — business logic lives here
+      routes/           Express routers — map paths to controllers only, no logic
+      schemas/          Zod validation schemas
+      db/
+        schema.ts       Drizzle table definitions
+        index.ts         DB client (Drizzle + pg Pool)
+        seed.ts          Dev-only seed script
+    drizzle.config.ts
+    drizzle/             Generated migrations
+  client/               Next.js frontend (not yet started)
+  docker-compose.yml     Postgres (pgvector) + Redis
+  AGENTS.md
+  context.md
+```
+
+## Conventions
+
+- Routes contain **no logic** — they only wire `path -> controller function`.
+- Controllers hold request/response handling and call into `db` directly for now (no separate service/repository layer yet — add one only if controllers start getting complex).
+- Use Drizzle's query builder directly for pgvector similarity queries (`ORDER BY embedding <=> $1`) rather than working around it — this is the main reason Drizzle was chosen over Prisma.
+- No monorepo tooling (no Turborepo/Nx/pnpm workspaces). `api/` and `client/` are plain sibling folders, each with their own `package.json`. Revisit only if type-sharing between them becomes painful.
+- Don't add new dependencies without a clear reason — keep the stack lean, this is a solo project.
+
+## Commands (api)
+
+- `bun run dev` — start dev server with watch mode
+- `bun run db:seed` — populate DB with sample resources/tags for local testing
+- `bun run db:generate` — generate a new migration from schema changes
+- `bun run db:migrate` — apply pending migrations
+- `docker compose up -d` — start Postgres + Redis
+- `docker compose down -v` — full reset (wipes DB volume)
+
+## Current status
+
+CRUD layer for `resources` is working (`POST /resources`, `GET /resources`, `GET /resources/:id`), with controller/route separation and a seed script. No AI processing, extraction, queue, or frontend yet. See `context.md` for full history and next steps.
