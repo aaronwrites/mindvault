@@ -1,8 +1,9 @@
 import type { Request, Response } from "express";
 import { db } from "../db";
-import { resources } from "../db/schema";
+import { resources, tags, resourceTags } from "../db/schema";
 import { createResourceSchema } from "../schemas/resource";
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, inArray } from "drizzle-orm";
+import { extractResourceMetadata } from "../lib/ai/gemini";
 
 export const createResource = async (req: Request, res: Response) => {
     const parsed = createResourceSchema.safeParse(req.body);
@@ -10,10 +11,53 @@ export const createResource = async (req: Request, res: Response) => {
         return res.status(400).json({ error: parsed.error.flatten() });
     }
 
-    const [resource] = await db
+    let [resource] = await db
         .insert(resources)
         .values(parsed.data)
         .returning();
+
+    if (!resource) return res.status(500).json({
+        error: "Error while creating resource"
+    })
+
+    try {
+        const metadata = await extractResourceMetadata(resource.title, resource.url);
+        console.log(metadata);
+        const updated = await db
+            .update(resources)
+            .set({
+                summary: metadata.summary,
+                metadata: {
+                    content_type: metadata.content_type,
+                    difficulty: metadata.difficulty,
+                    technologies: metadata.technologies,
+
+                }
+            })
+            .where(eq(resources.id, resource.id))
+            .returning();
+        resource = updated[0];
+
+        if (metadata.tags && metadata.tags.length > 0) {
+            await db.insert(tags)
+                .values(metadata.tags.map(t => ({ name: t })))
+                .onConflictDoNothing();
+
+            const insertedTags = await db.select()
+                .from(tags)
+                .where(inArray(tags.name, metadata.tags));
+
+            if (insertedTags.length > 0) {
+                await db.insert(resourceTags)
+                    .values(insertedTags.map(t => ({
+                        resourceId: resource?.id,
+                        tagId: t.id
+                    })));
+            }
+        }
+    } catch (error) {
+        console.error("Failed to extract metadata from AI:", error);
+    }
 
     res.status(201).json(resource);
 };
