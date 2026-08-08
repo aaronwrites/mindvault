@@ -29,9 +29,6 @@ export const createResource = async (req: Request, res: Response) => {
                 summary: metadata.summary,
                 metadata: {
                     content_type: metadata.content_type,
-                    difficulty: metadata.difficulty,
-                    technologies: metadata.technologies,
-
                 }
             })
             .where(eq(resources.id, resource.id))
