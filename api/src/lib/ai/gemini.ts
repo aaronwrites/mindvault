@@ -19,25 +19,13 @@ const responseSchema: Schema = {
             },
             description: "A list of relevant tags or keywords (lowercase)",
         },
-        technologies: {
-            type: Type.ARRAY,
-            items: {
-                type: Type.STRING,
-            },
-            description: "Technologies, languages, or frameworks mentioned",
-        },
         content_type: {
             type: Type.STRING,
-            enum: ["article", "video", "documentation", "repository", "note"],
+            enum: ["article", "video", "documentation", "repository", "note", "url"],
             description: "The type of content, e.g., 'article', 'video', 'documentation', 'repository'",
         },
-        difficulty: {
-            type: Type.STRING,
-            enum: ["beginner", "intermediate", "advanced"],
-            description: "Estimated difficulty or target audience level, e.g., 'beginner', 'intermediate', 'advanced'",
-        },
     },
-    required: ["summary", "tags", "technologies", "content_type", "difficulty"],
+    required: ["summary", "tags", "content_type"],
 };
 
 
@@ -49,7 +37,6 @@ function buildPrompt(title: string, url: string | null): string {
     Note: full content extraction is not yet implemented — base your analysis on the title and URL only. If the title/URL don't give enough signal for a confident summary, keep the summary short and general rather than inventing specifics you can't know.
     Guidelines:
     - tags: 3-6 specific, lowercase, single-or-hyphenated words (e.g. "react-hooks", not "React Hooks Tutorial")
-    - technologies: only include ones clearly implied by the title/URL/domain (e.g. a github.com/vercel/next.js URL implies "Next.js"), leave empty if genuinely unclear
     - summary: 1-2 sentences, don't pad with generic filler if you don't have enough signal`;
 }
 
@@ -65,7 +52,7 @@ export async function extractResourceMetadata(title: string, url: string | null)
             config: {
                 responseMimeType: "application/json",
                 responseSchema,
-                temperature: 0.3,
+                temperature: 0.2,
             },
         });
     } catch (err) {
