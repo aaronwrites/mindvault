@@ -5,6 +5,32 @@ import { createResourceSchema } from "../schemas/resource";
 import { desc, eq, inArray } from "drizzle-orm";
 import { extractResourceMetadata } from "../lib/ai/gemini";
 
+const attachTags = async <T extends { id: number }>(resourceRows: T[]) => {
+    if (resourceRows.length === 0) return [];
+
+    const tagRows = await db
+        .select({
+            resourceId: resourceTags.resourceId,
+            name: tags.name,
+        })
+        .from(resourceTags)
+        .innerJoin(tags, eq(resourceTags.tagId, tags.id))
+        .where(inArray(resourceTags.resourceId, resourceRows.map(resource => resource.id)));
+
+    const tagsByResource = new Map<number, string[]>();
+    for (const tag of tagRows) {
+        if (tag.resourceId === null) continue;
+        const resourceTagNames = tagsByResource.get(tag.resourceId) ?? [];
+        resourceTagNames.push(tag.name);
+        tagsByResource.set(tag.resourceId, resourceTagNames);
+    }
+
+    return resourceRows.map(resource => ({
+        ...resource,
+        tags: tagsByResource.get(resource.id) ?? [],
+    }));
+};
+
 export const createResource = async (req: Request, res: Response) => {
     const parsed = createResourceSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -19,6 +45,7 @@ export const createResource = async (req: Request, res: Response) => {
     if (!resource) return res.status(500).json({
         error: "Error while creating resource"
     })
+    const resourceId = resource.id;
 
     try {
         const metadata = await extractResourceMetadata(resource.title, resource.url);
@@ -31,9 +58,9 @@ export const createResource = async (req: Request, res: Response) => {
                     content_type: metadata.content_type,
                 }
             })
-            .where(eq(resources.id, resource.id))
+            .where(eq(resources.id, resourceId))
             .returning();
-        resource = updated[0];
+        if (updated[0]) resource = updated[0];
 
         if (metadata.tags && metadata.tags.length > 0) {
             await db.insert(tags)
@@ -47,7 +74,7 @@ export const createResource = async (req: Request, res: Response) => {
             if (insertedTags.length > 0) {
                 await db.insert(resourceTags)
                     .values(insertedTags.map(t => ({
-                        resourceId: resource?.id,
+                        resourceId,
                         tagId: t.id
                     })));
             }
@@ -56,7 +83,8 @@ export const createResource = async (req: Request, res: Response) => {
         console.error("Failed to extract metadata from AI:", error);
     }
 
-    res.status(201).json(resource);
+    const [resourceWithTags] = await attachTags([resource]);
+    res.status(201).json(resourceWithTags);
 };
 
 export const listResources = async (_req: Request, res: Response) => {
@@ -65,7 +93,7 @@ export const listResources = async (_req: Request, res: Response) => {
         .from(resources)
         .orderBy(desc(resources.createdAt));
 
-    res.json(all);
+    res.json(await attachTags(all));
 };
 
 export const getResource = async (req: Request, res: Response) => {
@@ -78,5 +106,6 @@ export const getResource = async (req: Request, res: Response) => {
         .where(eq(resources.id, id));
 
     if (!resource) return res.status(404).json({ error: "Not found" });
-    res.json(resource);
+    const [resourceWithTags] = await attachTags([resource]);
+    res.json(resourceWithTags);
 };

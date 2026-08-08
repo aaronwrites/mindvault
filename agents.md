@@ -32,7 +32,7 @@ mindvault/
         seed.ts          Dev-only seed script
     drizzle.config.ts
     drizzle/             Generated migrations
-  client/               Next.js frontend (not yet started)
+  client/               Next.js frontend using shadcn/ui components
   docker-compose.yml     Postgres (pgvector) + Redis
   AGENTS.md
   context.md
@@ -45,6 +45,7 @@ mindvault/
 - Use Drizzle's query builder directly for pgvector similarity queries (`ORDER BY embedding <=> $1`) rather than working around it — this is the main reason Drizzle was chosen over Prisma.
 - No monorepo tooling (no Turborepo/Nx/pnpm workspaces). `api/` and `client/` are plain sibling folders, each with their own `package.json`. Revisit only if type-sharing between them becomes painful.
 - Don't add new dependencies without a clear reason — keep the stack lean, this is a solo project.
+- Use installed shadcn/ui components for frontend UI elements wherever an appropriate component exists. Add components through the shadcn CLI when needed; use custom Tailwind markup only for layout or when shadcn has no suitable primitive.
 
 ## Commands (api)
 
@@ -57,4 +58,4 @@ mindvault/
 
 ## Current status
 
-CRUD layer for `resources` is working (`POST /resources`, `GET /resources`, `GET /resources/:id`), with controller/route separation and a seed script. No AI processing, extraction, queue, or frontend yet. See `context.md` for full history and next steps.
+CRUD and synchronous Gemini enrichment are working for `resources`, and resource responses include related tags. A minimal Next.js frontend supports creating and listing resource cards. Content extraction, embeddings/search, queues, and auth are not implemented yet. See `CONTEXT.md` for full history and next steps.
