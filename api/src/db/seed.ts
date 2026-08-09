@@ -1,5 +1,6 @@
 import { db } from "./index";
-import { resources, tags, resourceTags } from "./schema";
+import { embeddings, resources, tags, resourceTags } from "./schema";
+import { generateResourceEmbedding } from "../lib/ai/embeddings";
 
 async function seed() {
     console.log("Seeding database...");
@@ -39,6 +40,12 @@ async function seed() {
         { resourceId: reactRepo?.id, tagId: reactTag?.id },
         { resourceId: reactRepo?.id, tagId: jsTag?.id },
     ]);
+
+    for (const resource of [closures, dockerGuide, reactRepo]) {
+        if (!resource) continue;
+        const embedding = await generateResourceEmbedding(resource);
+        await db.insert(embeddings).values({ resourceId: resource.id, embedding });
+    }
 
     console.log("Seed complete.");
     process.exit(0);

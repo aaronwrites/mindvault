@@ -1,35 +1,11 @@
 import type { Request, Response } from "express";
 import { db } from "../db";
-import { resources, tags, resourceTags } from "../db/schema";
+import { embeddings, resources, tags, resourceTags } from "../db/schema";
 import { createResourceSchema } from "../schemas/resource";
 import { desc, eq, inArray } from "drizzle-orm";
 import { extractResourceMetadata } from "../lib/ai/gemini";
-
-const attachTags = async <T extends { id: number }>(resourceRows: T[]) => {
-    if (resourceRows.length === 0) return [];
-
-    const tagRows = await db
-        .select({
-            resourceId: resourceTags.resourceId,
-            name: tags.name,
-        })
-        .from(resourceTags)
-        .innerJoin(tags, eq(resourceTags.tagId, tags.id))
-        .where(inArray(resourceTags.resourceId, resourceRows.map(resource => resource.id)));
-
-    const tagsByResource = new Map<number, string[]>();
-    for (const tag of tagRows) {
-        if (tag.resourceId === null) continue;
-        const resourceTagNames = tagsByResource.get(tag.resourceId) ?? [];
-        resourceTagNames.push(tag.name);
-        tagsByResource.set(tag.resourceId, resourceTagNames);
-    }
-
-    return resourceRows.map(resource => ({
-        ...resource,
-        tags: tagsByResource.get(resource.id) ?? [],
-    }));
-};
+import { generateResourceEmbedding } from "../lib/ai/embeddings";
+import { attachTags } from "../lib/resource-tags";
 
 export const createResource = async (req: Request, res: Response) => {
     const parsed = createResourceSchema.safeParse(req.body);
@@ -81,6 +57,13 @@ export const createResource = async (req: Request, res: Response) => {
         }
     } catch (error) {
         console.error("Failed to extract metadata from AI:", error);
+    }
+
+    try {
+        const embedding = await generateResourceEmbedding(resource);
+        await db.insert(embeddings).values({ resourceId, embedding });
+    } catch (error) {
+        console.error("Failed to generate resource embedding:", error);
     }
 
     const [resourceWithTags] = await attachTags([resource]);

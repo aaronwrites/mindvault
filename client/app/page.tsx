@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { ResourceCard } from "@/components/resource-card";
 import { ResourceForm } from "@/components/resource-form";
+import { SearchForm } from "@/components/search-form";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -14,13 +15,16 @@ export default function Home() {
   const [resources, setResources] = useState<Resource[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [activeQuery, setActiveQuery] = useState<string | null>(null);
 
   const loadResources = useCallback(async () => {
     try {
+      setIsLoading(true);
       setError(null);
       const response = await fetch(`${API_URL}/resources`);
       if (!response.ok) throw new Error("Could not load your resources.");
       setResources(await response.json());
+      setActiveQuery(null);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Could not load your resources.");
     } finally {
@@ -67,15 +71,28 @@ export default function Home() {
 
       <ResourceForm
         apiUrl={API_URL}
-        onCreated={(resource) => setResources((current) => [resource, ...current])}
+        onCreated={() => void loadResources()}
+      />
+
+      <SearchForm
+        apiUrl={API_URL}
+        onResults={(query, results) => {
+          setError(null);
+          setActiveQuery(query);
+          setResources(results);
+        }}
+        onClear={() => void loadResources()}
+        onError={setError}
       />
 
       <section aria-labelledby="resources-heading" className="space-y-5">
         <div className="flex items-end justify-between gap-4">
           <div>
-            <h2 id="resources-heading" className="text-2xl font-semibold tracking-tight">Your resources</h2>
+            <h2 id="resources-heading" className="text-2xl font-semibold tracking-tight">
+              {activeQuery ? `Results for “${activeQuery}”` : "Your resources"}
+            </h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              {resources.length} {resources.length === 1 ? "resource" : "resources"} saved
+              {resources.length} {resources.length === 1 ? "resource" : "resources"} {activeQuery ? "found" : "saved"}
             </p>
           </div>
           <Button
@@ -100,7 +117,7 @@ export default function Home() {
         {!isLoading && !error && resources.length === 0 && (
           <Card>
             <CardContent className="py-3 text-center text-muted-foreground">
-              Your vault is empty. Add the first link above.
+              {activeQuery ? "No semantically similar resources were found." : "Your vault is empty. Add the first link above."}
             </CardContent>
           </Card>
         )}

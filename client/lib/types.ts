@@ -9,4 +9,5 @@ export type Resource = {
   metadata: Record<string, unknown> | null;
   createdAt: string | null;
   tags: string[];
+  distance?: number;
 };
