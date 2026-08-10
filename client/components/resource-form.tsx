@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,11 +20,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { Resource, SourceType } from "@/lib/types";
+import { createResource, resourceKeys } from "@/lib/api";
+import type { SourceType } from "@/lib/types";
 
 type ResourceFormProps = {
-  apiUrl: string;
-  onCreated: (resource: Resource) => void;
+  onCreated: () => void;
 };
 
 const sourceTypes: { value: SourceType; label: string }[] = [
@@ -34,40 +35,25 @@ const sourceTypes: { value: SourceType; label: string }[] = [
   { value: "note", label: "Note" },
 ];
 
-export function ResourceForm({ apiUrl, onCreated }: ResourceFormProps) {
+export function ResourceForm({ onCreated }: ResourceFormProps) {
+  const queryClient = useQueryClient();
   const [title, setTitle] = useState("");
   const [url, setUrl] = useState("");
   const [sourceType, setSourceType] = useState<SourceType>("article");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setIsSubmitting(true);
-    setError(null);
-
-    try {
-      const response = await fetch(`${apiUrl}/resources`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: title.trim(), url: url.trim(), sourceType }),
-      });
-
-      if (!response.ok) {
-        const body = await response.json().catch(() => null);
-        throw new Error(body?.error?.formErrors?.[0] ?? "Could not save this resource.");
-      }
-
-      const resource: Resource = await response.json();
-      onCreated(resource);
+  const createMutation = useMutation({
+    mutationFn: createResource,
+    onSuccess: async () => {
       setTitle("");
       setUrl("");
       setSourceType("article");
-    } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "Could not save this resource.");
-    } finally {
-      setIsSubmitting(false);
-    }
+      onCreated();
+      await queryClient.invalidateQueries({ queryKey: resourceKeys.all });
+    },
+  });
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    createMutation.mutate({ title: title.trim(), url: url.trim(), sourceType });
   }
 
   return (
@@ -121,15 +107,15 @@ export function ResourceForm({ apiUrl, onCreated }: ResourceFormProps) {
             />
           </div>
 
-          {error && (
+          {createMutation.error && (
             <Alert variant="destructive" className="sm:col-span-2">
-              <AlertDescription>{error}</AlertDescription>
+              <AlertDescription>{createMutation.error.message}</AlertDescription>
             </Alert>
           )}
 
           <div className="sm:col-span-2">
-            <Button type="submit" size="lg" disabled={isSubmitting}>
-              {isSubmitting ? "Saving and enriching…" : "Save to MindVault"}
+            <Button type="submit" size="lg" disabled={createMutation.isPending}>
+              {createMutation.isPending ? "Saving and enriching…" : "Save to MindVault"}
             </Button>
           </div>
         </form>

@@ -1,61 +1,37 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ResourceCard } from "@/components/resource-card";
 import { ResourceForm } from "@/components/resource-form";
 import { SearchForm } from "@/components/search-form";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import type { Resource } from "@/lib/types";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+import { API_URL, getResources, resourceKeys, searchResources } from "@/lib/api";
 
 export default function Home() {
-  const [resources, setResources] = useState<Resource[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
   const [activeQuery, setActiveQuery] = useState<string | null>(null);
+  const resourcesQuery = useQuery({
+    queryKey: activeQuery ? resourceKeys.search(activeQuery) : resourceKeys.all,
+    queryFn: () => activeQuery ? searchResources(activeQuery) : getResources(),
+  });
+  const resources = resourcesQuery.data ?? [];
 
-  const loadResources = useCallback(async () => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      const response = await fetch(`${API_URL}/resources`);
-      if (!response.ok) throw new Error("Could not load your resources.");
-      setResources(await response.json());
-      setActiveQuery(null);
-    } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "Could not load your resources.");
-    } finally {
-      setIsLoading(false);
+  function showAllResources() {
+    setActiveQuery(null);
+    void queryClient.invalidateQueries({ queryKey: resourceKeys.all });
+  }
+
+  function search(query: string) {
+    if (query === activeQuery) {
+      void resourcesQuery.refetch();
+      return;
     }
-  }, []);
 
-  useEffect(() => {
-    let isCurrent = true;
-
-    fetch(`${API_URL}/resources`)
-      .then((response) => {
-        if (!response.ok) throw new Error("Could not load your resources.");
-        return response.json() as Promise<Resource[]>;
-      })
-      .then((data) => {
-        if (isCurrent) setResources(data);
-      })
-      .catch((loadError: unknown) => {
-        if (isCurrent) {
-          setError(loadError instanceof Error ? loadError.message : "Could not load your resources.");
-        }
-      })
-      .finally(() => {
-        if (isCurrent) setIsLoading(false);
-      });
-
-    return () => {
-      isCurrent = false;
-    };
-  }, []);
+    setActiveQuery(query);
+  }
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col gap-12 px-6 py-12 sm:px-10 lg:py-20">
@@ -69,20 +45,12 @@ export default function Home() {
         </p>
       </header>
 
-      <ResourceForm
-        apiUrl={API_URL}
-        onCreated={() => void loadResources()}
-      />
+      <ResourceForm onCreated={() => setActiveQuery(null)} />
 
       <SearchForm
-        apiUrl={API_URL}
-        onResults={(query, results) => {
-          setError(null);
-          setActiveQuery(query);
-          setResources(results);
-        }}
-        onClear={() => void loadResources()}
-        onError={setError}
+        onSearch={search}
+        onClear={showAllResources}
+        isSearching={resourcesQuery.isFetching && activeQuery !== null}
       />
 
       <section aria-labelledby="resources-heading" className="space-y-5">
@@ -98,23 +66,24 @@ export default function Home() {
           <Button
             type="button"
             variant="outline"
-            onClick={() => void loadResources()}
+            onClick={showAllResources}
+            disabled={resourcesQuery.isFetching}
           >
             Refresh
           </Button>
         </div>
 
-        {isLoading && (
+        {resourcesQuery.isPending && (
           <Card>
             <CardContent className="py-3 text-center text-muted-foreground">Loading resources…</CardContent>
           </Card>
         )}
-        {error && (
+        {resourcesQuery.error && (
           <Alert variant="destructive">
-            <AlertDescription>{error} Make sure the API is running at {API_URL}.</AlertDescription>
+            <AlertDescription>{resourcesQuery.error.message} Make sure the API is running at {API_URL}.</AlertDescription>
           </Alert>
         )}
-        {!isLoading && !error && resources.length === 0 && (
+        {!resourcesQuery.isPending && !resourcesQuery.error && resources.length === 0 && (
           <Card>
             <CardContent className="py-3 text-center text-muted-foreground">
               {activeQuery ? "No semantically similar resources were found." : "Your vault is empty. Add the first link above."}

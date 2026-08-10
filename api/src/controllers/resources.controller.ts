@@ -25,7 +25,6 @@ export const createResource = async (req: Request, res: Response) => {
 
     try {
         const metadata = await extractResourceMetadata(resource.title, resource.url);
-        console.log(metadata);
         const updated = await db
             .update(resources)
             .set({

@@ -1,6 +1,6 @@
 # MindVault
 
-AI-powered personal knowledge management platform for developers. Goes beyond a bookmark manager: captures resources from multiple sources, enriches them with AI-generated summaries/tags/embeddings, and makes them retrievable via semantic search instead of manual folders.
+AI-powered personal knowledge management platform for users. Goes beyond a bookmark manager: captures resources from multiple sources, enriches them with AI-generated summaries/tags/embeddings, and makes them retrievable via semantic search instead of manual folders.
 
 Built solo — as both a portfolio piece and a university project proposal.
 

@@ -4,37 +4,21 @@ import { FormEvent, useState } from "react";
 import { Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import type { Resource } from "@/lib/types";
 
 type SearchFormProps = {
-  apiUrl: string;
-  onResults: (query: string, results: Resource[]) => void;
+  onSearch: (query: string) => void;
   onClear: () => void;
-  onError: (message: string) => void;
+  isSearching: boolean;
 };
 
-export function SearchForm({ apiUrl, onResults, onClear, onError }: SearchFormProps) {
+export function SearchForm({ onSearch, onClear, isSearching }: SearchFormProps) {
   const [query, setQuery] = useState("");
-  const [isSearching, setIsSearching] = useState(false);
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const trimmedQuery = query.trim();
     if (!trimmedQuery) return;
-
-    setIsSearching(true);
-    try {
-      const response = await fetch(`${apiUrl}/search?q=${encodeURIComponent(trimmedQuery)}`);
-      if (!response.ok) {
-        const body = await response.json().catch(() => null);
-        throw new Error(typeof body?.error === "string" ? body.error : "Could not search your resources.");
-      }
-      onResults(trimmedQuery, await response.json());
-    } catch (searchError) {
-      onError(searchError instanceof Error ? searchError.message : "Could not search your resources.");
-    } finally {
-      setIsSearching(false);
-    }
+    onSearch(trimmedQuery);
   }
 
   function clearSearch() {
