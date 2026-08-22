@@ -30,7 +30,7 @@ const responseSchema: Schema = {
 
 
 function buildPrompt(title: string, url: string | null): string {
-    return `Analyze the following resource and produce structured metadata for a developer's personal knowledge base.
+    return `Analyze the following resource and produce structured metadata for a personal knowledge base.
     Title: ${title}
     ${url ? `URL: ${url}` : "URL: not provided"}
 
@@ -63,14 +63,14 @@ export async function extractResourceMetadata(title: string, url: string | null)
         throw new Error("No text returned from Gemini API");
     }
 
-    let json: unknown;
+    let jsonRes: unknown;
     try {
-        json = JSON.parse(response.text);
+        jsonRes = JSON.parse(response.text);
     } catch {
         throw new Error("Gemini returned invalid JSON");
     }
 
-    const parsed = aiResponseSchema.safeParse(json);
+    const parsed = aiResponseSchema.safeParse(jsonRes);
     if (!parsed.success) {
         throw new Error(`Gemini response failed validation: ${parsed.error.message}`);
     }
