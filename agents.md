@@ -1,6 +1,6 @@
 # MindVault
 
-AI-powered personal knowledge management platform for users. Goes beyond a bookmark manager: captures resources from multiple sources, enriches them with AI-generated summaries/tags/embeddings, and makes them retrievable via semantic search instead of manual folders.
+Source-agnostic personal knowledge management system. MindVault durably captures Knowledge Items, organizes them automatically, and makes them retrievable from vague conceptual memory without requiring manual folders or taxonomy maintenance.
 
 Built solo — as both a portfolio piece and a university project proposal.
 
@@ -10,12 +10,12 @@ Built solo — as both a portfolio piece and a university project proposal.
 - **Backend**: Express + TypeScript
 - **ORM**: Drizzle (raw SQL access for pgvector queries, no generated client)
 - **Database**: PostgreSQL 18 (`pgvector/pgvector:pg18` Docker image), pgvector extension for embeddings
-- **Queue**: BullMQ + Redis (planned — not yet implemented)
-- **Object storage**: Cloudinary (planned — not yet implemented; only needed for uploaded files like PDFs/screenshots)
+- **Background work**: PostgreSQL-backed Processing Attempt queue with a separate worker (planned next)
+- **Object storage**: Deferred until binary Source adapters require it; no provider selected
 - **AI**: Gemini API free tier (Flash model) via Google AI Studio
 - **Frontend**: Next.js + shadcn/ui (kept at defaults for now — visual polish deferred until backend is solid)
 - **Validation**: Zod
-- **Future**: browser extension (after core web app is complete), built as a thin client against the same API
+- **Future**: thin browser capture client immediately after the durable article milestone
 
 ## Structure
 
@@ -33,7 +33,7 @@ mindvault/
     drizzle.config.ts
     drizzle/             Generated migrations
   client/               Next.js frontend using shadcn/ui components
-  docker-compose.yml     Postgres (pgvector) + Redis
+  docker-compose.yml     Postgres (pgvector) + currently unused Redis
   AGENTS.md
   context.md
 ```
@@ -42,7 +42,7 @@ mindvault/
 
 - Routes contain **no logic** — they only wire `path -> controller function`.
 - Controllers hold request/response handling and call into `db` directly for now (no separate service/repository layer yet — add one only if controllers start getting complex).
-- Use Drizzle's query builder directly for pgvector similarity queries (`ORDER BY embedding <=> $1`) rather than working around it — this is the main reason Drizzle was chosen over Prisma.
+- Keep hybrid retrieval in PostgreSQL using pgvector plus PostgreSQL text search; do not add a separate search service without a demonstrated need.
 - No monorepo tooling (no Turborepo/Nx/pnpm workspaces). `api/` and `client/` are plain sibling folders, each with their own `package.json`. Revisit only if type-sharing between them becomes painful.
 - Don't add new dependencies without a clear reason — keep the stack lean, this is a solo project.
 - Use installed shadcn/ui components for frontend UI elements wherever an appropriate component exists. Add components through the shadcn CLI when needed; use custom Tailwind markup only for layout or when shadcn has no suitable primitive.
@@ -58,4 +58,18 @@ mindvault/
 
 ## Current status
 
-CRUD and synchronous Gemini enrichment are working for `resources`, and resource responses include related tags. A minimal Next.js frontend supports creating and listing resource cards. Content extraction, embeddings/search, queues, and auth are not implemented yet. See `CONTEXT.md` for full history and next steps.
+The current implementation is a legacy synchronous prototype: it creates and lists `resources`, infers metadata from title and URL without extracting content, and performs whole-resource vector search. It has no durable Capture/Source/Knowledge Item model, processing lifecycle, Passage retrieval, retries, or authentication. The next authoritative milestone is `.scratch/durable-article-capture-and-retrieval/spec.md`; `CONTEXT.md` is the domain glossary and `docs/adr/` records accepted architectural decisions.
+
+## Agent skills
+
+### Issue tracker
+
+Issues and specs are tracked as local Markdown files under `.scratch/`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Triage uses the default Matt Pocock skill labels. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+This repository uses a single-context domain-doc layout. See `docs/agents/domain.md`.

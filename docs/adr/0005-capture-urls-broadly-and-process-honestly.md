@@ -1,0 +1,3 @@
+# Capture URLs broadly and process honestly
+
+MindVault durably captures any safe public HTTP(S) URL but initially guarantees full processing only for publicly accessible, server-rendered textual articles and documentation. Extraction succeeds only when canonical provenance and meaningful primary text pass quality checks within strict network, redirect, content-type, size, and timeout limits; MindVault does not bypass authentication, paywalls, bot protection, or private-network restrictions. Other Source kinds and inadequate extractions are reported honestly rather than being mislabeled as successfully processed; specialized adapters will expand support incrementally.
