@@ -25,18 +25,27 @@ type ProcessingWorkerOptions = {
     workerId?: string;
     clock?: Clock;
     leaseDurationMs?: number;
+    maxAttempts?: number;
+    retryBaseDelayMs?: number;
+    retryMaxDelayMs?: number;
     handlers: Partial<Record<ProcessingStageKind, ProcessingStageHandler>>;
 };
 
 type ClaimedStageRow = ClaimedProcessingStage & { leaseToken: string };
 
 const systemClock: Clock = { now: () => new Date() };
+const defaultMaxAttempts = 3;
+const defaultRetryBaseDelayMs = 1_000;
+const defaultRetryMaxDelayMs = 60_000;
 
 export function createProcessingWorker({
     database,
     workerId = randomUUID(),
     clock = systemClock,
     leaseDurationMs = 60_000,
+    maxAttempts = defaultMaxAttempts,
+    retryBaseDelayMs = defaultRetryBaseDelayMs,
+    retryMaxDelayMs = defaultRetryMaxDelayMs,
     handlers,
 }: ProcessingWorkerOptions): ProcessingWorker {
     return {
@@ -46,8 +55,12 @@ export function createProcessingWorker({
 
             const handler = handlers[claimedStage.kind];
             if (!handler) return 0;
-            await handler(claimedStage);
-            await completeStage(database, claimedStage);
+            try {
+                await handler(claimedStage);
+                await completeStage(database, claimedStage);
+            } catch {
+                await scheduleRetry(database, claimedStage, clock.now(), maxAttempts, retryBaseDelayMs, retryMaxDelayMs);
+            }
             return 1;
         },
     };
@@ -78,7 +91,10 @@ async function claimEligibleStage(
             LEFT JOIN processing_stages AS prerequisite ON prerequisite.id = stage.prerequisite_stage_id
             WHERE stage.kind IN (${sql.join(handledKinds.map(kind => sql`${kind}`), sql`, `)})
               AND stage.available_at <= ${now}
-              AND stage.status = 'pending'
+              AND (
+                  stage.status = 'pending'
+                  OR (stage.status = 'running' AND stage.lease_expires_at <= ${now})
+              )
               AND (stage.prerequisite_stage_id IS NULL OR prerequisite.status = 'completed')
             ORDER BY stage.available_at, stage.id
             LIMIT 1
@@ -101,6 +117,28 @@ async function completeStage(database: Database, stage: ClaimedStageRow): Promis
     await database.execute(sql`
         UPDATE processing_stages
         SET status = 'completed', lease_token = NULL, lease_expires_at = NULL
+        WHERE id = ${stage.id}
+          AND status = 'running'
+          AND lease_token = ${stage.leaseToken}
+    `);
+}
+
+async function scheduleRetry(
+    database: Database,
+    stage: ClaimedStageRow,
+    now: Date,
+    maxAttempts: number,
+    retryBaseDelayMs: number,
+    retryMaxDelayMs: number,
+): Promise<void> {
+    const exhausted = stage.attemptCount >= maxAttempts;
+    const delayMs = Math.min(retryBaseDelayMs * 2 ** (stage.attemptCount - 1), retryMaxDelayMs);
+    await database.execute(sql`
+        UPDATE processing_stages
+        SET status = ${exhausted ? "failed" : "pending"},
+            available_at = ${new Date(now.getTime() + delayMs)},
+            lease_token = NULL,
+            lease_expires_at = NULL
         WHERE id = ${stage.id}
           AND status = 'running'
           AND lease_token = ${stage.leaseToken}
