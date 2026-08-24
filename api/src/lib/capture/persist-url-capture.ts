@@ -1,4 +1,5 @@
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
+import { eq } from "drizzle-orm";
 import * as schema from "../../db/schema";
 import {
     captureContexts,
@@ -9,6 +10,7 @@ import {
     sources,
 } from "../../db/schema";
 import type { CreateCaptureInput } from "../../schemas/capture";
+import { normalizeCaptureUrl } from "./normalize-capture-url";
 
 const initialStageKinds = [
     "extraction",
@@ -32,13 +34,20 @@ export async function persistUrlCapture(
     input: CreateCaptureInput,
 ): Promise<PersistedCapture> {
     return database.transaction(async transaction => {
-        const [source] = await transaction.insert(sources).values({
+        const normalizedUrl = normalizeCaptureUrl(input.url);
+        const [createdSource] = await transaction.insert(sources).values({
             submittedUrl: input.url,
-            normalizedUrl: input.url,
-        }).returning();
+            normalizedUrl,
+        }).onConflictDoNothing().returning();
+        const source = createdSource ?? (await transaction
+            .select()
+            .from(sources)
+            .where(eq(sources.normalizedUrl, normalizedUrl)))[0];
         if (!source) throw new Error("Source was not created");
 
-        const [knowledgeItem] = await transaction.insert(knowledgeItems).values({ sourceId: source.id }).returning();
+        const knowledgeItem = createdSource
+            ? (await transaction.insert(knowledgeItems).values({ sourceId: source.id }).returning())[0]
+            : (await transaction.select().from(knowledgeItems).where(eq(knowledgeItems.sourceId, source.id)))[0];
         if (!knowledgeItem) throw new Error("Knowledge Item was not created");
 
         const [capture] = await transaction.insert(captures).values({
@@ -55,7 +64,7 @@ export async function persistUrlCapture(
 
         const [attempt] = await transaction.insert(processingAttempts).values({
             knowledgeItemId: knowledgeItem.id,
-            kind: "initial-capture",
+            kind: createdSource ? "initial-capture" : "refresh",
         }).returning();
         if (!attempt) throw new Error("Processing Attempt was not created");
 

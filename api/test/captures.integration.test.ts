@@ -20,6 +20,100 @@ async function startHarness(): Promise<IntegrationHarness> {
 }
 
 describe("URL Capture", () => {
+    test.skipIf(!process.env.TEST_DATABASE_URL)("reuses a mechanically equivalent Source and Knowledge Item while retaining each Capture Context", async () => {
+        const runningHarness = await startHarness();
+
+        const firstResponse = await fetch(`${runningHarness.apiBaseUrl}/captures`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+                url: "https://docs.example.com/guides/capture?topic=queues&utm_source=newsletter#overview",
+                selectedText: "The first source-authored selection.",
+                personalNote: "The first reason this mattered.",
+            }),
+        });
+        const firstCapture = await firstResponse.json() as {
+            captureId: number;
+            sourceId: number;
+            knowledgeItemId: number;
+            processingAttemptId: number;
+        };
+
+        const secondResponse = await fetch(`${runningHarness.apiBaseUrl}/captures`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+                url: "https://docs.example.com/guides/capture?topic=queues&utm_campaign=launch&fbclid=click-id",
+                selectedText: "The later source-authored selection.",
+                personalNote: "The later reason this mattered.",
+            }),
+        });
+        const secondCapture = await secondResponse.json() as {
+            captureId: number;
+            sourceId: number;
+            knowledgeItemId: number;
+            processingAttemptId: number;
+        };
+
+        expect(firstResponse.status).toBe(201);
+        expect(secondResponse.status).toBe(201);
+        expect(secondCapture).toEqual(expect.objectContaining({
+            sourceId: firstCapture.sourceId,
+            knowledgeItemId: firstCapture.knowledgeItemId,
+        }));
+        expect(secondCapture.captureId).not.toBe(firstCapture.captureId);
+        expect(secondCapture.processingAttemptId).not.toBe(firstCapture.processingAttemptId);
+
+        const itemResponse = await fetch(`${runningHarness.apiBaseUrl}/knowledge-items/${firstCapture.knowledgeItemId}`);
+        expect(await itemResponse.json()).toEqual(expect.objectContaining({
+            source: expect.objectContaining({
+                submittedUrl: "https://docs.example.com/guides/capture?topic=queues&utm_source=newsletter#overview",
+                normalizedUrl: "https://docs.example.com/guides/capture?topic=queues",
+            }),
+            captureContexts: [
+                { kind: "selected-source-text", summary: "The first source-authored selection." },
+                { kind: "personal-note", summary: "The first reason this mattered." },
+                { kind: "selected-source-text", summary: "The later source-authored selection." },
+                { kind: "personal-note", summary: "The later reason this mattered." },
+            ],
+            latestAttempt: expect.objectContaining({ kind: "refresh" }),
+        }));
+
+        const { rows } = await runningHarness.database.pool.query<{
+            captures: string;
+            sources: string;
+            knowledgeItems: string;
+        }>(`
+            SELECT
+                (SELECT count(*) FROM captures)::text AS captures,
+                (SELECT count(*) FROM sources)::text AS sources,
+                (SELECT count(*) FROM knowledge_items)::text AS "knowledgeItems"
+        `);
+        expect(rows[0]).toEqual({ captures: "2", sources: "1", knowledgeItems: "1" });
+    });
+
+    test.skipIf(!process.env.TEST_DATABASE_URL)("keeps Sources distinct when normalized URLs differ", async () => {
+        const runningHarness = await startHarness();
+
+        const firstResponse = await fetch(`${runningHarness.apiBaseUrl}/captures`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ url: "https://docs.example.com/guides/capture?page=1" }),
+        });
+        const secondResponse = await fetch(`${runningHarness.apiBaseUrl}/captures`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ url: "https://docs.example.com/guides/capture?page=2" }),
+        });
+        const firstCapture = await firstResponse.json() as { sourceId: number; knowledgeItemId: number };
+        const secondCapture = await secondResponse.json() as { sourceId: number; knowledgeItemId: number };
+
+        expect(firstResponse.status).toBe(201);
+        expect(secondResponse.status).toBe(201);
+        expect(secondCapture.sourceId).not.toBe(firstCapture.sourceId);
+        expect(secondCapture.knowledgeItemId).not.toBe(firstCapture.knowledgeItemId);
+    });
+
     test.skipIf(!process.env.TEST_DATABASE_URL)("durably records a URL Capture and its initial Processing Attempt", async () => {
         const runningHarness = await startHarness();
 
