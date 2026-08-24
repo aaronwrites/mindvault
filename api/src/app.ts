@@ -4,6 +4,7 @@ import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as schema from "./db/schema";
 import { db } from "./db";
 import { capturesRouter } from "./routes/captures";
+import { knowledgeItemsRouter } from "./routes/knowledge-items";
 import { resourcesRouter } from "./routes/resources";
 import { searchRouter } from "./routes/search";
 
@@ -18,6 +19,7 @@ export function createApp({ database = db }: AppDependencies = {}) {
 
     app.use("/resources", resourcesRouter);
     app.use("/captures", capturesRouter(database));
+    app.use("/knowledge-items", knowledgeItemsRouter(database));
     app.use("/search", searchRouter);
     app.get("/health", (_req, res) => res.json({ status: "ok" }));
 

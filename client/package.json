@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "bun test"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
@@ -23,11 +24,16 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.6",
+    "@types/bun": "^1.4.0",
+    "@types/jsdom": "^30.0.0",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.3.0",
+    "jsdom": "^30.0.1",
     "tailwindcss": "^4",
     "typescript": "^5"
   },

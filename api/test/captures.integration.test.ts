@@ -39,13 +39,54 @@ describe("URL Capture", () => {
             sourceId: number;
             knowledgeItemId: number;
             processingAttemptId: number;
+            availability: string;
+            organizationCondition: string;
         };
-        expect(capture).toEqual({
+        expect(capture).toEqual(expect.objectContaining({
             captureId: expect.any(Number),
             sourceId: expect.any(Number),
             knowledgeItemId: expect.any(Number),
             processingAttemptId: expect.any(Number),
-        });
+            availability: "processing",
+            organizationCondition: "processing",
+        }));
+
+        const listResponse = await fetch(`${runningHarness.apiBaseUrl}/knowledge-items`);
+        expect(listResponse.status).toBe(200);
+        expect(await listResponse.json()).toEqual([
+            {
+                id: capture.knowledgeItemId,
+                createdAt: expect.any(String),
+                source: {
+                    id: capture.sourceId,
+                    submittedUrl: "https://docs.example.com/capture",
+                    normalizedUrl: "https://docs.example.com/capture",
+                    kind: "web",
+                },
+                captureContexts: [
+                    { kind: "selected-source-text", summary: "A memorable source-authored detail." },
+                    { kind: "personal-note", summary: "Use this in the retrieval design." },
+                ],
+                availability: "processing",
+                organizationCondition: "processing",
+                recognitionSummary: null,
+                topicTags: [],
+                latestAttempt: {
+                    id: capture.processingAttemptId,
+                    kind: "initial-capture",
+                    status: "pending",
+                    createdAt: expect.any(String),
+                },
+            },
+        ]);
+
+        const detailResponse = await fetch(`${runningHarness.apiBaseUrl}/knowledge-items/${capture.knowledgeItemId}`);
+        expect(detailResponse.status).toBe(200);
+        expect(await detailResponse.json()).toEqual(expect.objectContaining({
+            id: capture.knowledgeItemId,
+            availability: "processing",
+            latestAttempt: expect.objectContaining({ id: capture.processingAttemptId }),
+        }));
 
         const { rows } = await runningHarness.database.pool.query<{
             captures: string;
