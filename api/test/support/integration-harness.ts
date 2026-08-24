@@ -12,8 +12,12 @@ export type IntegrationHarness = {
     cleanup(): Promise<void>;
 };
 
-export async function createIntegrationHarness(createApp: (database: IntegrationDatabase) => Express, worker: EligibleWorker): Promise<IntegrationHarness> {
+export async function createIntegrationHarness(
+    createApp: (database: IntegrationDatabase) => Express,
+    worker: EligibleWorker | ((database: IntegrationDatabase) => EligibleWorker),
+): Promise<IntegrationHarness> {
     const database = await createIntegrationDatabase();
+    const resolvedWorker = typeof worker === "function" ? worker(database) : worker;
     const app = createApp(database);
     const sourceServer = await startSourceFixtureServer();
     const server: Server = await new Promise((resolve, reject) => {
@@ -27,7 +31,7 @@ export async function createIntegrationHarness(createApp: (database: Integration
         database,
         sourceServer,
         apiBaseUrl: `http://127.0.0.1:${address.port}`,
-        drainWorker: () => drainEligibleWork(worker),
+        drainWorker: () => drainEligibleWork(resolvedWorker),
         async cleanup() {
             await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
             await sourceServer.close();

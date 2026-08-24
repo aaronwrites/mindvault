@@ -5,6 +5,7 @@
   "private": true,
   "scripts": {
     "dev": "bun --watch src/index.ts",
+    "worker": "bun src/worker.ts",
     "test": "bun test",
     "typecheck": "tsc --noEmit",
     "db:generate": "bunx drizzle-kit generate",

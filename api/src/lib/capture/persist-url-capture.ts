@@ -11,16 +11,7 @@ import {
 } from "../../db/schema";
 import type { CreateCaptureInput } from "../../schemas/capture";
 import { normalizeCaptureUrl } from "./normalize-capture-url";
-
-const initialStageKinds = [
-    "extraction",
-    "snapshot-persistence",
-    "passage-generation",
-    "lexical-indexing",
-    "semantic-indexing",
-    "recognition-summary-generation",
-    "topic-tag-generation",
-] as const;
+import { processingStageKinds, type ProcessingStageKind } from "../processing/stages";
 
 export type PersistedCapture = {
     captureId: number;
@@ -69,7 +60,7 @@ export async function persistUrlCapture(
         if (!attempt) throw new Error("Processing Attempt was not created");
 
         const stages = new Map<string, number>();
-        for (const kind of initialStageKinds) {
+        for (const kind of processingStageKinds) {
             const prerequisite = prerequisiteFor(kind);
             const prerequisiteStageId = prerequisite ? stages.get(prerequisite) : undefined;
             const [stage] = await transaction.insert(processingStages).values({
@@ -90,7 +81,7 @@ export async function persistUrlCapture(
     });
 }
 
-function prerequisiteFor(kind: typeof initialStageKinds[number]): string | undefined {
+function prerequisiteFor(kind: ProcessingStageKind): ProcessingStageKind | undefined {
     switch (kind) {
         case "snapshot-persistence":
             return "extraction";
