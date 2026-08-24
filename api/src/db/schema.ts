@@ -1,4 +1,4 @@
-import { pgTable, serial, text, timestamp, jsonb, integer, vector } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp, jsonb, integer, vector, uniqueIndex } from "drizzle-orm/pg-core";
 
 export const EMBEDDING_DIMENSIONS = 768;
 
@@ -28,4 +28,54 @@ export const embeddings = pgTable("embeddings", {
         .references(() => resources.id, { onDelete: "cascade" }),
     embedding: vector("embedding", { dimensions: EMBEDDING_DIMENSIONS }).notNull(),
     createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const sources = pgTable("sources", {
+    id: serial("id").primaryKey(),
+    submittedUrl: text("submitted_url").notNull(),
+    normalizedUrl: text("normalized_url").notNull(),
+    sourceKind: text("source_kind").notNull().default("web"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+}, table => [uniqueIndex("sources_normalized_url_unique").on(table.normalizedUrl)]);
+
+export const knowledgeItems = pgTable("knowledge_items", {
+    id: serial("id").primaryKey(),
+    sourceId: integer("source_id").notNull().references(() => sources.id),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+}, table => [uniqueIndex("knowledge_items_source_id_unique").on(table.sourceId)]);
+
+export const captures = pgTable("captures", {
+    id: serial("id").primaryKey(),
+    sourceId: integer("source_id").notNull().references(() => sources.id),
+    knowledgeItemId: integer("knowledge_item_id").notNull().references(() => knowledgeItems.id),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const captureContexts = pgTable("capture_contexts", {
+    id: serial("id").primaryKey(),
+    captureId: integer("capture_id").notNull().references(() => captures.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(),
+    text: text("text").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const processingAttempts = pgTable("processing_attempts", {
+    id: serial("id").primaryKey(),
+    knowledgeItemId: integer("knowledge_item_id").notNull().references(() => knowledgeItems.id),
+    kind: text("kind").notNull(),
+    status: text("status").notNull().default("pending"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const processingStages = pgTable("processing_stages", {
+    id: serial("id").primaryKey(),
+    processingAttemptId: integer("processing_attempt_id").notNull().references(() => processingAttempts.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(),
+    status: text("status").notNull().default("pending"),
+    prerequisiteStageId: integer("prerequisite_stage_id"),
+    availableAt: timestamp("available_at").notNull().defaultNow(),
+    leaseToken: text("lease_token"),
+    leaseExpiresAt: timestamp("lease_expires_at"),
+    attemptCount: integer("attempt_count").notNull().default(0),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
 });

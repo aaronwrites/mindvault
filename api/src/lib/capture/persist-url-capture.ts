@@ -1,0 +1,98 @@
+import type { NodePgDatabase } from "drizzle-orm/node-postgres";
+import * as schema from "../../db/schema";
+import {
+    captureContexts,
+    captures,
+    knowledgeItems,
+    processingAttempts,
+    processingStages,
+    sources,
+} from "../../db/schema";
+import type { CreateCaptureInput } from "../../schemas/capture";
+
+const initialStageKinds = [
+    "extraction",
+    "snapshot-persistence",
+    "passage-generation",
+    "lexical-indexing",
+    "semantic-indexing",
+    "recognition-summary-generation",
+    "topic-tag-generation",
+] as const;
+
+export type PersistedCapture = {
+    captureId: number;
+    sourceId: number;
+    knowledgeItemId: number;
+    processingAttemptId: number;
+};
+
+export async function persistUrlCapture(
+    database: NodePgDatabase<typeof schema>,
+    input: CreateCaptureInput,
+): Promise<PersistedCapture> {
+    return database.transaction(async transaction => {
+        const [source] = await transaction.insert(sources).values({
+            submittedUrl: input.url,
+            normalizedUrl: input.url,
+        }).returning();
+        if (!source) throw new Error("Source was not created");
+
+        const [knowledgeItem] = await transaction.insert(knowledgeItems).values({ sourceId: source.id }).returning();
+        if (!knowledgeItem) throw new Error("Knowledge Item was not created");
+
+        const [capture] = await transaction.insert(captures).values({
+            sourceId: source.id,
+            knowledgeItemId: knowledgeItem.id,
+        }).returning();
+        if (!capture) throw new Error("Capture was not created");
+
+        const contexts = [
+            input.selectedText && { captureId: capture.id, kind: "selected-source-text", text: input.selectedText },
+            input.personalNote && { captureId: capture.id, kind: "personal-note", text: input.personalNote },
+        ].filter((context): context is { captureId: number; kind: string; text: string } => Boolean(context));
+        if (contexts.length > 0) await transaction.insert(captureContexts).values(contexts);
+
+        const [attempt] = await transaction.insert(processingAttempts).values({
+            knowledgeItemId: knowledgeItem.id,
+            kind: "initial-capture",
+        }).returning();
+        if (!attempt) throw new Error("Processing Attempt was not created");
+
+        const stages = new Map<string, number>();
+        for (const kind of initialStageKinds) {
+            const prerequisite = prerequisiteFor(kind);
+            const prerequisiteStageId = prerequisite ? stages.get(prerequisite) : undefined;
+            const [stage] = await transaction.insert(processingStages).values({
+                processingAttemptId: attempt.id,
+                kind,
+                prerequisiteStageId,
+            }).returning();
+            if (!stage) throw new Error(`Processing stage ${kind} was not created`);
+            stages.set(kind, stage.id);
+        }
+
+        return {
+            captureId: capture.id,
+            sourceId: source.id,
+            knowledgeItemId: knowledgeItem.id,
+            processingAttemptId: attempt.id,
+        };
+    });
+}
+
+function prerequisiteFor(kind: typeof initialStageKinds[number]): string | undefined {
+    switch (kind) {
+        case "snapshot-persistence":
+            return "extraction";
+        case "passage-generation":
+        case "recognition-summary-generation":
+        case "topic-tag-generation":
+            return "snapshot-persistence";
+        case "lexical-indexing":
+        case "semantic-indexing":
+            return "passage-generation";
+        default:
+            return undefined;
+    }
+}

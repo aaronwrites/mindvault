@@ -12,8 +12,9 @@ export type IntegrationHarness = {
     cleanup(): Promise<void>;
 };
 
-export async function createIntegrationHarness(app: Express, worker: EligibleWorker): Promise<IntegrationHarness> {
+export async function createIntegrationHarness(createApp: (database: IntegrationDatabase) => Express, worker: EligibleWorker): Promise<IntegrationHarness> {
     const database = await createIntegrationDatabase();
+    const app = createApp(database);
     const sourceServer = await startSourceFixtureServer();
     const server: Server = await new Promise((resolve, reject) => {
         const listener = app.listen(0, "127.0.0.1", () => resolve(listener));

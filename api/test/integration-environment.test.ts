@@ -17,7 +17,7 @@ afterEach(async () => {
 describe("durable article integration environment", () => {
     test.skipIf(!process.env.TEST_DATABASE_URL)("starts the public API and drains its worker controls against a migrated isolated database", async () => {
         let remainingWork = 1;
-        harness = await createIntegrationHarness(createApp(), { runEligibleWork: async () => remainingWork > 0 ? remainingWork-- : 0 });
+        harness = await createIntegrationHarness(database => createApp({ database: database.db }), { runEligibleWork: async () => remainingWork > 0 ? remainingWork-- : 0 });
         const health = await fetch(`${harness.apiBaseUrl}/health`);
 
         expect(await health.json()).toEqual({ status: "ok" });

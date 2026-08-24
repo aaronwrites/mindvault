@@ -15,6 +15,13 @@
       "when": 1786202322993,
       "tag": "0001_busy_mister_sinister",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1787561591773,
+      "tag": "0002_supreme_shaman",
+      "breakpoints": true
     }
   ]
 }
