@@ -12,6 +12,118 @@ afterEach(async () => {
 });
 
 describe("Extraction", () => {
+    test.skipIf(!process.env.TEST_DATABASE_URL)("reconciles canonical Sources without losing Capture Context or Processing Attempt history", async () => {
+        harness = await createIntegrationHarness(
+            database => createApp({ database: database.db }),
+            (database, sourceServer) => createExtractionWorker({ database: database.db, sourceFetchOptions: sourceServer.safeFetchDependencies() }),
+        );
+
+        const firstResponse = await fetch(`${harness.apiBaseUrl}/captures`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ url: harness.sourceServer.fetchUrl("/canonical") , personalNote: "Captured from the declared canonical address." }),
+        });
+        const secondResponse = await fetch(`${harness.apiBaseUrl}/captures`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ url: harness.sourceServer.fetchUrl("/articles/canonical-target"), selectedText: "Captured from the resolved address." }),
+        });
+        const firstCapture = await firstResponse.json() as { knowledgeItemId: number; processingAttemptId: number };
+        const secondCapture = await secondResponse.json() as { knowledgeItemId: number; processingAttemptId: number };
+
+        await harness.drainWorker();
+
+        const item = await (await fetch(`${harness.apiBaseUrl}/knowledge-items/${secondCapture.knowledgeItemId}`)).json() as {
+            captureContexts: Array<{ kind: string; summary: string }>;
+        };
+        expect(item.captureContexts).toEqual([
+            { kind: "personal-note", summary: "Captured from the declared canonical address." },
+            { kind: "selected-source-text", summary: "Captured from the resolved address." },
+        ]);
+        const identity = await harness.database.pool.query<{
+            sources: string; knowledge_items: string; attempts: string; original_url: string; final_url: string; canonical_url: string | null;
+        }>(`
+            SELECT
+                (SELECT count(*) FROM sources)::text AS sources,
+                (SELECT count(*) FROM knowledge_items)::text AS knowledge_items,
+                (SELECT count(*) FROM processing_attempts WHERE knowledge_item_id = $1)::text AS attempts,
+                original_url, final_url, canonical_url
+            FROM extracted_sources
+            WHERE processing_attempt_id = $2
+        `, [secondCapture.knowledgeItemId, firstCapture.processingAttemptId]);
+        expect(identity.rows).toEqual([expect.objectContaining({
+            sources: "1",
+            knowledge_items: "1",
+            attempts: "2",
+            original_url: harness.sourceServer.fetchUrl("/canonical"),
+            final_url: harness.sourceServer.fetchUrl("/canonical"),
+            canonical_url: harness.sourceServer.fetchUrl("/articles/canonical-target"),
+        })]);
+        expect(secondCapture.knowledgeItemId).not.toBe(firstCapture.knowledgeItemId);
+    });
+
+    test.skipIf(!process.env.TEST_DATABASE_URL)("keeps independent Sources distinct when their extracted content is identical", async () => {
+        harness = await createIntegrationHarness(
+            database => createApp({ database: database.db }),
+            (database, sourceServer) => createExtractionWorker({ database: database.db, sourceFetchOptions: sourceServer.safeFetchDependencies() }),
+        );
+        const capture = async (path: string) => {
+            const response = await fetch(`${harness!.apiBaseUrl}/captures`, {
+                method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ url: harness!.sourceServer.fetchUrl(path) }),
+            });
+            return response.json() as Promise<{ knowledgeItemId: number }>;
+        };
+
+        const [first, second] = await Promise.all([capture("/articles/independent-one"), capture("/articles/independent-two")]);
+        await harness.drainWorker();
+
+        expect(first.knowledgeItemId).not.toBe(second.knowledgeItemId);
+        const counts = await harness.database.pool.query<{ sources: string; knowledge_items: string }>(`
+            SELECT (SELECT count(*) FROM sources)::text AS sources, (SELECT count(*) FROM knowledge_items)::text AS knowledge_items
+        `);
+        expect(counts.rows).toEqual([{ sources: "2", knowledge_items: "2" }]);
+    });
+
+    test.skipIf(!process.env.TEST_DATABASE_URL)("reconciles a permanent redirect with its resolved Source", async () => {
+        harness = await createIntegrationHarness(
+            database => createApp({ database: database.db }),
+            (database, sourceServer) => createExtractionWorker({ database: database.db, sourceFetchOptions: sourceServer.safeFetchDependencies() }),
+        );
+        const capture = async (path: string) => {
+            const response = await fetch(`${harness!.apiBaseUrl}/captures`, {
+                method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ url: harness!.sourceServer.fetchUrl(path) }),
+            });
+            return response.json() as Promise<{ knowledgeItemId: number }>;
+        };
+        const [redirected, resolved] = await Promise.all([capture("/redirect/permanent"), capture("/articles/canonical-target")]);
+
+        await harness.drainWorker();
+
+        const counts = await harness.database.pool.query<{ sources: string; knowledge_items: string }>(`
+            SELECT (SELECT count(*) FROM sources)::text AS sources, (SELECT count(*) FROM knowledge_items)::text AS knowledge_items
+        `);
+        expect(counts.rows).toEqual([{ sources: "1", knowledge_items: "1" }]);
+        expect(redirected.knowledgeItemId).not.toBe(resolved.knowledgeItemId);
+    });
+
+    test.skipIf(!process.env.TEST_DATABASE_URL)("ignores an invalid declared canonical address without failing Extraction", async () => {
+        harness = await createIntegrationHarness(
+            database => createApp({ database: database.db }),
+            (database, sourceServer) => createExtractionWorker({ database: database.db, sourceFetchOptions: sourceServer.safeFetchDependencies() }),
+        );
+        const response = await fetch(`${harness.apiBaseUrl}/captures`, {
+            method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ url: harness.sourceServer.fetchUrl("/invalid-canonical") }),
+        });
+        const capture = await response.json() as { processingAttemptId: number };
+
+        await harness.drainWorker();
+
+        const extraction = await harness.database.pool.query<{ canonical_url: string | null }>(
+            "SELECT canonical_url FROM extracted_sources WHERE processing_attempt_id = $1", [capture.processingAttemptId],
+        );
+        expect(extraction.rows).toEqual([{ canonical_url: null }]);
+    });
+
     test.skipIf(!process.env.TEST_DATABASE_URL)("records cleaned meaningful primary text from a supported article", async () => {
         harness = await createIntegrationHarness(
             database => createApp({ database: database.db }),

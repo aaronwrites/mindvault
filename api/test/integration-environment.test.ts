@@ -42,9 +42,9 @@ describe("durable article integration environment", () => {
         expect(await initial.text()).toContain("original content");
         expect(await changed.text()).toContain("meaningfully changed content");
         expect(await repeated.text()).toContain("durable capture");
-        expect(await canonical.text()).toContain(`href=\"${sourceServer.baseUrl}/articles/first\"`);
+        expect(await canonical.text()).toContain(`href=\"${sourceServer.baseUrl}/articles/canonical-target\"`);
         expect(redirect.status).toBe(308);
-        expect(redirect.headers.get("location")).toBe("/articles/first");
+        expect(redirect.headers.get("location")).toBe("/articles/canonical-target");
         expect(unsupported.headers.get("content-type")).toContain("application/pdf");
         expect(oversized.headers.get("content-length")).toBe("2097152");
         expect(await inadequate.text()).toContain("Too short");

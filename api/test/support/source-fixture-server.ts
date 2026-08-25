@@ -34,9 +34,12 @@ export async function startSourceFixtureServer(): Promise<SourceFixtureServer> {
         if (path === "/articles/changed") {
             return html(200, article("Changed article", changedArticleVersion === 1 ? "The original content." : "The meaningfully changed content."));
         }
-        if (path === "/canonical") return html(200, article("Canonical article", "Canonical fixture content.", `${baseUrl}/articles/first`));
+        if (path === "/canonical") return html(200, article("Canonical article", "Canonical fixture content establishes that a declared canonical address is strong identity evidence when separate captures begin at different public URLs. Extraction preserves the address originally captured, the fetched final address, and this canonical address for later Source Snapshot provenance.", `${baseUrl}/articles/canonical-target`));
+        if (path === "/invalid-canonical") return html(200, article("Invalid canonical article", "This article contains enough meaningful text to be captured even though its canonical declaration is malformed. Extraction must treat invalid canonical markup as absent identity evidence instead of failing a safely fetched and otherwise supported public textual Source.", "http://["));
+        if (path === "/articles/canonical-target") return html(200, article("Canonical target", "The canonical fixture's resolved address remains the same external Source even when an earlier Capture began at a different URL. Source identity reconciliation preserves Capture Context and Processing Attempt history while retaining provenance for each Extraction result."));
+        if (path === "/articles/independent-one" || path === "/articles/independent-two") return html(200, article("Syndicated article", "This identical content is intentionally served by independent URLs without a canonical declaration or permanent redirect. Content hashes and semantic similarity must never silently merge independent Source identities because provenance remains distinct even when the primary text matches exactly."));
         if (path === "/redirect/permanent") {
-            response.writeHead(308, { location: "/articles/first" });
+            response.writeHead(308, { location: "/articles/canonical-target" });
             return response.end();
         }
         if (path === "/unsupported.pdf") {
@@ -77,7 +80,7 @@ export async function startSourceFixtureServer(): Promise<SourceFixtureServer> {
                 resolveAddresses: async () => ["8.8.8.8"],
                 transport: {
                     async fetch(target) {
-                        const response = await fetch(target.url, { signal: target.signal });
+                        const response = await fetch(target.url, { signal: target.signal, redirect: "manual" });
                         return {
                             status: response.status,
                             headers: Object.fromEntries(response.headers.entries()),

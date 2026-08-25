@@ -4,6 +4,7 @@ import * as schema from "../../db/schema";
 import { extractedSources, knowledgeItems, processingAttempts, processingStages, sources } from "../../db/schema";
 import { classifySourceSupport } from "./classify-source-support";
 import { fetchPublicSource, type SafeFetchOptions } from "./fetch-public-source";
+import { reconcileExtractedSourceIdentity } from "./reconcile-source-identity";
 import type { ClaimedProcessingStage } from "../../worker";
 
 type Database = NodePgDatabase<typeof schema>;
@@ -35,10 +36,14 @@ export function createExtractionStageHandler(database: Database, fetchOptions: S
 
         const extracted = extractMeaningfulPrimaryText(new TextDecoder().decode(fetched.response.body), fetched.response.finalUrl);
         const completed = await withCurrentLease(database, stage, async transaction => {
-            await transaction.update(sources).set({ sourceKind: support.sourceKind }).where(eq(sources.id, source.id));
+            const reconciledSource = await reconcileExtractedSourceIdentity(transaction, source, {
+                canonicalUrl: extracted.canonicalUrl,
+                permanentRedirects: fetched.permanentRedirects,
+            });
+            await transaction.update(sources).set({ sourceKind: support.sourceKind }).where(eq(sources.id, reconciledSource.id));
             await transaction.insert(extractedSources).values({
                 processingAttemptId: stage.processingAttemptId,
-                sourceId: source.id,
+                sourceId: reconciledSource.id,
                 title: extracted.title,
                 primaryText: extracted.primaryText,
                 originalUrl: fetched.response.originalUrl,
@@ -87,7 +92,17 @@ export function extractMeaningfulPrimaryText(html: string, finalUrl: string): { 
 
     const canonical = firstMatch(html, /<link\s+[^>]*rel=["']canonical["'][^>]*href=["']([^"']+)["'][^>]*>/i)
         ?? firstMatch(html, /<link\s+[^>]*href=["']([^"']+)["'][^>]*rel=["']canonical["'][^>]*>/i);
-    return { title: title!, primaryText, canonicalUrl: canonical ? new URL(canonical, finalUrl).toString() : null };
+    return { title: title!, primaryText, canonicalUrl: canonicalUrlFor(canonical, finalUrl) };
+}
+
+function canonicalUrlFor(canonical: string | null, finalUrl: string): string | null {
+    if (!canonical) return null;
+    try {
+        const url = new URL(canonical, finalUrl);
+        return url.protocol === "http:" || url.protocol === "https:" ? url.toString() : null;
+    } catch {
+        return null;
+    }
 }
 
 function stripBoilerplate(value: string): string {
