@@ -35,6 +35,7 @@ export const sources = pgTable("sources", {
     submittedUrl: text("submitted_url").notNull(),
     normalizedUrl: text("normalized_url").notNull(),
     sourceKind: text("source_kind").notNull().default("web"),
+    currentSnapshotId: integer("current_snapshot_id"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
 }, table => [uniqueIndex("sources_normalized_url_unique").on(table.normalizedUrl)]);
 
@@ -80,6 +81,20 @@ export const extractedSources = pgTable("extracted_sources", {
     permanentRedirects: jsonb("permanent_redirects").notNull(),
     extractedAt: timestamp("extracted_at").notNull().defaultNow(),
 });
+
+export const sourceSnapshots = pgTable("source_snapshots", {
+    id: serial("id").primaryKey(),
+    sourceId: integer("source_id").notNull().references(() => sources.id),
+    title: text("title").notNull(),
+    primaryText: text("primary_text").notNull(),
+    originalUrl: text("original_url").notNull(),
+    finalUrl: text("final_url").notNull(),
+    canonicalUrl: text("canonical_url"),
+    permanentRedirects: jsonb("permanent_redirects").notNull(),
+    extractedAt: timestamp("extracted_at").notNull(),
+    contentHash: text("content_hash").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+}, table => [uniqueIndex("source_snapshots_source_content_hash_unique").on(table.sourceId, table.contentHash)]);
 
 export const processingStages = pgTable("processing_stages", {
     id: serial("id").primaryKey(),

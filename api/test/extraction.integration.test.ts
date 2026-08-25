@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { createApp } from "../src/app";
-import { createExtractionWorker } from "../src/worker";
+import { createArticleProcessingWorker } from "../src/worker";
 import { ManualClock } from "./support/deterministic-runtime";
 import { createIntegrationHarness, type IntegrationHarness } from "./support/integration-harness";
 
@@ -12,10 +12,77 @@ afterEach(async () => {
 });
 
 describe("Extraction", () => {
+    test.skipIf(!process.env.TEST_DATABASE_URL)("persists immutable cleaned Source Snapshots without duplicating unchanged content", async () => {
+        harness = await createIntegrationHarness(
+            database => createApp({ database: database.db }),
+            (database, sourceServer) => createArticleProcessingWorker({ database: database.db, sourceFetchOptions: sourceServer.safeFetchDependencies() }),
+        );
+
+        const capture = async () => {
+            const response = await fetch(`${harness!.apiBaseUrl}/captures`, {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ url: harness!.sourceServer.fetchUrl("/articles/changed") }),
+            });
+            return response.json() as Promise<{ sourceId: number }>;
+        };
+
+        const firstCapture = await capture();
+        await harness.drainWorker();
+
+        const secondCapture = await capture();
+        await harness.drainWorker();
+
+        harness.sourceServer.setChangedArticleVersion(2);
+        await capture();
+        await harness.drainWorker();
+
+        const snapshots = await harness.database.pool.query<{
+            id: number;
+            title: string;
+            primary_text: string;
+            original_url: string;
+            final_url: string;
+            canonical_url: string | null;
+            permanent_redirects: Array<{ from: string; to: string }>;
+            content_hash: string;
+            extracted_at: Date;
+        }>(`
+            SELECT id, title, primary_text, original_url, final_url, canonical_url, permanent_redirects, content_hash, extracted_at
+            FROM source_snapshots
+            WHERE source_id = $1
+            ORDER BY id
+        `, [firstCapture.sourceId]);
+        const currentSnapshot = await harness.database.pool.query<{ current_snapshot_id: number | null }>(
+            "SELECT current_snapshot_id FROM sources WHERE id = $1", [firstCapture.sourceId],
+        );
+        expect(secondCapture.sourceId).toBe(firstCapture.sourceId);
+        expect(snapshots.rows).toEqual([
+            expect.objectContaining({
+                title: "Changed article",
+                primary_text: "The original content explains how durable Source Snapshots preserve cleaned primary text and provenance after a public article changes or disappears. It is deliberately long enough to pass the meaningful-text quality threshold.",
+                original_url: harness.sourceServer.fetchUrl("/articles/changed"),
+                final_url: harness.sourceServer.fetchUrl("/articles/changed"),
+                canonical_url: null,
+                permanent_redirects: [],
+                content_hash: expect.stringMatching(/^[a-f0-9]{64}$/),
+                extracted_at: expect.any(Date),
+            }),
+            expect.objectContaining({
+                title: "Changed article",
+                primary_text: "The meaningfully changed content explains how a new immutable Source Snapshot preserves a later version while earlier extracted knowledge and provenance remain available for trustworthy retrieval.",
+                content_hash: expect.stringMatching(/^[a-f0-9]{64}$/),
+                extracted_at: expect.any(Date),
+            }),
+        ]);
+        expect(snapshots.rows[0]?.content_hash).not.toBe(snapshots.rows[1]?.content_hash);
+        expect(currentSnapshot.rows[0]?.current_snapshot_id).toBe(snapshots.rows[1]?.id);
+    });
+
     test.skipIf(!process.env.TEST_DATABASE_URL)("reconciles canonical Sources without losing Capture Context or Processing Attempt history", async () => {
         harness = await createIntegrationHarness(
             database => createApp({ database: database.db }),
-            (database, sourceServer) => createExtractionWorker({ database: database.db, sourceFetchOptions: sourceServer.safeFetchDependencies() }),
+            (database, sourceServer) => createArticleProcessingWorker({ database: database.db, sourceFetchOptions: sourceServer.safeFetchDependencies() }),
         );
 
         const firstResponse = await fetch(`${harness.apiBaseUrl}/captures`, {
@@ -65,7 +132,7 @@ describe("Extraction", () => {
     test.skipIf(!process.env.TEST_DATABASE_URL)("keeps independent Sources distinct when their extracted content is identical", async () => {
         harness = await createIntegrationHarness(
             database => createApp({ database: database.db }),
-            (database, sourceServer) => createExtractionWorker({ database: database.db, sourceFetchOptions: sourceServer.safeFetchDependencies() }),
+            (database, sourceServer) => createArticleProcessingWorker({ database: database.db, sourceFetchOptions: sourceServer.safeFetchDependencies() }),
         );
         const capture = async (path: string) => {
             const response = await fetch(`${harness!.apiBaseUrl}/captures`, {
@@ -87,7 +154,7 @@ describe("Extraction", () => {
     test.skipIf(!process.env.TEST_DATABASE_URL)("reconciles a permanent redirect with its resolved Source", async () => {
         harness = await createIntegrationHarness(
             database => createApp({ database: database.db }),
-            (database, sourceServer) => createExtractionWorker({ database: database.db, sourceFetchOptions: sourceServer.safeFetchDependencies() }),
+            (database, sourceServer) => createArticleProcessingWorker({ database: database.db, sourceFetchOptions: sourceServer.safeFetchDependencies() }),
         );
         const capture = async (path: string) => {
             const response = await fetch(`${harness!.apiBaseUrl}/captures`, {
@@ -109,7 +176,7 @@ describe("Extraction", () => {
     test.skipIf(!process.env.TEST_DATABASE_URL)("ignores an invalid declared canonical address without failing Extraction", async () => {
         harness = await createIntegrationHarness(
             database => createApp({ database: database.db }),
-            (database, sourceServer) => createExtractionWorker({ database: database.db, sourceFetchOptions: sourceServer.safeFetchDependencies() }),
+            (database, sourceServer) => createArticleProcessingWorker({ database: database.db, sourceFetchOptions: sourceServer.safeFetchDependencies() }),
         );
         const response = await fetch(`${harness.apiBaseUrl}/captures`, {
             method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ url: harness.sourceServer.fetchUrl("/invalid-canonical") }),
@@ -127,7 +194,7 @@ describe("Extraction", () => {
     test.skipIf(!process.env.TEST_DATABASE_URL)("records cleaned meaningful primary text from a supported article", async () => {
         harness = await createIntegrationHarness(
             database => createApp({ database: database.db }),
-            (database, sourceServer) => createExtractionWorker({ database: database.db, sourceFetchOptions: sourceServer.safeFetchDependencies() }),
+            (database, sourceServer) => createArticleProcessingWorker({ database: database.db, sourceFetchOptions: sourceServer.safeFetchDependencies() }),
         );
 
         const captureResponse = await fetch(`${harness.apiBaseUrl}/captures`, {
@@ -161,7 +228,7 @@ describe("Extraction", () => {
     test.skipIf(!process.env.TEST_DATABASE_URL)("marks a known unsupported Source as Unsupported and skips downstream work", async () => {
         harness = await createIntegrationHarness(
             database => createApp({ database: database.db }),
-            (database, sourceServer) => createExtractionWorker({ database: database.db, sourceFetchOptions: sourceServer.safeFetchDependencies() }),
+            (database, sourceServer) => createArticleProcessingWorker({ database: database.db, sourceFetchOptions: sourceServer.safeFetchDependencies() }),
         );
         const captureResponse = await fetch(`${harness.apiBaseUrl}/captures`, {
             method: "POST",
@@ -195,7 +262,7 @@ describe("Extraction", () => {
         test.skipIf(!process.env.TEST_DATABASE_URL)(`shows Needs attention after Extraction rejects ${path}`, async () => {
             harness = await createIntegrationHarness(
                 database => createApp({ database: database.db }),
-                (database, sourceServer) => createExtractionWorker({
+                (database, sourceServer) => createArticleProcessingWorker({
                     database: database.db,
                     maxAttempts: 1,
                     sourceFetchOptions: sourceServer.safeFetchDependencies(),
@@ -222,7 +289,7 @@ describe("Extraction", () => {
         const clock = new ManualClock(new Date());
         harness = await createIntegrationHarness(
             database => createApp({ database: database.db }),
-            (database, sourceServer) => createExtractionWorker({
+            (database, sourceServer) => createArticleProcessingWorker({
                 database: database.db,
                 clock,
                 maxAttempts: 3,

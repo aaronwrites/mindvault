@@ -1,7 +1,7 @@
 import { eq, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as schema from "../../db/schema";
-import { captures, extractedSources, knowledgeItems, processingAttempts, sources } from "../../db/schema";
+import { captures, extractedSources, knowledgeItems, processingAttempts, sourceSnapshots, sources } from "../../db/schema";
 import { normalizeCaptureUrl } from "../capture/normalize-capture-url";
 
 type Database = NodePgDatabase<typeof schema>;
@@ -45,6 +45,15 @@ export async function reconcileExtractedSourceIdentity(
         .where(eq(processingAttempts.knowledgeItemId, sourceItem.id));
     await transaction.update(extractedSources).set({ sourceId: identifiedSource.id })
         .where(eq(extractedSources.sourceId, source.id));
+    await transaction.execute(sql`
+        DELETE FROM source_snapshots AS duplicate
+        USING source_snapshots AS existing
+        WHERE duplicate.source_id = ${source.id}
+          AND existing.source_id = ${identifiedSource.id}
+          AND duplicate.content_hash = existing.content_hash
+    `);
+    await transaction.update(sourceSnapshots).set({ sourceId: identifiedSource.id })
+        .where(eq(sourceSnapshots.sourceId, source.id));
     await transaction.delete(knowledgeItems).where(eq(knowledgeItems.id, sourceItem.id));
     await transaction.delete(sources).where(eq(sources.id, source.id));
     return identifiedSource;
