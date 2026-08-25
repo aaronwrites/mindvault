@@ -1,8 +1,11 @@
 import { createServer, type Server } from "node:http";
+import type { SafeFetchDependencies } from "../../src/lib/sources/fetch-public-source";
 
 export type SourceFixtureServer = {
     baseUrl: string;
     setChangedArticleVersion(version: 1 | 2): void;
+    fetchUrl(path: string): string;
+    safeFetchDependencies(): SafeFetchDependencies;
     close(): Promise<void>;
 };
 
@@ -22,6 +25,11 @@ export async function startSourceFixtureServer(): Promise<SourceFixtureServer> {
         };
 
         if (path === "/articles/first") return html(200, article("First article", "A deterministic article about durable capture."));
+        if (path === "/articles/primary-text") return html(200, `<!doctype html>
+<html><head><title>Primary article</title></head><body>
+<nav>Products Pricing Sign in</nav><div class="cookie-banner">We use cookies. Accept cookies.</div>
+<main><article><h1>Primary article</h1><div class="site-navigation">Sections and account menu</div><div id="related-content">Read these unrelated articles next</div><p>Durable Capture stores a Source before asynchronous processing begins. This fixture explains how Extraction keeps meaningful primary text while discarding repeated page chrome and navigation.</p><p>Processing Attempts make failures visible without losing the user's Capture. A cleaned representation preserves the useful material for later Source Snapshot persistence and Passage retrieval.</p></article></main>
+<footer>Copyright and privacy policy</footer></body></html>`);
         if (path === "/articles/repeated") return html(200, article("First article", "A deterministic article about durable capture."));
         if (path === "/articles/changed") {
             return html(200, article("Changed article", changedArticleVersion === 1 ? "The original content." : "The meaningfully changed content."));
@@ -41,6 +49,9 @@ export async function startSourceFixtureServer(): Promise<SourceFixtureServer> {
         }
         if (path === "/inadequate") return html(200, "<html><body><main>Too short.</main></body></html>");
         if (path === "/authentication") return html(200, "<html><body><h1>Sign in required</h1><form><input type=password></form></body></html>");
+        if (path === "/bot-challenge") return html(200, "<html><body><main><h1>Verify you are human</h1><p>Complete this CAPTCHA to continue to the requested page.</p></main></body></html>");
+        if (path === "/paywall") return html(200, "<html><body><main><h1>Subscriber article</h1><p>Subscribe to continue reading this paywall-protected article.</p></main></body></html>");
+        if (path === "/error-page") return html(200, "<html><body><main><h1>Something went wrong</h1><p>The requested page could not be loaded.</p></main></body></html>");
         if (path === "/failure") return html(503, "<html><body>Fixture unavailable</body></html>");
         return html(404, "<html><body>Not found</body></html>");
     });
@@ -57,6 +68,24 @@ export async function startSourceFixtureServer(): Promise<SourceFixtureServer> {
         baseUrl,
         setChangedArticleVersion(version) {
             changedArticleVersion = version;
+        },
+        fetchUrl(path) {
+            return `${baseUrl}${path}`;
+        },
+        safeFetchDependencies() {
+            return {
+                resolveAddresses: async () => ["8.8.8.8"],
+                transport: {
+                    async fetch(target) {
+                        const response = await fetch(target.url, { signal: target.signal });
+                        return {
+                            status: response.status,
+                            headers: Object.fromEntries(response.headers.entries()),
+                            body: new Uint8Array(await response.arrayBuffer()),
+                        };
+                    },
+                },
+            };
         },
         close: () => new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve())),
     };

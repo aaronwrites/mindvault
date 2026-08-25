@@ -32,6 +32,7 @@ export type KnowledgeItemView = {
         kind: string;
         status: string;
         createdAt: string;
+        failureReason?: string;
     } | null;
 };
 
@@ -109,6 +110,7 @@ async function presentKnowledgeItems(
                 kind: latestAttempt.kind,
                 status: latestAttempt.status,
                 createdAt: toIsoString(latestAttempt.createdAt),
+                ...(latestAttempt.failureReason ? { failureReason: latestAttempt.failureReason } : {}),
             } : null,
         };
     });

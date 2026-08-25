@@ -4,6 +4,8 @@ import { sql } from "drizzle-orm";
 import { db } from "./db";
 import type { Clock } from "./lib/ai/providers";
 import { type ProcessingStageKind } from "./lib/processing/stages";
+import { createExtractionStageHandler } from "./lib/sources/extract-public-textual-source";
+import type { SafeFetchOptions } from "./lib/sources/fetch-public-source";
 import * as schema from "./db/schema";
 type Database = NodePgDatabase<typeof schema>;
 
@@ -12,15 +14,16 @@ export type ClaimedProcessingStage = {
     processingAttemptId: number;
     kind: ProcessingStageKind;
     attemptCount: number;
+    leaseToken: string;
 };
 
-export type ProcessingStageHandler = (stage: ClaimedProcessingStage) => Promise<void>;
+export type ProcessingStageHandler = (stage: ClaimedProcessingStage) => Promise<void | { completed: true }>;
 
 export type ProcessingWorker = {
     runEligibleWork(): Promise<number>;
 };
 
-type ProcessingWorkerOptions = {
+export type ProcessingWorkerOptions = {
     database: Database;
     workerId?: string;
     clock?: Clock;
@@ -31,7 +34,19 @@ type ProcessingWorkerOptions = {
     handlers: Partial<Record<ProcessingStageKind, ProcessingStageHandler>>;
 };
 
-type ClaimedStageRow = ClaimedProcessingStage & { leaseToken: string };
+export function createExtractionWorker({
+    database,
+    sourceFetchOptions,
+    ...options
+}: Omit<ProcessingWorkerOptions, "handlers"> & { sourceFetchOptions?: SafeFetchOptions }): ProcessingWorker {
+    return createProcessingWorker({
+        database,
+        ...options,
+        handlers: { extraction: createExtractionStageHandler(database, sourceFetchOptions) },
+    });
+}
+
+type ClaimedStageRow = ClaimedProcessingStage;
 
 const systemClock: Clock = { now: () => new Date() };
 const defaultMaxAttempts = 3;
@@ -56,10 +71,10 @@ export function createProcessingWorker({
             const handler = handlers[claimedStage.kind];
             if (!handler) return 0;
             try {
-                await handler(claimedStage);
-                await completeStage(database, claimedStage);
-            } catch {
-                await scheduleRetry(database, claimedStage, clock.now(), maxAttempts, retryBaseDelayMs, retryMaxDelayMs);
+                const outcome = await handler(claimedStage);
+                if (!outcome?.completed) await completeStage(database, claimedStage);
+            } catch (error) {
+                await scheduleRetry(database, claimedStage, clock.now(), maxAttempts, retryBaseDelayMs, retryMaxDelayMs, error instanceof Error ? error.message : "Processing failed unexpectedly");
             }
             return 1;
         },
@@ -130,21 +145,28 @@ async function scheduleRetry(
     maxAttempts: number,
     retryBaseDelayMs: number,
     retryMaxDelayMs: number,
+    failureReason: string,
 ): Promise<void> {
     const exhausted = stage.attemptCount >= maxAttempts;
     const delayMs = Math.min(retryBaseDelayMs * 2 ** (stage.attemptCount - 1), retryMaxDelayMs);
-    await database.execute(sql`
+    const result = await database.execute(sql`
         UPDATE processing_stages
         SET status = ${exhausted ? "failed" : "pending"},
             available_at = ${new Date(now.getTime() + delayMs)},
             lease_token = NULL,
-            lease_expires_at = NULL
+            lease_expires_at = NULL,
+            failure_reason = ${exhausted ? failureReason : null}
         WHERE id = ${stage.id}
           AND status = 'running'
           AND lease_token = ${stage.leaseToken}
+        RETURNING id
     `);
+    if (exhausted && stage.kind === "extraction" && result.rows.length > 0) {
+        await database.update(schema.processingAttempts).set({ status: "failed", failureReason })
+            .where(sql`${schema.processingAttempts.id} = ${stage.processingAttemptId}`);
+    }
 }
 
 if (import.meta.main) {
-    startProcessingWorker(createProcessingWorker({ database: db, handlers: {} }));
+    startProcessingWorker(createExtractionWorker({ database: db }));
 }

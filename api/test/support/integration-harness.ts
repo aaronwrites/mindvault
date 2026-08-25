@@ -14,12 +14,12 @@ export type IntegrationHarness = {
 
 export async function createIntegrationHarness(
     createApp: (database: IntegrationDatabase) => Express,
-    worker: EligibleWorker | ((database: IntegrationDatabase) => EligibleWorker),
+    worker: EligibleWorker | ((database: IntegrationDatabase, sourceServer: SourceFixtureServer) => EligibleWorker),
 ): Promise<IntegrationHarness> {
     const database = await createIntegrationDatabase();
-    const resolvedWorker = typeof worker === "function" ? worker(database) : worker;
-    const app = createApp(database);
     const sourceServer = await startSourceFixtureServer();
+    const resolvedWorker = typeof worker === "function" ? worker(database, sourceServer) : worker;
+    const app = createApp(database);
     const server: Server = await new Promise((resolve, reject) => {
         const listener = app.listen(0, "127.0.0.1", () => resolve(listener));
         listener.once("error", reject);

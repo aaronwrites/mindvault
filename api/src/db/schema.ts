@@ -64,7 +64,21 @@ export const processingAttempts = pgTable("processing_attempts", {
     knowledgeItemId: integer("knowledge_item_id").notNull().references(() => knowledgeItems.id),
     kind: text("kind").notNull(),
     status: text("status").notNull().default("pending"),
+    failureReason: text("failure_reason"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const extractedSources = pgTable("extracted_sources", {
+    id: serial("id").primaryKey(),
+    processingAttemptId: integer("processing_attempt_id").notNull().references(() => processingAttempts.id, { onDelete: "cascade" }).unique(),
+    sourceId: integer("source_id").notNull().references(() => sources.id),
+    title: text("title").notNull(),
+    primaryText: text("primary_text").notNull(),
+    originalUrl: text("original_url").notNull(),
+    finalUrl: text("final_url").notNull(),
+    canonicalUrl: text("canonical_url"),
+    permanentRedirects: jsonb("permanent_redirects").notNull(),
+    extractedAt: timestamp("extracted_at").notNull().defaultNow(),
 });
 
 export const processingStages = pgTable("processing_stages", {
@@ -77,5 +91,6 @@ export const processingStages = pgTable("processing_stages", {
     leaseToken: text("lease_token"),
     leaseExpiresAt: timestamp("lease_expires_at"),
     attemptCount: integer("attempt_count").notNull().default(0),
+    failureReason: text("failure_reason"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
 });

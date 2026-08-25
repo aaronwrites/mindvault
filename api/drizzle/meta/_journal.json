@@ -22,6 +22,13 @@
       "when": 1787561591773,
       "tag": "0002_supreme_shaman",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1787633958699,
+      "tag": "0003_round_paper_doll",
+      "breakpoints": true
     }
   ]
 }

@@ -20,7 +20,7 @@ function startHarness(handler: (kind: string) => Promise<void>, options: {
     retryMaxDelayMs?: number;
     leaseDurationMs?: number;
 } = {}) {
-    const clock = new ManualClock(new Date("2026-08-24T12:00:00.000Z"));
+    const clock = new ManualClock(new Date("2099-01-01T12:00:00.000Z"));
     return createIntegrationHarness(database => createApp({ database: database.db }), database => createProcessingWorker({
         database: database.db,
         workerId: "test-worker",
@@ -40,7 +40,7 @@ function startHarness(handler: (kind: string) => Promise<void>, options: {
 
 describe("Processing worker", () => {
     test.skipIf(!process.env.TEST_DATABASE_URL)("waits until a stage becomes available before claiming it", async () => {
-        const clock = new ManualClock(new Date("2026-08-24T12:00:00.000Z"));
+        const clock = new ManualClock(new Date("2099-01-01T12:00:00.000Z"));
         harness = await startHarness(async () => {});
         const response = await fetch(`${harness.apiBaseUrl}/captures`, {
             method: "POST",
@@ -102,7 +102,7 @@ describe("Processing worker", () => {
         let releaseHandler: (() => void) | undefined;
         const handlerStarted = Promise.withResolvers<void>();
         const handlerRelease = new Promise<void>(resolve => { releaseHandler = resolve; });
-        const clock = new ManualClock(new Date("2026-08-24T12:00:00.000Z"));
+        const clock = new ManualClock(new Date("2099-01-01T12:00:00.000Z"));
         harness = await createIntegrationHarness(database => createApp({ database: database.db }), database => createProcessingWorker({
             database: database.db,
             workerId: "first-worker",
@@ -150,7 +150,7 @@ describe("Processing worker", () => {
     });
 
     test.skipIf(!process.env.TEST_DATABASE_URL)("retries transient failures with bounded backoff before exhausting the stage", async () => {
-        const clock = new ManualClock(new Date("2026-08-24T12:00:00.000Z"));
+        const clock = new ManualClock(new Date("2099-01-01T12:00:00.000Z"));
         let runs = 0;
         harness = await createIntegrationHarness(database => createApp({ database: database.db }), database => createProcessingWorker({
             database: database.db,
@@ -182,7 +182,7 @@ describe("Processing worker", () => {
     });
 
     test.skipIf(!process.env.TEST_DATABASE_URL)("resumes only the incomplete stage after a partial workflow failure", async () => {
-        const clock = new ManualClock(new Date("2026-08-24T12:00:00.000Z"));
+        const clock = new ManualClock(new Date("2099-01-01T12:00:00.000Z"));
         const runs: Record<string, number> = {};
         harness = await createIntegrationHarness(database => createApp({ database: database.db }), database => createProcessingWorker({
             database: database.db,
