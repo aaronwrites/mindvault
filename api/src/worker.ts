@@ -6,6 +6,7 @@ import type { Clock } from "./lib/ai/providers";
 import { type ProcessingStageKind } from "./lib/processing/stages";
 import { createExtractionStageHandler } from "./lib/sources/extract-public-textual-source";
 import { createSnapshotPersistenceStageHandler } from "./lib/sources/persist-cleaned-source-snapshot";
+import { createPassageGenerationStageHandler } from "./lib/passages/generate-passages";
 import type { SafeFetchOptions } from "./lib/sources/fetch-public-source";
 import * as schema from "./db/schema";
 type Database = NodePgDatabase<typeof schema>;
@@ -46,6 +47,7 @@ export function createArticleProcessingWorker({
         handlers: {
             extraction: createExtractionStageHandler(database, sourceFetchOptions),
             "snapshot-persistence": createSnapshotPersistenceStageHandler(database),
+            "passage-generation": createPassageGenerationStageHandler(database),
         },
     });
 }

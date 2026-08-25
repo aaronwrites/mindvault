@@ -1,6 +1,7 @@
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { eq } from "drizzle-orm";
 import * as schema from "../../db/schema";
+import type { CaptureContextKind } from "../../db/schema";
 import {
     captureContexts,
     captures,
@@ -50,7 +51,7 @@ export async function persistUrlCapture(
         const contexts = [
             input.selectedText && { captureId: capture.id, kind: "selected-source-text", text: input.selectedText },
             input.personalNote && { captureId: capture.id, kind: "personal-note", text: input.personalNote },
-        ].filter((context): context is { captureId: number; kind: string; text: string } => Boolean(context));
+        ].filter((context): context is { captureId: number; kind: CaptureContextKind; text: string } => Boolean(context));
         if (contexts.length > 0) await transaction.insert(captureContexts).values(contexts);
 
         const [attempt] = await transaction.insert(processingAttempts).values({
