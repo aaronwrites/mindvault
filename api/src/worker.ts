@@ -7,6 +7,7 @@ import { type ProcessingStageKind } from "./lib/processing/stages";
 import { createExtractionStageHandler } from "./lib/sources/extract-public-textual-source";
 import { createSnapshotPersistenceStageHandler } from "./lib/sources/persist-cleaned-source-snapshot";
 import { createPassageGenerationStageHandler } from "./lib/passages/generate-passages";
+import { createLexicalIndexingStageHandler } from "./lib/passages/index-lexical-passages";
 import type { SafeFetchOptions } from "./lib/sources/fetch-public-source";
 import * as schema from "./db/schema";
 type Database = NodePgDatabase<typeof schema>;
@@ -48,6 +49,7 @@ export function createArticleProcessingWorker({
             extraction: createExtractionStageHandler(database, sourceFetchOptions),
             "snapshot-persistence": createSnapshotPersistenceStageHandler(database),
             "passage-generation": createPassageGenerationStageHandler(database),
+            "lexical-indexing": createLexicalIndexingStageHandler(database),
         },
     });
 }

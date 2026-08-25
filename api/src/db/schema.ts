@@ -1,7 +1,12 @@
-import { check, pgTable, serial, text, timestamp, jsonb, integer, vector, uniqueIndex } from "drizzle-orm/pg-core";
+import { check, customType, index, pgTable, serial, text, timestamp, jsonb, integer, vector, uniqueIndex } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
 export const EMBEDDING_DIMENSIONS = 768;
+const tsvector = customType<{ data: string }>({
+    dataType() {
+        return "tsvector";
+    },
+});
 export const captureContextKinds = ["selected-source-text", "personal-note"] as const;
 export type CaptureContextKind = typeof captureContextKinds[number];
 
@@ -105,11 +110,13 @@ export const passages = pgTable("passages", {
     captureContextId: integer("capture_context_id").references(() => captureContexts.id, { onDelete: "cascade" }),
     origin: text("origin").notNull(),
     text: text("text").notNull(),
+    lexicalSearch: tsvector("lexical_search"),
     ordinal: integer("ordinal").notNull(),
     createdAt: timestamp("created_at").notNull().defaultNow(),
 }, table => [
     uniqueIndex("passages_source_snapshot_ordinal_unique").on(table.sourceSnapshotId, table.ordinal),
     uniqueIndex("passages_capture_context_ordinal_unique").on(table.captureContextId, table.ordinal),
+    index("passages_lexical_search_index").using("gin", table.lexicalSearch),
     check("passages_one_content_origin", sql`(
         (source_snapshot_id IS NOT NULL AND capture_context_id IS NULL AND origin = 'source-snapshot')
         OR (source_snapshot_id IS NULL AND capture_context_id IS NOT NULL AND origin IN ('selected-source-text', 'personal-note'))

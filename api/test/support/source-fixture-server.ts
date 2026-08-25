@@ -25,6 +25,7 @@ export async function startSourceFixtureServer(): Promise<SourceFixtureServer> {
         };
 
         if (path === "/articles/first") return html(200, article("First article", "A deterministic article about durable capture."));
+        if (path === "/articles/lexical-corpus") return html(200, article("Lexical corpus", "Run the git rebase --autosquash command before publishing. Pass the --max-old-space-size=4096 flag to Node.js when a build needs more memory. The service reported the error message EADDRINUSE while binding its listener. OAuth2 is the authorization protocol used by this fixture. PostgreSQL 18 supplies the text-search index. The deployment identifier release-2026-08-25 must remain traceable through processing history. This deliberately detailed corpus verifies exact-language Passage retrieval across commands, flags, error messages, acronyms, versions, and identifiers."));
         if (path === "/articles/primary-text") return html(200, `<!doctype html>
 <html><head><title>Primary article</title></head><body>
 <nav>Products Pricing Sign in</nav><div class="cookie-banner">We use cookies. Accept cookies.</div>

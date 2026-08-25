@@ -1,0 +1,1 @@
+CREATE INDEX "passages_lexical_search_index" ON "passages" USING gin ("lexical_search");

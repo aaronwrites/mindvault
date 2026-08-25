@@ -50,6 +50,20 @@
       "when": 1787637498310,
       "tag": "0006_regular_captain_marvel",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1787638071444,
+      "tag": "0007_lying_firedrake",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1787638274393,
+      "tag": "0008_tiny_supreme_intelligence",
+      "breakpoints": true
     }
   ]
 }

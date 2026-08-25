@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { createApp } from "../src/app";
+import { findLexicalPassages } from "../src/lib/passages/find-lexical-passages";
 import { createArticleProcessingWorker } from "../src/worker";
 import { createIntegrationHarness, type IntegrationHarness } from "./support/integration-harness";
 
@@ -11,6 +12,42 @@ afterEach(async () => {
 });
 
 describe("Passage generation", () => {
+    test.skipIf(!process.env.TEST_DATABASE_URL)("indexes Source Snapshot and Capture Context Passages for exact-language retrieval", async () => {
+        harness = await createIntegrationHarness(
+            database => createApp({ database: database.db }),
+            (database, sourceServer) => createArticleProcessingWorker({ database: database.db, sourceFetchOptions: sourceServer.safeFetchDependencies() }),
+        );
+        const response = await fetch(`${harness.apiBaseUrl}/captures`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+                url: harness.sourceServer.fetchUrl("/articles/lexical-corpus"),
+                selectedText: "The selected source text names RFC-9110.",
+                personalNote: "My personal note records ticket-13.",
+            }),
+        });
+        expect(response.status).toBe(201);
+        await harness.drainWorker();
+        const indexStatus = (await harness.database.pool.query<{ complete: boolean }>(
+            "SELECT bool_and(lexical_search IS NOT NULL) AS complete FROM passages",
+        )).rows[0];
+        expect(indexStatus?.complete).toBe(true);
+
+        for (const expected of [
+            "git rebase",
+            "--max-old-space-size=4096",
+            "EADDRINUSE",
+            "OAuth2",
+            "PostgreSQL 18",
+            "release-2026-08-25",
+            "RFC-9110",
+            "ticket-13",
+        ]) {
+            const matches = await findLexicalPassages(harness.database.db, expected);
+            expect(matches.some(match => match.text.includes(expected))).toBe(true);
+        }
+    });
+
     test.skipIf(!process.env.TEST_DATABASE_URL)("creates distinct Source Snapshot and Capture Context Passages without duplicates", async () => {
         harness = await createIntegrationHarness(
             database => createApp({ database: database.db }),
