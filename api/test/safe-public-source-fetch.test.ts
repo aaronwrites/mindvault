@@ -5,6 +5,7 @@ import {
     type SafeFetchDependencies,
     type SafeFetchTransport,
 } from "../src/lib/sources/fetch-public-source";
+import { classifySourceSupport } from "../src/lib/sources/classify-source-support";
 
 type StubResponse = {
     status: number;
@@ -32,6 +33,58 @@ function transport(responses: Record<string, StubResponse>): SafeFetchTransport 
 }
 
 describe("public Source fetch policy", () => {
+    test("selects the public textual adapter for a bounded HTML article", async () => {
+        const fetched = await fetchPublicSource("https://example.com/article", {
+            resolveAddresses: publicAddressResolver,
+            transport: transport({ "https://example.com/article": { status: 200 } }),
+        });
+
+        expect(classifySourceSupport(fetched)).toEqual({
+            kind: "supported",
+            sourceKind: "public-textual-web",
+            adapter: "public-textual-web",
+        });
+    });
+
+    test("classifies a bounded PDF response as an unsupported Source Kind", async () => {
+        const fetched = await fetchPublicSource("https://example.com/article.pdf", {
+            resolveAddresses: publicAddressResolver,
+            transport: transport({ "https://example.com/article.pdf": { status: 200, headers: { "content-type": "application/pdf" } } }),
+        });
+
+        expect(classifySourceSupport(fetched)).toEqual({
+            kind: "unsupported",
+            sourceKind: "pdf",
+            reason: "unsupported-content-type",
+        });
+    });
+
+    test("classifies a bounded image response as an unsupported Source Kind", async () => {
+        const fetched = await fetchPublicSource("https://example.com/diagram.png", {
+            resolveAddresses: publicAddressResolver,
+            transport: transport({ "https://example.com/diagram.png": { status: 200, headers: { "content-type": "image/png" } } }),
+        });
+
+        expect(classifySourceSupport(fetched)).toEqual({
+            kind: "unsupported",
+            sourceKind: "image",
+            reason: "unsupported-content-type",
+        });
+    });
+
+    test("keeps a bounded response without a content type unsupported when its Source Kind is ambiguous", async () => {
+        const fetched = await fetchPublicSource("https://example.com/unknown", {
+            resolveAddresses: publicAddressResolver,
+            transport: transport({ "https://example.com/unknown": { status: 200, headers: {} } }),
+        });
+
+        expect(classifySourceSupport(fetched)).toEqual({
+            kind: "unsupported",
+            sourceKind: "unknown",
+            reason: "ambiguous-content-type",
+        });
+    });
+
     test("classifies public and unsafe network addresses without making network requests", () => {
         expect(isPublicIpAddress("8.8.8.8")).toBe(true);
         expect(isPublicIpAddress("2606:4700:4700::1111")).toBe(true);
