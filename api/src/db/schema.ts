@@ -136,3 +136,14 @@ export const processingStages = pgTable("processing_stages", {
     failureReason: text("failure_reason"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
 });
+
+export const passageEmbeddings = pgTable("passage_embeddings", {
+    passageId: integer("passage_id").primaryKey().references(() => passages.id, { onDelete: "cascade" }),
+    embedding: vector("embedding", { dimensions: EMBEDDING_DIMENSIONS }).notNull(),
+    provider: text("provider").notNull(),
+    model: text("model").notNull(),
+    dimensions: integer("dimensions").notNull(),
+    metadata: jsonb("metadata").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});

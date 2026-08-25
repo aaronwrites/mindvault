@@ -10,12 +10,23 @@ export class DeterministicGenerationProvider implements TextGenerationProvider {
 }
 
 export class DeterministicEmbeddingProvider implements EmbeddingProvider {
+    readonly representation = {
+        provider: "test",
+        model: "deterministic-v1",
+        dimensions: EMBEDDING_DIMENSIONS,
+        metadata: { normalization: "unit-length" },
+    };
+
     async embed(text: string): Promise<number[]> {
         let hash = 0;
         for (const character of text) hash = (hash * 31 + character.charCodeAt(0)) >>> 0;
         const vector = Array<number>(EMBEDDING_DIMENSIONS).fill(0);
         vector[hash % EMBEDDING_DIMENSIONS] = 1;
         return vector;
+    }
+
+    embedQuery(text: string): Promise<number[]> {
+        return this.embed(text);
     }
 }
 

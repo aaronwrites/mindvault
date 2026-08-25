@@ -2,12 +2,14 @@ import { randomUUID } from "node:crypto";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { sql } from "drizzle-orm";
 import { db } from "./db";
-import type { Clock } from "./lib/ai/providers";
+import type { Clock, EmbeddingProvider } from "./lib/ai/providers";
+import { createGeminiPassageEmbeddingProvider } from "./lib/ai/embeddings";
 import { type ProcessingStageKind } from "./lib/processing/stages";
 import { createExtractionStageHandler } from "./lib/sources/extract-public-textual-source";
 import { createSnapshotPersistenceStageHandler } from "./lib/sources/persist-cleaned-source-snapshot";
 import { createPassageGenerationStageHandler } from "./lib/passages/generate-passages";
 import { createLexicalIndexingStageHandler } from "./lib/passages/index-lexical-passages";
+import { createSemanticIndexingStageHandler } from "./lib/passages/index-semantic-passages";
 import type { SafeFetchOptions } from "./lib/sources/fetch-public-source";
 import * as schema from "./db/schema";
 type Database = NodePgDatabase<typeof schema>;
@@ -40,8 +42,9 @@ export type ProcessingWorkerOptions = {
 export function createArticleProcessingWorker({
     database,
     sourceFetchOptions,
+    embeddingProvider = createGeminiPassageEmbeddingProvider(),
     ...options
-}: Omit<ProcessingWorkerOptions, "handlers"> & { sourceFetchOptions?: SafeFetchOptions }): ProcessingWorker {
+}: Omit<ProcessingWorkerOptions, "handlers"> & { sourceFetchOptions?: SafeFetchOptions; embeddingProvider?: EmbeddingProvider }): ProcessingWorker {
     return createProcessingWorker({
         database,
         ...options,
@@ -50,6 +53,7 @@ export function createArticleProcessingWorker({
             "snapshot-persistence": createSnapshotPersistenceStageHandler(database),
             "passage-generation": createPassageGenerationStageHandler(database),
             "lexical-indexing": createLexicalIndexingStageHandler(database),
+            "semantic-indexing": createSemanticIndexingStageHandler(database, embeddingProvider),
         },
     });
 }

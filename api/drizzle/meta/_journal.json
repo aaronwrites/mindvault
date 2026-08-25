@@ -64,6 +64,13 @@
       "when": 1787638274393,
       "tag": "0008_tiny_supreme_intelligence",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1787638958956,
+      "tag": "0009_opposite_scarlet_spider",
+      "breakpoints": true
     }
   ]
 }

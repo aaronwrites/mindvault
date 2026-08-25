@@ -1,5 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
 import { EMBEDDING_DIMENSIONS } from "../../db/schema";
+import type { EmbeddingProvider } from "./providers";
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 const EMBEDDING_MODEL = process.env.GEMINI_EMBEDDING_MODEL ?? "gemini-embedding-001";
@@ -61,4 +62,17 @@ export function generateResourceEmbedding(resource: ResourceEmbeddingInput): Pro
 
 export function generateQueryEmbedding(query: string): Promise<number[]> {
     return generateEmbedding(query, "RETRIEVAL_QUERY");
+}
+
+export function createGeminiPassageEmbeddingProvider(): EmbeddingProvider {
+    return {
+        representation: {
+            provider: "google",
+            model: EMBEDDING_MODEL,
+            dimensions: EMBEDDING_DIMENSIONS,
+            metadata: { taskType: "RETRIEVAL_DOCUMENT", normalized: true },
+        },
+        embed: text => generateEmbedding(text, "RETRIEVAL_DOCUMENT"),
+        embedQuery: text => generateEmbedding(text, "RETRIEVAL_QUERY"),
+    };
 }
