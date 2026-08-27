@@ -37,6 +37,31 @@ export type KnowledgeItem = {
   } | null;
 };
 
+export type RecallKnowledgeItem = {
+  id: number;
+  title: string | null;
+  source: KnowledgeItem["source"];
+  recognitionSummary: string | null;
+  topicTags: string[];
+  excerpts: Array<{
+    text: string;
+    origin: "source-snapshot" | "selected-source-text" | "personal-note";
+    sourceSnapshot: {
+      id: number;
+      originalUrl: string;
+      finalUrl: string;
+      canonicalUrl: string | null;
+      extractedAt: string;
+    } | null;
+    ranking: {
+      score: number;
+      semanticRank?: number;
+      lexicalRank?: number;
+    };
+  }>;
+  ranking: { score: number; matchedPassageCount: number };
+};
+
 export type CaptureResponse = {
   captureId: number;
   sourceId: number;

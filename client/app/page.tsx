@@ -1,15 +1,19 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { CaptureForm } from "@/components/capture-form";
 import { KnowledgeItemCard } from "@/components/knowledge-item-card";
+import { RecallResultCard } from "@/components/recall-result-card";
+import { SearchForm } from "@/components/search-form";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent } from "@/components/ui/card";
-import { getKnowledgeItems, knowledgeItemKeys } from "@/lib/api";
+import { getKnowledgeItems, knowledgeItemKeys, recallKeys, searchKnowledgeItems } from "@/lib/api";
 import type { KnowledgeItem } from "@/lib/types";
 
 export default function Home() {
   const queryClient = useQueryClient();
+  const [searchQuery, setSearchQuery] = useState("");
   const knowledgeItemsQuery = useQuery({
     queryKey: knowledgeItemKeys.all,
     queryFn: getKnowledgeItems,
@@ -24,6 +28,11 @@ export default function Home() {
     refetchIntervalInBackground: true,
   });
   const knowledgeItems = knowledgeItemsQuery.data ?? [];
+  const recallQuery = useQuery({
+    queryKey: recallKeys.search(searchQuery),
+    queryFn: () => searchKnowledgeItems(searchQuery),
+    enabled: Boolean(searchQuery),
+  });
   function showCapturedItem(knowledgeItem: KnowledgeItem) {
     queryClient.setQueryData<KnowledgeItem[]>(
       knowledgeItemKeys.all,
@@ -47,6 +56,21 @@ export default function Home() {
         </p>
       </header>
       <CaptureForm onCaptured={showCapturedItem} />
+      <section aria-labelledby="recall-heading" className="space-y-4">
+        <div>
+          <h2 id="recall-heading" className="text-2xl font-semibold tracking-tight">Recall your Knowledge Items</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Search by meaning or exact language such as an error message, command, or identifier.</p>
+        </div>
+        <SearchForm onSearch={setSearchQuery} onClear={() => setSearchQuery("")} isSearching={recallQuery.isFetching} />
+        {searchQuery && recallQuery.isPending && <Card role="status"><CardContent className="py-3 text-center text-muted-foreground">Searching your captured knowledge…</CardContent></Card>}
+        {searchQuery && recallQuery.error && <Alert variant="destructive"><AlertDescription>{recallQuery.error.message}</AlertDescription></Alert>}
+        {searchQuery && !recallQuery.isPending && !recallQuery.error && recallQuery.data?.length === 0 && (
+          <Card><CardContent className="py-3 text-center text-muted-foreground">No Ready Knowledge Items matched that recall. Try a related idea or the exact wording you remember.</CardContent></Card>
+        )}
+        {recallQuery.data && recallQuery.data.length > 0 && (
+          <div className="grid gap-4 md:grid-cols-2">{recallQuery.data.map(result => <RecallResultCard key={result.id} result={result} />)}</div>
+        )}
+      </section>
       <section aria-labelledby="knowledge-items-heading" className="space-y-5">
         <div>
           <div>

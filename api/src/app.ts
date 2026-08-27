@@ -23,7 +23,7 @@ export function createApp({ database = db, embeddingProvider = createGeminiPassa
     app.use("/resources", resourcesRouter);
     app.use("/captures", capturesRouter(database, embeddingProvider.representation));
     app.use("/knowledge-items", knowledgeItemsRouter(database, embeddingProvider.representation));
-    app.use("/search", searchRouter);
+    app.use("/search", searchRouter(database, embeddingProvider));
     app.get("/health", (_req, res) => res.json({ status: "ok" }));
 
     return app;

@@ -1,6 +1,6 @@
 import { JSDOM } from "jsdom";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
-import type { CaptureResponse, KnowledgeItem } from "@/lib/types";
+import type { CaptureResponse, KnowledgeItem, RecallKnowledgeItem } from "@/lib/types";
 
 const dom = new JSDOM("<!doctype html><html><body></body></html>", {
   url: "http://localhost",
@@ -29,10 +29,13 @@ const createCapture =
       personalNote?: string;
     }) => Promise<CaptureResponse>
   >();
+const searchKnowledgeItems = mock<(query: string) => Promise<RecallKnowledgeItem[]>>();
 mock.module("@/lib/api", () => ({
   getKnowledgeItems,
   createCapture,
+  searchKnowledgeItems,
   knowledgeItemKeys: { all: ["knowledge-items"] },
+  recallKeys: { search: (query: string) => ["knowledge-items", "recall", query] },
 }));
 
 const { default: Home } = await import("@/app/page");
@@ -75,6 +78,7 @@ function renderHome() {
 beforeEach(() => {
   getKnowledgeItems.mockReset();
   createCapture.mockReset();
+  searchKnowledgeItems.mockReset();
 });
 afterEach(cleanup);
 
@@ -164,5 +168,41 @@ describe("Knowledge Item Capture", () => {
     expect((await screen.findByRole("alert")).textContent).toContain(
       "MindVault is unavailable.",
     );
+  });
+
+  test("shows grounded Recall excerpts and an action to open the original Source", async () => {
+    getKnowledgeItems.mockResolvedValue([]);
+    searchKnowledgeItems.mockResolvedValue([
+      {
+        id: 7,
+        title: "Lexical corpus",
+        source: processingItem.source,
+        recognitionSummary: null,
+        topicTags: [],
+        excerpts: [
+          {
+            text: "The service reported the error message EADDRINUSE while binding its listener.",
+            origin: "source-snapshot",
+            sourceSnapshot: {
+              id: 5,
+              originalUrl: processingItem.source.submittedUrl,
+              finalUrl: processingItem.source.submittedUrl,
+              canonicalUrl: null,
+              extractedAt: processingItem.createdAt,
+            },
+            ranking: { score: 0.04, lexicalRank: 1 },
+          },
+        ],
+        ranking: { score: 0.04, matchedPassageCount: 1 },
+      },
+    ]);
+    const user = userEvent.setup({ document: dom.window.document });
+    renderHome();
+
+    await user.type(screen.getByLabelText("Search your Knowledge Items"), "EADDRINUSE");
+    await user.click(screen.getByRole("button", { name: "Search" }));
+
+    expect(await screen.findByText(/EADDRINUSE/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Open original Source" }).getAttribute("href")).toBe(processingItem.source.submittedUrl);
   });
 });

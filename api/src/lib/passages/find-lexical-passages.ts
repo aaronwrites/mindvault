@@ -12,7 +12,7 @@ export type LexicalPassageMatch = {
     rank: number;
 };
 
-export async function findLexicalPassages(database: Database, query: string): Promise<LexicalPassageMatch[]> {
+export async function findLexicalPassages(database: Database, query: string, limit = 100): Promise<LexicalPassageMatch[]> {
     if (!query.trim()) return [];
 
     const result = await database.execute(sql<LexicalPassageMatch>`
@@ -21,6 +21,7 @@ export async function findLexicalPassages(database: Database, query: string): Pr
         FROM passages
         WHERE lexical_search @@ plainto_tsquery('simple', ${query})
         ORDER BY rank DESC, id
+        LIMIT ${limit}
     `);
     return result.rows as LexicalPassageMatch[];
 }

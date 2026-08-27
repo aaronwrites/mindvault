@@ -29,7 +29,7 @@ export function SearchForm({ onSearch, onClear, isSearching }: SearchFormProps) 
   return (
     <form onSubmit={handleSubmit} role="search" className="flex gap-2">
       <Input
-        aria-label="Search resources"
+        aria-label="Search your Knowledge Items"
         value={query}
         onChange={(event) => setQuery(event.target.value)}
         placeholder="Search by meaning, e.g. container orchestration"

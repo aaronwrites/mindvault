@@ -1,6 +1,7 @@
 import type {
   CaptureResponse,
   KnowledgeItem,
+  RecallKnowledgeItem,
   Resource,
   SourceType,
 } from "@/lib/types";
@@ -14,6 +15,9 @@ export const resourceKeys = {
 };
 
 export const knowledgeItemKeys = { all: ["knowledge-items"] as const };
+export const recallKeys = {
+  search: (query: string) => ["knowledge-items", "recall", query] as const,
+};
 
 async function getErrorMessage(response: Response, fallback: string) {
   const body = await response.json().catch(() => null);
@@ -45,6 +49,25 @@ export async function searchResources(query: string): Promise<Resource[]> {
   if (!response.ok) {
     throw new Error(
       await getErrorMessage(response, "Could not search your resources."),
+    );
+  }
+
+  return response.json();
+}
+
+export async function searchKnowledgeItems(
+  query: string,
+): Promise<RecallKnowledgeItem[]> {
+  const response = await fetch(
+    `${API_URL}/search?q=${encodeURIComponent(query)}`,
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      await getErrorMessage(
+        response,
+        "Recall is unavailable right now. Please try again.",
+      ),
     );
   }
 

@@ -12,7 +12,7 @@ export type SemanticPassageMatch = {
     distance: number;
 };
 
-export async function findSemanticPassages(database: Database, query: string, embeddingProvider: EmbeddingProvider): Promise<SemanticPassageMatch[]> {
+export async function findSemanticPassages(database: Database, query: string, embeddingProvider: EmbeddingProvider, limit = 100): Promise<SemanticPassageMatch[]> {
     const embedding = await embeddingProvider.embedQuery(query);
     validateEmbedding(embedding, embeddingProvider.representation);
     const distance = cosineDistance(passageEmbeddings.embedding, embedding);
@@ -28,6 +28,7 @@ export async function findSemanticPassages(database: Database, query: string, em
             eq(passageEmbeddings.dimensions, embeddingProvider.representation.dimensions),
             sql`${passageEmbeddings.metadata} IS NOT DISTINCT FROM ${JSON.stringify(embeddingProvider.representation.metadata)}::jsonb`,
         ))
-        .orderBy(asc(distance));
+        .orderBy(asc(distance))
+        .limit(limit);
     return matches.map(match => ({ ...match, distance: Number(match.distance) }));
 }
