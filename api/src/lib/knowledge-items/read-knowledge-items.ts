@@ -97,6 +97,7 @@ async function presentKnowledgeItems(
     }
 
     const availabilityByItem = await availabilityByKnowledgeItem(database, rows, latestAttempts, embeddingRepresentation);
+    const displayedLatestAttemptStatuses = await latestAttemptStatuses(database, latestAttempts);
 
     return rows.map(({ knowledgeItem, source }) => {
         const latestAttempt = latestAttempts.get(knowledgeItem.id);
@@ -117,12 +118,38 @@ async function presentKnowledgeItems(
             latestAttempt: latestAttempt ? {
                 id: latestAttempt.id,
                 kind: latestAttempt.kind,
-                status: latestAttempt.status,
+                status: displayedLatestAttemptStatuses.get(latestAttempt.id) ?? latestAttempt.status,
                 createdAt: toIsoString(latestAttempt.createdAt),
                 ...(latestAttempt.failureReason ? { failureReason: latestAttempt.failureReason } : {}),
             } : null,
         };
     });
+}
+
+async function latestAttemptStatuses(
+    database: Database,
+    latestAttempts: Map<number, typeof processingAttempts.$inferSelect>,
+): Promise<Map<number, string>> {
+    const attempts = [...latestAttempts.values()];
+    if (attempts.length === 0) return new Map();
+
+    const stages = await database.select({ processingAttemptId: processingStages.processingAttemptId, kind: processingStages.kind, status: processingStages.status })
+        .from(processingStages)
+        .where(inArray(processingStages.processingAttemptId, attempts.map(attempt => attempt.id)));
+    const stagesByAttempt = new Map<number, Array<{ kind: string; status: string }>>();
+    for (const stage of stages) {
+        const attemptStages = stagesByAttempt.get(stage.processingAttemptId) ?? [];
+        attemptStages.push(stage);
+        stagesByAttempt.set(stage.processingAttemptId, attemptStages);
+    }
+
+    return new Map(attempts.map(attempt => {
+        const requiredStages = (stagesByAttempt.get(attempt.id) ?? []).filter(stage => isRequiredRetrievalStage(stage.kind));
+        const status = attempt.status === "pending" && requiredStages.length > 0 && requiredStages.every(stage => stage.status === "completed")
+            ? "completed"
+            : attempt.status;
+        return [attempt.id, status];
+    }));
 }
 
 async function availabilityByKnowledgeItem(

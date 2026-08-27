@@ -40,6 +40,12 @@ describe("Extraction", () => {
         expect(refreshResponse.status).toBe(202);
         await harness.drainWorker();
 
+        const refreshedItem = await fetch(`${harness.apiBaseUrl}/knowledge-items/${firstCapture.knowledgeItemId}`);
+        expect(await refreshedItem.json()).toEqual(expect.objectContaining({
+            availability: "ready",
+            latestAttempt: expect.objectContaining({ kind: "refresh", status: "completed" }),
+        }));
+
         const snapshots = await harness.database.pool.query<{
             id: number;
             title: string;
