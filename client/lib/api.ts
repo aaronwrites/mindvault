@@ -113,6 +113,23 @@ export async function refreshKnowledgeItem(
   return response.json();
 }
 
+export async function retryKnowledgeItem(
+  knowledgeItemId: number,
+): Promise<RefreshKnowledgeItemResponse> {
+  const response = await fetch(
+    `${API_URL}/knowledge-items/${knowledgeItemId}/retry`,
+    { method: "POST" },
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      await getErrorMessage(response, "Could not retry Knowledge Item processing."),
+    );
+  }
+
+  return response.json();
+}
+
 export async function createResource(input: {
   title: string;
   url: string;

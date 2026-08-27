@@ -20,13 +20,18 @@ const labels = {
 export function KnowledgeItemCard({
   knowledgeItem,
   onRefresh,
+  onRetry,
   isRefreshing = false,
+  isRetrying = false,
 }: {
   knowledgeItem: KnowledgeItem;
   onRefresh: (knowledgeItemId: number) => void;
+  onRetry: (knowledgeItemId: number) => void;
   isRefreshing?: boolean;
+  isRetrying?: boolean;
 }) {
   const { source } = knowledgeItem;
+  const retryIsActionable = knowledgeItem.latestAttempt?.status === "failed";
   return (
     <Card className="h-full">
       <CardHeader>
@@ -59,6 +64,11 @@ export function KnowledgeItemCard({
             Capture succeeded. Processing continues in the background.
           </p>
         )}
+        {knowledgeItem.availability === "needs-attention" && (
+          <p className="text-sm text-muted-foreground">
+            Processing needs attention{knowledgeItem.latestAttempt?.failureReason ? `: ${knowledgeItem.latestAttempt.failureReason}` : "."}
+          </p>
+        )}
         {knowledgeItem.availability === "ready" && knowledgeItem.latestAttempt?.kind === "refresh" &&
           (knowledgeItem.latestAttempt.status === "pending" || knowledgeItem.latestAttempt.status === "running") && (
             <p className="text-sm text-muted-foreground">
@@ -71,6 +81,12 @@ export function KnowledgeItemCard({
               Refresh could not update this Source. Your existing Ready content remains available.
             </p>
           )}
+        {knowledgeItem.availability === "ready" && knowledgeItem.latestAttempt?.kind === "manual-retry" &&
+          (knowledgeItem.latestAttempt.status === "pending" || knowledgeItem.latestAttempt.status === "running") && (
+            <p className="text-sm text-muted-foreground">
+              Retrying failed processing. Your Ready content remains available.
+            </p>
+          )}
         {knowledgeItem.latestAttempt && (
           <p className="text-sm text-muted-foreground">
             Latest attempt:{" "}
@@ -80,13 +96,24 @@ export function KnowledgeItemCard({
         )}
       </CardContent>
       <CardFooter className="gap-3">
-        <Button
-          variant="outline"
-          onClick={() => onRefresh(knowledgeItem.id)}
-          disabled={isRefreshing}
-        >
-          {isRefreshing ? "Refreshing…" : "Refresh"}
-        </Button>
+        {knowledgeItem.availability === "ready" && !retryIsActionable && (
+          <Button
+            variant="outline"
+            onClick={() => onRefresh(knowledgeItem.id)}
+            disabled={isRefreshing}
+          >
+            {isRefreshing ? "Refreshing…" : "Refresh"}
+          </Button>
+        )}
+        {retryIsActionable && (
+          <Button
+            variant="outline"
+            onClick={() => onRetry(knowledgeItem.id)}
+            disabled={isRetrying}
+          >
+            {isRetrying ? "Retrying…" : "Retry processing"}
+          </Button>
+        )}
       </CardFooter>
       {knowledgeItem.captureContexts.length > 0 && (
         <CardFooter>

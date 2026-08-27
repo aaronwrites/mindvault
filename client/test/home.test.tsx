@@ -30,11 +30,13 @@ const createCapture =
     }) => Promise<CaptureResponse>
   >();
 const refreshKnowledgeItem = mock<(knowledgeItemId: number) => Promise<{ processingAttemptId: number; knowledgeItem: KnowledgeItem }>>();
+const retryKnowledgeItem = mock<(knowledgeItemId: number) => Promise<{ processingAttemptId: number; knowledgeItem: KnowledgeItem }>>();
 const searchKnowledgeItems = mock<(query: string) => Promise<RecallKnowledgeItem[]>>();
 mock.module("@/lib/api", () => ({
   getKnowledgeItems,
   createCapture,
   refreshKnowledgeItem,
+  retryKnowledgeItem,
   searchKnowledgeItems,
   knowledgeItemKeys: { all: ["knowledge-items"] },
   recallKeys: { all: ["knowledge-items", "recall"], search: (query: string) => ["knowledge-items", "recall", query] },
@@ -81,6 +83,7 @@ beforeEach(() => {
   getKnowledgeItems.mockReset();
   createCapture.mockReset();
   refreshKnowledgeItem.mockReset();
+  retryKnowledgeItem.mockReset();
   searchKnowledgeItems.mockReset();
 });
 afterEach(cleanup);
@@ -163,6 +166,58 @@ describe("Knowledge Item Capture", () => {
 
     await user.click(await screen.findByRole("button", { name: "Refresh" }));
     await waitFor(() => expect(refreshKnowledgeItem.mock.calls[0]?.[0]).toBe(readyItem.id));
+  });
+
+  test("offers Retry only for a Knowledge Item that needs attention and updates it as retry processing begins", async () => {
+    const needsAttentionItem: KnowledgeItem = {
+      ...processingItem,
+      availability: "needs-attention",
+      latestAttempt: {
+        ...processingItem.latestAttempt!,
+        status: "failed",
+        failureReason: "The Source returned HTTP 503",
+      },
+    };
+    const retriedItem: KnowledgeItem = {
+      ...needsAttentionItem,
+      availability: "processing",
+      latestAttempt: { ...needsAttentionItem.latestAttempt!, id: 2, kind: "manual-retry", status: "pending" },
+    };
+    getKnowledgeItems
+      .mockResolvedValueOnce([needsAttentionItem])
+      .mockResolvedValue([retriedItem]);
+    retryKnowledgeItem.mockResolvedValue({
+      processingAttemptId: 2,
+      knowledgeItem: retriedItem,
+    });
+    const user = userEvent.setup({ document: dom.window.document });
+    renderHome();
+
+    await user.click(await screen.findByRole("button", { name: "Retry processing" }));
+    await waitFor(() => expect(retryKnowledgeItem.mock.calls[0]?.[0]).toBe(needsAttentionItem.id));
+    expect(await screen.findByText("Processing")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Retry processing" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Refresh" })).toBeNull();
+  });
+
+  test("offers Retry without removing Ready content after a failed Refresh", async () => {
+    const readyItem = {
+      ...processingItem,
+      availability: "ready" as const,
+      latestAttempt: {
+        ...processingItem.latestAttempt!,
+        kind: "refresh",
+        status: "failed",
+        failureReason: "The Source returned HTTP 503",
+      },
+    };
+    getKnowledgeItems.mockResolvedValue([readyItem]);
+    renderHome();
+
+    expect(await screen.findByText("Ready")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Retry processing" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Refresh" })).toBeNull();
+    expect(screen.getByText(/existing Ready content remains available/)).toBeTruthy();
   });
 
   test("provides accessible loading, empty, and error states", async () => {

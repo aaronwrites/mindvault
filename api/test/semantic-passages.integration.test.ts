@@ -99,6 +99,30 @@ describe("Semantic Passage indexing", () => {
                 failureReason: "embedding provider unavailable",
             }),
         }));
+
+        const retryResponse = await fetch(`${harness.apiBaseUrl}/knowledge-items/${firstCapture.knowledgeItemId}/retry`, {
+            method: "POST",
+        });
+        expect(retryResponse.status).toBe(202);
+        expect(await retryResponse.json()).toEqual(expect.objectContaining({
+            knowledgeItem: expect.objectContaining({
+                availability: "ready",
+                latestAttempt: expect.objectContaining({ kind: "manual-retry", status: "pending" }),
+            }),
+        }));
+
+        const recoveryWorker = createArticleProcessingWorker({
+            database: harness.database.db,
+            sourceFetchOptions: harness.sourceServer.safeFetchDependencies(),
+            embeddingProvider: embeddings,
+        });
+        await drainEligibleWork(recoveryWorker);
+
+        const recoveredItemResponse = await fetch(`${harness.apiBaseUrl}/knowledge-items/${firstCapture.knowledgeItemId}`);
+        expect(await recoveredItemResponse.json()).toEqual(expect.objectContaining({
+            availability: "ready",
+            latestAttempt: expect.objectContaining({ kind: "manual-retry", status: "completed" }),
+        }));
     });
 
     test.skipIf(!process.env.TEST_DATABASE_URL)("becomes Ready after a current Source Snapshot has complete lexical and semantic Passage indexes", async () => {

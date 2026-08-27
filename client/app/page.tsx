@@ -8,7 +8,7 @@ import { RecallResultCard } from "@/components/recall-result-card";
 import { SearchForm } from "@/components/search-form";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent } from "@/components/ui/card";
-import { getKnowledgeItems, knowledgeItemKeys, recallKeys, refreshKnowledgeItem, searchKnowledgeItems } from "@/lib/api";
+import { getKnowledgeItems, knowledgeItemKeys, recallKeys, refreshKnowledgeItem, retryKnowledgeItem, searchKnowledgeItems } from "@/lib/api";
 import type { KnowledgeItem } from "@/lib/types";
 
 export default function Home() {
@@ -28,21 +28,26 @@ export default function Home() {
     refetchIntervalInBackground: true,
   });
   const knowledgeItems = knowledgeItemsQuery.data ?? [];
+  async function updateKnowledgeItemAfterProcessingAttempt({ knowledgeItem }: { knowledgeItem: KnowledgeItem }) {
+    queryClient.setQueryData<KnowledgeItem[]>(
+      knowledgeItemKeys.all,
+      (current) =>
+        (current ?? []).map((item) =>
+          item.id === knowledgeItem.id ? knowledgeItem : item,
+        ),
+    );
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: knowledgeItemKeys.all }),
+      queryClient.invalidateQueries({ queryKey: recallKeys.all }),
+    ]);
+  }
   const refreshMutation = useMutation({
     mutationFn: refreshKnowledgeItem,
-    onSuccess: async ({ knowledgeItem }) => {
-      queryClient.setQueryData<KnowledgeItem[]>(
-        knowledgeItemKeys.all,
-        (current) =>
-          (current ?? []).map((item) =>
-            item.id === knowledgeItem.id ? knowledgeItem : item,
-          ),
-      );
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: knowledgeItemKeys.all }),
-        queryClient.invalidateQueries({ queryKey: recallKeys.all }),
-      ]);
-    },
+    onSuccess: updateKnowledgeItemAfterProcessingAttempt,
+  });
+  const retryMutation = useMutation({
+    mutationFn: retryKnowledgeItem,
+    onSuccess: updateKnowledgeItemAfterProcessingAttempt,
   });
   const recallQuery = useQuery({
     queryKey: recallKeys.search(searchQuery),
@@ -121,6 +126,11 @@ export default function Home() {
             <AlertDescription>{refreshMutation.error.message}</AlertDescription>
           </Alert>
         )}
+        {retryMutation.error && (
+          <Alert variant="destructive">
+            <AlertDescription>{retryMutation.error.message}</AlertDescription>
+          </Alert>
+        )}
         {!knowledgeItemsQuery.isPending &&
           !knowledgeItemsQuery.error &&
           knowledgeItems.length === 0 && (
@@ -136,7 +146,9 @@ export default function Home() {
               key={knowledgeItem.id}
               knowledgeItem={knowledgeItem}
               onRefresh={(knowledgeItemId) => refreshMutation.mutate(knowledgeItemId)}
+              onRetry={(knowledgeItemId) => retryMutation.mutate(knowledgeItemId)}
               isRefreshing={refreshMutation.isPending && refreshMutation.variables === knowledgeItem.id}
+              isRetrying={retryMutation.isPending && retryMutation.variables === knowledgeItem.id}
             />
           ))}
         </div>

@@ -2,9 +2,14 @@ import { eq } from "drizzle-orm";
 import { afterEach, describe, expect, test } from "bun:test";
 import { createApp } from "../src/app";
 import { processingStages } from "../src/db/schema";
+import { DeterministicEmbeddingProvider, ManualClock } from "./support/deterministic-runtime";
 import { processingStageKinds } from "../src/lib/processing/stages";
+import { createLexicalIndexingStageHandler } from "../src/lib/passages/index-lexical-passages";
+import { createPassageGenerationStageHandler } from "../src/lib/passages/generate-passages";
+import { createSemanticIndexingStageHandler } from "../src/lib/passages/index-semantic-passages";
+import { createSnapshotPersistenceStageHandler } from "../src/lib/sources/persist-cleaned-source-snapshot";
+import { createExtractionStageHandler } from "../src/lib/sources/extract-public-textual-source";
 import { createProcessingWorker } from "../src/worker";
-import { ManualClock } from "./support/deterministic-runtime";
 import { createIntegrationHarness, type IntegrationHarness } from "./support/integration-harness";
 
 let harness: IntegrationHarness | undefined;
@@ -207,5 +212,114 @@ describe("Processing worker", () => {
         expect(runs["lexical-indexing"]).toBe(2);
         expect(runs["semantic-indexing"]).toBe(1);
         expect(runs["passage-generation"]).toBe(1);
+    });
+
+    test.skipIf(!process.env.TEST_DATABASE_URL)("manually retries only failed retrieval work without recreating the Knowledge Item", async () => {
+        const runs: Record<string, number> = {};
+        const embeddingProvider = new DeterministicEmbeddingProvider();
+        harness = await createIntegrationHarness(
+            database => createApp({ database: database.db, embeddingProvider }),
+            (database, sourceServer) => {
+                const extraction = createExtractionStageHandler(database.db, sourceServer.safeFetchDependencies());
+                const snapshotPersistence = createSnapshotPersistenceStageHandler(database.db);
+                const passageGeneration = createPassageGenerationStageHandler(database.db);
+                const lexicalIndexing = createLexicalIndexingStageHandler(database.db);
+                const semanticIndexing = createSemanticIndexingStageHandler(database.db, embeddingProvider);
+                return createProcessingWorker({
+                    database: database.db,
+                    workerId: "manual-retry-worker",
+                    maxAttempts: 1,
+                    handlers: {
+                        extraction: async stage => { runs.extraction = (runs.extraction ?? 0) + 1; await extraction(stage); },
+                        "snapshot-persistence": async stage => { runs["snapshot-persistence"] = (runs["snapshot-persistence"] ?? 0) + 1; await snapshotPersistence(stage); },
+                        "passage-generation": async stage => { runs["passage-generation"] = (runs["passage-generation"] ?? 0) + 1; await passageGeneration(stage); },
+                        "lexical-indexing": async stage => {
+                            runs["lexical-indexing"] = (runs["lexical-indexing"] ?? 0) + 1;
+                            if (runs["lexical-indexing"] === 1) throw new Error("lexical index is unavailable");
+                            await lexicalIndexing(stage);
+                        },
+                        "semantic-indexing": async stage => { runs["semantic-indexing"] = (runs["semantic-indexing"] ?? 0) + 1; await semanticIndexing(stage); },
+                        "recognition-summary-generation": async () => { runs["recognition-summary-generation"] = (runs["recognition-summary-generation"] ?? 0) + 1; },
+                        "topic-tag-generation": async () => { runs["topic-tag-generation"] = (runs["topic-tag-generation"] ?? 0) + 1; },
+                    },
+                });
+            },
+        );
+
+        const captureResponse = await fetch(`${harness.apiBaseUrl}/captures`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ url: harness.sourceServer.fetchUrl("/articles/primary-text") }),
+        });
+        const capture = await captureResponse.json() as { knowledgeItemId: number; processingAttemptId: number };
+        await harness.drainWorker();
+
+        const failedItem = await (await fetch(`${harness.apiBaseUrl}/knowledge-items/${capture.knowledgeItemId}`)).json() as {
+            availability: string;
+            latestAttempt: { status: string; failureReason?: string };
+        };
+        expect(failedItem).toEqual(expect.objectContaining({
+            availability: "needs-attention",
+            latestAttempt: expect.objectContaining({ status: "failed", failureReason: "lexical index is unavailable" }),
+        }));
+
+        const retryResponse = await fetch(`${harness.apiBaseUrl}/knowledge-items/${capture.knowledgeItemId}/retry`, {
+            method: "POST",
+        });
+        expect(retryResponse.status).toBe(202);
+        expect(await retryResponse.json()).toEqual(expect.objectContaining({
+            processingAttemptId: expect.any(Number),
+            knowledgeItem: expect.objectContaining({
+                availability: "processing",
+                latestAttempt: expect.objectContaining({ kind: "manual-retry", status: "pending" }),
+            }),
+        }));
+
+        await harness.drainWorker();
+
+        const recoveredItem = await (await fetch(`${harness.apiBaseUrl}/knowledge-items/${capture.knowledgeItemId}`)).json() as {
+            availability: string;
+            latestAttempt: { kind: string; status: string };
+        };
+        expect(recoveredItem).toEqual(expect.objectContaining({
+            availability: "ready",
+            latestAttempt: expect.objectContaining({ kind: "manual-retry", status: "completed" }),
+        }));
+        expect(runs).toEqual({
+            extraction: 1,
+            "snapshot-persistence": 1,
+            "passage-generation": 1,
+            "lexical-indexing": 2,
+            "semantic-indexing": 1,
+            "recognition-summary-generation": 1,
+            "topic-tag-generation": 1,
+        });
+        const history = await harness.database.pool.query<{
+            kind: string;
+            status: string;
+            attempt_count: number;
+        }>(`
+            SELECT attempt.kind, stage.status, stage.attempt_count
+            FROM processing_attempts AS attempt
+            INNER JOIN processing_stages AS stage ON stage.processing_attempt_id = attempt.id
+            WHERE attempt.knowledge_item_id = $1
+            ORDER BY attempt.id, stage.id
+        `, [capture.knowledgeItemId]);
+        expect(history.rows).toEqual([
+            { kind: "initial-capture", status: "completed", attempt_count: 1 },
+            { kind: "initial-capture", status: "completed", attempt_count: 1 },
+            { kind: "initial-capture", status: "completed", attempt_count: 1 },
+            { kind: "initial-capture", status: "failed", attempt_count: 1 },
+            { kind: "initial-capture", status: "completed", attempt_count: 1 },
+            { kind: "initial-capture", status: "completed", attempt_count: 1 },
+            { kind: "initial-capture", status: "completed", attempt_count: 1 },
+            { kind: "manual-retry", status: "completed", attempt_count: 0 },
+            { kind: "manual-retry", status: "completed", attempt_count: 0 },
+            { kind: "manual-retry", status: "completed", attempt_count: 0 },
+            { kind: "manual-retry", status: "completed", attempt_count: 1 },
+            { kind: "manual-retry", status: "completed", attempt_count: 0 },
+            { kind: "manual-retry", status: "completed", attempt_count: 0 },
+            { kind: "manual-retry", status: "completed", attempt_count: 0 },
+        ]);
     });
 });
