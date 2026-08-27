@@ -34,6 +34,7 @@ export type KnowledgeItem = {
     kind: string;
     status: string;
     createdAt: string;
+    failureReason?: string;
   } | null;
 };
 
@@ -66,8 +67,13 @@ export type CaptureResponse = {
   captureId: number;
   sourceId: number;
   knowledgeItemId: number;
-  processingAttemptId: number;
+  processingAttemptId: number | null;
   availability: KnowledgeItemAvailability;
   organizationCondition: "processing" | "complete" | "incomplete";
+  knowledgeItem: KnowledgeItem;
+};
+
+export type RefreshKnowledgeItemResponse = {
+  processingAttemptId: number;
   knowledgeItem: KnowledgeItem;
 };

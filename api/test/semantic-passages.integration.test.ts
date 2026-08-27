@@ -77,7 +77,10 @@ describe("Semantic Passage indexing", () => {
         const firstCapture = await capture();
         await harness.drainWorker();
         harness.sourceServer.setChangedArticleVersion(2);
-        await capture();
+        const refreshResponse = await fetch(`${harness.apiBaseUrl}/knowledge-items/${firstCapture.knowledgeItemId}/refresh`, {
+            method: "POST",
+        });
+        expect(refreshResponse.status).toBe(202);
 
         const failedRefreshWorker = createArticleProcessingWorker({
             database: harness.database.db,
@@ -88,7 +91,14 @@ describe("Semantic Passage indexing", () => {
         await drainEligibleWork(failedRefreshWorker);
 
         const itemResponse = await fetch(`${harness.apiBaseUrl}/knowledge-items/${firstCapture.knowledgeItemId}`);
-        expect(await itemResponse.json()).toEqual(expect.objectContaining({ availability: "ready" }));
+        expect(await itemResponse.json()).toEqual(expect.objectContaining({
+            availability: "ready",
+            latestAttempt: expect.objectContaining({
+                kind: "refresh",
+                status: "failed",
+                failureReason: "embedding provider unavailable",
+            }),
+        }));
     });
 
     test.skipIf(!process.env.TEST_DATABASE_URL)("becomes Ready after a current Source Snapshot has complete lexical and semantic Passage indexes", async () => {
@@ -192,12 +202,10 @@ describe("Semantic Passage indexing", () => {
         await capture();
         expect(firstProvider.calls).toBe(1);
 
-        const response = await fetch(`${harness.apiBaseUrl}/captures`, {
+        const response = await fetch(`${harness.apiBaseUrl}/knowledge-items/${firstCapture.knowledgeItemId}/refresh`, {
             method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ url: harness.sourceServer.fetchUrl("/articles/semantic-retention") }),
         });
-        expect(response.status).toBe(201);
+        expect(response.status).toBe(202);
 
         const replacementProvider = new FixedCorpusEmbeddingProvider("fixed-corpus-v2");
         const replacementWorker = createArticleProcessingWorker({

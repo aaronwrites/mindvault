@@ -4,7 +4,7 @@ import { sql } from "drizzle-orm";
 import { db } from "./db";
 import type { Clock, EmbeddingProvider } from "./lib/ai/providers";
 import { createGeminiPassageEmbeddingProvider } from "./lib/ai/embeddings";
-import { type ProcessingStageKind } from "./lib/processing/stages";
+import { isRequiredRetrievalStage, type ProcessingStageKind } from "./lib/processing/stages";
 import { createExtractionStageHandler } from "./lib/sources/extract-public-textual-source";
 import { createSnapshotPersistenceStageHandler } from "./lib/sources/persist-cleaned-source-snapshot";
 import { createPassageGenerationStageHandler } from "./lib/passages/generate-passages";
@@ -173,7 +173,7 @@ async function scheduleRetry(
           AND lease_token = ${stage.leaseToken}
         RETURNING id
     `);
-    if (exhausted && stage.kind === "extraction" && result.rows.length > 0) {
+    if (exhausted && isRequiredRetrievalStage(stage.kind) && result.rows.length > 0) {
         await database.update(schema.processingAttempts).set({ status: "failed", failureReason })
             .where(sql`${schema.processingAttempts.id} = ${stage.processingAttemptId}`);
     }

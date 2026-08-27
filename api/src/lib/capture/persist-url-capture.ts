@@ -6,19 +6,18 @@ import {
     captureContexts,
     captures,
     knowledgeItems,
-    processingAttempts,
-    processingStages,
     sources,
 } from "../../db/schema";
 import type { CreateCaptureInput } from "../../schemas/capture";
 import { normalizeCaptureUrl } from "./normalize-capture-url";
-import { processingStageKinds, type ProcessingStageKind } from "../processing/stages";
+import { createProcessingAttempt } from "../processing/create-processing-attempt";
+import { hasRecentSuccessfulExtraction } from "./refresh-policy";
 
 export type PersistedCapture = {
     captureId: number;
     sourceId: number;
     knowledgeItemId: number;
-    processingAttemptId: number;
+    processingAttemptId: number | null;
 };
 
 export async function persistUrlCapture(
@@ -54,46 +53,15 @@ export async function persistUrlCapture(
         ].filter((context): context is { captureId: number; kind: CaptureContextKind; text: string } => Boolean(context));
         if (contexts.length > 0) await transaction.insert(captureContexts).values(contexts);
 
-        const [attempt] = await transaction.insert(processingAttempts).values({
-            knowledgeItemId: knowledgeItem.id,
-            kind: createdSource ? "initial-capture" : "refresh",
-        }).returning();
-        if (!attempt) throw new Error("Processing Attempt was not created");
-
-        const stages = new Map<string, number>();
-        for (const kind of processingStageKinds) {
-            const prerequisite = prerequisiteFor(kind);
-            const prerequisiteStageId = prerequisite ? stages.get(prerequisite) : undefined;
-            const [stage] = await transaction.insert(processingStages).values({
-                processingAttemptId: attempt.id,
-                kind,
-                prerequisiteStageId,
-            }).returning();
-            if (!stage) throw new Error(`Processing stage ${kind} was not created`);
-            stages.set(kind, stage.id);
-        }
+        const processingAttemptId = createdSource || !await hasRecentSuccessfulExtraction(transaction, source.id)
+            ? await createProcessingAttempt(transaction, knowledgeItem.id, createdSource ? "initial-capture" : "refresh")
+            : null;
 
         return {
             captureId: capture.id,
             sourceId: source.id,
             knowledgeItemId: knowledgeItem.id,
-            processingAttemptId: attempt.id,
+            processingAttemptId,
         };
     });
-}
-
-function prerequisiteFor(kind: ProcessingStageKind): ProcessingStageKind | undefined {
-    switch (kind) {
-        case "snapshot-persistence":
-            return "extraction";
-        case "passage-generation":
-        case "recognition-summary-generation":
-        case "topic-tag-generation":
-            return "snapshot-persistence";
-        case "lexical-indexing":
-        case "semantic-indexing":
-            return "passage-generation";
-        default:
-            return undefined;
-    }
 }

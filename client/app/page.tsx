@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { CaptureForm } from "@/components/capture-form";
 import { KnowledgeItemCard } from "@/components/knowledge-item-card";
@@ -8,7 +8,7 @@ import { RecallResultCard } from "@/components/recall-result-card";
 import { SearchForm } from "@/components/search-form";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent } from "@/components/ui/card";
-import { getKnowledgeItems, knowledgeItemKeys, recallKeys, searchKnowledgeItems } from "@/lib/api";
+import { getKnowledgeItems, knowledgeItemKeys, recallKeys, refreshKnowledgeItem, searchKnowledgeItems } from "@/lib/api";
 import type { KnowledgeItem } from "@/lib/types";
 
 export default function Home() {
@@ -28,6 +28,22 @@ export default function Home() {
     refetchIntervalInBackground: true,
   });
   const knowledgeItems = knowledgeItemsQuery.data ?? [];
+  const refreshMutation = useMutation({
+    mutationFn: refreshKnowledgeItem,
+    onSuccess: async ({ knowledgeItem }) => {
+      queryClient.setQueryData<KnowledgeItem[]>(
+        knowledgeItemKeys.all,
+        (current) =>
+          (current ?? []).map((item) =>
+            item.id === knowledgeItem.id ? knowledgeItem : item,
+          ),
+      );
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: knowledgeItemKeys.all }),
+        queryClient.invalidateQueries({ queryKey: recallKeys.all }),
+      ]);
+    },
+  });
   const recallQuery = useQuery({
     queryKey: recallKeys.search(searchQuery),
     queryFn: () => searchKnowledgeItems(searchQuery),
@@ -100,6 +116,11 @@ export default function Home() {
             </AlertDescription>
           </Alert>
         )}
+        {refreshMutation.error && (
+          <Alert variant="destructive">
+            <AlertDescription>{refreshMutation.error.message}</AlertDescription>
+          </Alert>
+        )}
         {!knowledgeItemsQuery.isPending &&
           !knowledgeItemsQuery.error &&
           knowledgeItems.length === 0 && (
@@ -114,6 +135,8 @@ export default function Home() {
             <KnowledgeItemCard
               key={knowledgeItem.id}
               knowledgeItem={knowledgeItem}
+              onRefresh={(knowledgeItemId) => refreshMutation.mutate(knowledgeItemId)}
+              isRefreshing={refreshMutation.isPending && refreshMutation.variables === knowledgeItem.id}
             />
           ))}
         </div>

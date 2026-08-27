@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { createApp } from "../src/app";
+import { createArticleProcessingWorker } from "../src/worker";
 import {
     createIntegrationHarness,
     type IntegrationHarness,
@@ -20,6 +21,45 @@ async function startHarness(): Promise<IntegrationHarness> {
 }
 
 describe("URL Capture", () => {
+    test.skipIf(!process.env.TEST_DATABASE_URL)("retains Capture Context without scheduling a Refresh when Extraction is recent", async () => {
+        harness = await createIntegrationHarness(
+            database => createApp({ database: database.db }),
+            (database, sourceServer) => createArticleProcessingWorker({
+                database: database.db,
+                sourceFetchOptions: sourceServer.safeFetchDependencies(),
+            }),
+        );
+
+        const firstResponse = await fetch(`${harness.apiBaseUrl}/captures`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ url: harness.sourceServer.fetchUrl("/articles/primary-text") }),
+        });
+        const firstCapture = await firstResponse.json() as { knowledgeItemId: number };
+        await harness.drainWorker();
+
+        const repeatedResponse = await fetch(`${harness.apiBaseUrl}/captures`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+                url: harness.sourceServer.fetchUrl("/articles/primary-text"),
+                personalNote: "Keep the retrieval boundary in mind.",
+            }),
+        });
+
+        expect(repeatedResponse.status).toBe(201);
+        expect(await repeatedResponse.json()).toEqual(expect.objectContaining({
+            knowledgeItemId: firstCapture.knowledgeItemId,
+            processingAttemptId: null,
+            availability: "ready",
+        }));
+        const attempts = await harness.database.pool.query<{ count: string }>(
+            "SELECT count(*)::text AS count FROM processing_attempts WHERE knowledge_item_id = $1",
+            [firstCapture.knowledgeItemId],
+        );
+        expect(attempts.rows).toEqual([{ count: "1" }]);
+    });
+
     test.skipIf(!process.env.TEST_DATABASE_URL)("reuses a mechanically equivalent Source and Knowledge Item while retaining each Capture Context", async () => {
         const runningHarness = await startHarness();
 

@@ -24,7 +24,7 @@ describe("Extraction", () => {
                 headers: { "content-type": "application/json" },
                 body: JSON.stringify({ url: harness!.sourceServer.fetchUrl("/articles/changed") }),
             });
-            return response.json() as Promise<{ sourceId: number }>;
+            return response.json() as Promise<{ sourceId: number; knowledgeItemId: number }>;
         };
 
         const firstCapture = await capture();
@@ -34,7 +34,10 @@ describe("Extraction", () => {
         await harness.drainWorker();
 
         harness.sourceServer.setChangedArticleVersion(2);
-        await capture();
+        const refreshResponse = await fetch(`${harness.apiBaseUrl}/knowledge-items/${firstCapture.knowledgeItemId}/refresh`, {
+            method: "POST",
+        });
+        expect(refreshResponse.status).toBe(202);
         await harness.drainWorker();
 
         const snapshots = await harness.database.pool.query<{

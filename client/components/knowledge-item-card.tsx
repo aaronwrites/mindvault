@@ -19,8 +19,12 @@ const labels = {
 } as const;
 export function KnowledgeItemCard({
   knowledgeItem,
+  onRefresh,
+  isRefreshing = false,
 }: {
   knowledgeItem: KnowledgeItem;
+  onRefresh: (knowledgeItemId: number) => void;
+  isRefreshing?: boolean;
 }) {
   const { source } = knowledgeItem;
   return (
@@ -55,6 +59,18 @@ export function KnowledgeItemCard({
             Capture succeeded. Processing continues in the background.
           </p>
         )}
+        {knowledgeItem.availability === "ready" && knowledgeItem.latestAttempt?.kind === "refresh" &&
+          (knowledgeItem.latestAttempt.status === "pending" || knowledgeItem.latestAttempt.status === "running") && (
+            <p className="text-sm text-muted-foreground">
+              Refresh underway. Your Ready content remains available.
+            </p>
+          )}
+        {knowledgeItem.availability === "ready" && knowledgeItem.latestAttempt?.kind === "refresh" &&
+          knowledgeItem.latestAttempt.status === "failed" && (
+            <p className="text-sm text-muted-foreground">
+              Refresh could not update this Source. Your existing Ready content remains available.
+            </p>
+          )}
         {knowledgeItem.latestAttempt && (
           <p className="text-sm text-muted-foreground">
             Latest attempt:{" "}
@@ -63,6 +79,15 @@ export function KnowledgeItemCard({
           </p>
         )}
       </CardContent>
+      <CardFooter className="gap-3">
+        <Button
+          variant="outline"
+          onClick={() => onRefresh(knowledgeItem.id)}
+          disabled={isRefreshing}
+        >
+          {isRefreshing ? "Refreshing…" : "Refresh"}
+        </Button>
+      </CardFooter>
       {knowledgeItem.captureContexts.length > 0 && (
         <CardFooter>
           <ul className="space-y-1 text-sm" aria-label="Capture context">

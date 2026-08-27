@@ -2,6 +2,7 @@ import type {
   CaptureResponse,
   KnowledgeItem,
   RecallKnowledgeItem,
+  RefreshKnowledgeItemResponse,
   Resource,
   SourceType,
 } from "@/lib/types";
@@ -16,6 +17,7 @@ export const resourceKeys = {
 
 export const knowledgeItemKeys = { all: ["knowledge-items"] as const };
 export const recallKeys = {
+  all: ["knowledge-items", "recall"] as const,
   search: (query: string) => ["knowledge-items", "recall", query] as const,
 };
 
@@ -88,6 +90,23 @@ export async function createCapture(input: {
   if (!response.ok) {
     throw new Error(
       await getErrorMessage(response, "Could not capture this URL."),
+    );
+  }
+
+  return response.json();
+}
+
+export async function refreshKnowledgeItem(
+  knowledgeItemId: number,
+): Promise<RefreshKnowledgeItemResponse> {
+  const response = await fetch(
+    `${API_URL}/knowledge-items/${knowledgeItemId}/refresh`,
+    { method: "POST" },
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      await getErrorMessage(response, "Could not refresh this Knowledge Item."),
     );
   }
 

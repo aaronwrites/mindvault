@@ -29,13 +29,15 @@ const createCapture =
       personalNote?: string;
     }) => Promise<CaptureResponse>
   >();
+const refreshKnowledgeItem = mock<(knowledgeItemId: number) => Promise<{ processingAttemptId: number; knowledgeItem: KnowledgeItem }>>();
 const searchKnowledgeItems = mock<(query: string) => Promise<RecallKnowledgeItem[]>>();
 mock.module("@/lib/api", () => ({
   getKnowledgeItems,
   createCapture,
+  refreshKnowledgeItem,
   searchKnowledgeItems,
   knowledgeItemKeys: { all: ["knowledge-items"] },
-  recallKeys: { search: (query: string) => ["knowledge-items", "recall", query] },
+  recallKeys: { all: ["knowledge-items", "recall"], search: (query: string) => ["knowledge-items", "recall", query] },
 }));
 
 const { default: Home } = await import("@/app/page");
@@ -78,6 +80,7 @@ function renderHome() {
 beforeEach(() => {
   getKnowledgeItems.mockReset();
   createCapture.mockReset();
+  refreshKnowledgeItem.mockReset();
   searchKnowledgeItems.mockReset();
 });
 afterEach(cleanup);
@@ -139,6 +142,27 @@ describe("Knowledge Item Capture", () => {
       timeout: 3_000,
     });
     expect(await screen.findByText("Ready")).toBeTruthy();
+  });
+
+  test("offers an accessible Refresh action while keeping Ready content visible", async () => {
+    const readyItem = {
+      ...processingItem,
+      availability: "ready" as const,
+      latestAttempt: { ...processingItem.latestAttempt!, kind: "initial-capture", status: "completed" },
+    };
+    getKnowledgeItems.mockResolvedValue([readyItem]);
+    refreshKnowledgeItem.mockResolvedValue({
+      processingAttemptId: 2,
+      knowledgeItem: {
+        ...readyItem,
+        latestAttempt: { ...readyItem.latestAttempt!, id: 2, kind: "refresh", status: "pending" },
+      },
+    });
+    const user = userEvent.setup({ document: dom.window.document });
+    renderHome();
+
+    await user.click(await screen.findByRole("button", { name: "Refresh" }));
+    await waitFor(() => expect(refreshKnowledgeItem.mock.calls[0]?.[0]).toBe(readyItem.id));
   });
 
   test("provides accessible loading, empty, and error states", async () => {
