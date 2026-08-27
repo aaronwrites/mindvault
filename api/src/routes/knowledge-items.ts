@@ -2,10 +2,11 @@ import { Router } from "express";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as schema from "../db/schema";
 import { getKnowledgeItemController, listKnowledgeItemsController } from "../controllers/knowledge-items.controller";
+import type { EmbeddingProvider } from "../lib/ai/providers";
 
-export function knowledgeItemsRouter(database: NodePgDatabase<typeof schema>) {
+export function knowledgeItemsRouter(database: NodePgDatabase<typeof schema>, embeddingRepresentation: EmbeddingProvider["representation"]) {
     const router = Router();
-    router.get("/", listKnowledgeItemsController(database));
-    router.get("/:id", getKnowledgeItemController(database));
+    router.get("/", listKnowledgeItemsController(database, embeddingRepresentation));
+    router.get("/:id", getKnowledgeItemController(database, embeddingRepresentation));
     return router;
 }

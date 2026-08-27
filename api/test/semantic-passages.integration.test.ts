@@ -3,7 +3,7 @@ import { createApp } from "../src/app";
 import { findSemanticPassages } from "../src/lib/passages/find-semantic-passages";
 import type { EmbeddingProvider } from "../src/lib/ai/providers";
 import { createArticleProcessingWorker } from "../src/worker";
-import { drainEligibleWork } from "./support/deterministic-runtime";
+import { DeterministicEmbeddingProvider, drainEligibleWork } from "./support/deterministic-runtime";
 import { createIntegrationHarness, type IntegrationHarness } from "./support/integration-harness";
 
 let harness: IntegrationHarness | undefined;
@@ -54,10 +54,74 @@ const fixedCorpusVectors = new Map([
 ]);
 
 describe("Semantic Passage indexing", () => {
+    test.skipIf(!process.env.TEST_DATABASE_URL)("keeps an item Ready when a Refresh fails after retaining an older indexed Source Snapshot", async () => {
+        const embeddings = new DeterministicEmbeddingProvider();
+        harness = await createIntegrationHarness(
+            database => createApp({ database: database.db, embeddingProvider: embeddings }),
+            (database, sourceServer) => createArticleProcessingWorker({
+                database: database.db,
+                sourceFetchOptions: sourceServer.safeFetchDependencies(),
+                embeddingProvider: embeddings,
+            }),
+        );
+        const capture = async () => {
+            const response = await fetch(`${harness!.apiBaseUrl}/captures`, {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ url: harness!.sourceServer.fetchUrl("/articles/changed") }),
+            });
+            expect(response.status).toBe(201);
+            return response.json() as Promise<{ knowledgeItemId: number }>;
+        };
+
+        const firstCapture = await capture();
+        await harness.drainWorker();
+        harness.sourceServer.setChangedArticleVersion(2);
+        await capture();
+
+        const failedRefreshWorker = createArticleProcessingWorker({
+            database: harness.database.db,
+            sourceFetchOptions: harness.sourceServer.safeFetchDependencies(),
+            embeddingProvider: new FailingEmbeddingProvider(),
+            maxAttempts: 1,
+        });
+        await drainEligibleWork(failedRefreshWorker);
+
+        const itemResponse = await fetch(`${harness.apiBaseUrl}/knowledge-items/${firstCapture.knowledgeItemId}`);
+        expect(await itemResponse.json()).toEqual(expect.objectContaining({ availability: "ready" }));
+    });
+
+    test.skipIf(!process.env.TEST_DATABASE_URL)("becomes Ready after a current Source Snapshot has complete lexical and semantic Passage indexes", async () => {
+        const embeddings = new FixedCorpusEmbeddingProvider();
+        harness = await createIntegrationHarness(
+            database => createApp({ database: database.db, embeddingProvider: embeddings }),
+            (database, sourceServer) => createArticleProcessingWorker({
+                database: database.db,
+                sourceFetchOptions: sourceServer.safeFetchDependencies(),
+                embeddingProvider: embeddings,
+            }),
+        );
+
+        const captureResponse = await fetch(`${harness.apiBaseUrl}/captures`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ url: harness.sourceServer.fetchUrl("/articles/semantic-retention") }),
+        });
+        const capture = await captureResponse.json() as { knowledgeItemId: number; availability: string };
+        expect(captureResponse.status).toBe(201);
+        expect(capture.availability).toBe("processing");
+
+        await harness.drainWorker();
+
+        const knowledgeItemResponse = await fetch(`${harness.apiBaseUrl}/knowledge-items/${capture.knowledgeItemId}`);
+        expect(knowledgeItemResponse.status).toBe(200);
+        expect(await knowledgeItemResponse.json()).toEqual(expect.objectContaining({ availability: "ready" }));
+    });
+
     test.skipIf(!process.env.TEST_DATABASE_URL)("persists a complete compatible representation and recalls a fixed conceptual match", async () => {
         const embeddings = new FixedCorpusEmbeddingProvider();
         harness = await createIntegrationHarness(
-            database => createApp({ database: database.db }),
+            database => createApp({ database: database.db, embeddingProvider: embeddings }),
             (database, sourceServer) => createArticleProcessingWorker({
                 database: database.db,
                 sourceFetchOptions: sourceServer.safeFetchDependencies(),
@@ -105,7 +169,7 @@ describe("Semantic Passage indexing", () => {
     test.skipIf(!process.env.TEST_DATABASE_URL)("reuses compatible embeddings and replaces an incompatible representation", async () => {
         const firstProvider = new FixedCorpusEmbeddingProvider("fixed-corpus-v1");
         harness = await createIntegrationHarness(
-            database => createApp({ database: database.db }),
+            database => createApp({ database: database.db, embeddingProvider: firstProvider }),
             (database, sourceServer) => createArticleProcessingWorker({
                 database: database.db,
                 sourceFetchOptions: sourceServer.safeFetchDependencies(),
@@ -120,9 +184,10 @@ describe("Semantic Passage indexing", () => {
             });
             expect(response.status).toBe(201);
             await harness!.drainWorker();
+            return response.json() as Promise<{ knowledgeItemId: number }>;
         };
 
-        await capture();
+        const firstCapture = await capture();
         expect(firstProvider.calls).toBe(1);
         await capture();
         expect(firstProvider.calls).toBe(1);
@@ -144,5 +209,19 @@ describe("Semantic Passage indexing", () => {
         expect(replacementProvider.calls).toBe(1);
         const models = await harness.database.pool.query<{ model: string }>("SELECT DISTINCT model FROM passage_embeddings");
         expect(models.rows).toEqual([{ model: "fixed-corpus-v2" }]);
+        const itemResponse = await fetch(`${harness.apiBaseUrl}/knowledge-items/${firstCapture.knowledgeItemId}`);
+        expect(await itemResponse.json()).toEqual(expect.objectContaining({ availability: "processing" }));
     });
 });
+
+class FailingEmbeddingProvider implements EmbeddingProvider {
+    readonly representation = new DeterministicEmbeddingProvider().representation;
+
+    async embed(): Promise<number[]> {
+        throw new Error("embedding provider unavailable");
+    }
+
+    async embedQuery(): Promise<number[]> {
+        throw new Error("embedding provider unavailable");
+    }
+}

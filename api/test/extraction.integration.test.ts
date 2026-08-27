@@ -208,7 +208,7 @@ describe("Extraction", () => {
 
         const itemResponse = await fetch(`${harness.apiBaseUrl}/knowledge-items/${capture.knowledgeItemId}`);
         expect(await itemResponse.json()).toEqual(expect.objectContaining({
-            availability: "processing",
+            availability: "ready",
             source: expect.objectContaining({ kind: "public-textual-web" }),
         }));
         const extraction = await harness.database.pool.query<{ title: string; primary_text: string; raw_html_count: string }>(`

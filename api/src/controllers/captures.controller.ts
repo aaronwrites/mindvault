@@ -4,8 +4,9 @@ import * as schema from "../db/schema";
 import { persistUrlCapture } from "../lib/capture/persist-url-capture";
 import { getKnowledgeItem } from "../lib/knowledge-items/read-knowledge-items";
 import { createCaptureSchema } from "../schemas/capture";
+import type { EmbeddingProvider } from "../lib/ai/providers";
 
-export function createCapture(database: NodePgDatabase<typeof schema>) {
+export function createCapture(database: NodePgDatabase<typeof schema>, embeddingRepresentation: EmbeddingProvider["representation"]) {
     return async (req: Request, res: Response) => {
         const parsed = createCaptureSchema.safeParse(req.body);
         if (!parsed.success) {
@@ -14,7 +15,7 @@ export function createCapture(database: NodePgDatabase<typeof schema>) {
 
         try {
             const result = await persistUrlCapture(database, parsed.data);
-            const knowledgeItem = await getKnowledgeItem(database, result.knowledgeItemId);
+            const knowledgeItem = await getKnowledgeItem(database, result.knowledgeItemId, embeddingRepresentation);
             if (!knowledgeItem) throw new Error("Captured Knowledge Item could not be read");
 
             return res.status(201).json({
