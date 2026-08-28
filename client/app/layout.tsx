@@ -4,7 +4,7 @@ import { Providers } from "./providers";
 
 export const metadata: Metadata = {
   title: "MindVault",
-  description: "Capture developer resources and recall them effortlessly.",
+  description: "Capture useful knowledge and recall it when it matters.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

@@ -1,11 +1,17 @@
 import { EMBEDDING_DIMENSIONS } from "../../src/db/schema";
-import type { Clock, EmbeddingProvider, TextGenerationProvider } from "../../src/lib/ai/providers";
+import type { Clock, EmbeddingProvider, TextGenerationProvider, TopicTagGenerationProvider } from "../../src/lib/ai/providers";
 
 export class DeterministicGenerationProvider implements TextGenerationProvider {
     constructor(private readonly response = "deterministic generated text") {}
 
     async generate(_prompt: string): Promise<string> {
         return this.response;
+    }
+}
+
+export class DeterministicTopicTagGenerationProvider implements TopicTagGenerationProvider {
+    async generateTopicTags(): Promise<Array<{ name: string; aliases: string[] }>> {
+        return [{ name: "Testing", aliases: [] }];
     }
 }
 

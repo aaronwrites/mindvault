@@ -1,10 +1,13 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { createApp } from "../src/app";
 import { createArticleProcessingWorker } from "../src/worker";
-import { ManualClock } from "./support/deterministic-runtime";
+import { DeterministicEmbeddingProvider, DeterministicGenerationProvider, DeterministicTopicTagGenerationProvider, ManualClock } from "./support/deterministic-runtime";
 import { createIntegrationHarness, type IntegrationHarness } from "./support/integration-harness";
 
 let harness: IntegrationHarness | undefined;
+const embeddings = new DeterministicEmbeddingProvider();
+const summaries = new DeterministicGenerationProvider();
+const topicTags = new DeterministicTopicTagGenerationProvider();
 
 afterEach(async () => {
     await harness?.cleanup();
@@ -14,8 +17,8 @@ afterEach(async () => {
 describe("Extraction", () => {
     test.skipIf(!process.env.TEST_DATABASE_URL)("persists immutable cleaned Source Snapshots without duplicating unchanged content", async () => {
         harness = await createIntegrationHarness(
-            database => createApp({ database: database.db }),
-            (database, sourceServer) => createArticleProcessingWorker({ database: database.db, sourceFetchOptions: sourceServer.safeFetchDependencies() }),
+            database => createApp({ database: database.db, embeddingProvider: embeddings }),
+            (database, sourceServer) => createArticleProcessingWorker({ database: database.db, sourceFetchOptions: sourceServer.safeFetchDependencies(), embeddingProvider: embeddings, summaryProvider: summaries, topicTagProvider: topicTags }),
         );
 
         const capture = async () => {
@@ -90,8 +93,8 @@ describe("Extraction", () => {
 
     test.skipIf(!process.env.TEST_DATABASE_URL)("reconciles canonical Sources without losing Capture Context or Processing Attempt history", async () => {
         harness = await createIntegrationHarness(
-            database => createApp({ database: database.db }),
-            (database, sourceServer) => createArticleProcessingWorker({ database: database.db, sourceFetchOptions: sourceServer.safeFetchDependencies() }),
+            database => createApp({ database: database.db, embeddingProvider: embeddings }),
+            (database, sourceServer) => createArticleProcessingWorker({ database: database.db, sourceFetchOptions: sourceServer.safeFetchDependencies(), embeddingProvider: embeddings, summaryProvider: summaries, topicTagProvider: topicTags }),
         );
 
         const firstResponse = await fetch(`${harness.apiBaseUrl}/captures`, {
@@ -140,8 +143,8 @@ describe("Extraction", () => {
 
     test.skipIf(!process.env.TEST_DATABASE_URL)("keeps independent Sources distinct when their extracted content is identical", async () => {
         harness = await createIntegrationHarness(
-            database => createApp({ database: database.db }),
-            (database, sourceServer) => createArticleProcessingWorker({ database: database.db, sourceFetchOptions: sourceServer.safeFetchDependencies() }),
+            database => createApp({ database: database.db, embeddingProvider: embeddings }),
+            (database, sourceServer) => createArticleProcessingWorker({ database: database.db, sourceFetchOptions: sourceServer.safeFetchDependencies(), embeddingProvider: embeddings, summaryProvider: summaries, topicTagProvider: topicTags }),
         );
         const capture = async (path: string) => {
             const response = await fetch(`${harness!.apiBaseUrl}/captures`, {
@@ -162,8 +165,8 @@ describe("Extraction", () => {
 
     test.skipIf(!process.env.TEST_DATABASE_URL)("reconciles a permanent redirect with its resolved Source", async () => {
         harness = await createIntegrationHarness(
-            database => createApp({ database: database.db }),
-            (database, sourceServer) => createArticleProcessingWorker({ database: database.db, sourceFetchOptions: sourceServer.safeFetchDependencies() }),
+            database => createApp({ database: database.db, embeddingProvider: embeddings }),
+            (database, sourceServer) => createArticleProcessingWorker({ database: database.db, sourceFetchOptions: sourceServer.safeFetchDependencies(), embeddingProvider: embeddings, summaryProvider: summaries, topicTagProvider: topicTags }),
         );
         const capture = async (path: string) => {
             const response = await fetch(`${harness!.apiBaseUrl}/captures`, {
@@ -184,8 +187,8 @@ describe("Extraction", () => {
 
     test.skipIf(!process.env.TEST_DATABASE_URL)("ignores an invalid declared canonical address without failing Extraction", async () => {
         harness = await createIntegrationHarness(
-            database => createApp({ database: database.db }),
-            (database, sourceServer) => createArticleProcessingWorker({ database: database.db, sourceFetchOptions: sourceServer.safeFetchDependencies() }),
+            database => createApp({ database: database.db, embeddingProvider: embeddings }),
+            (database, sourceServer) => createArticleProcessingWorker({ database: database.db, sourceFetchOptions: sourceServer.safeFetchDependencies(), embeddingProvider: embeddings, summaryProvider: summaries, topicTagProvider: topicTags }),
         );
         const response = await fetch(`${harness.apiBaseUrl}/captures`, {
             method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ url: harness.sourceServer.fetchUrl("/invalid-canonical") }),
@@ -202,8 +205,8 @@ describe("Extraction", () => {
 
     test.skipIf(!process.env.TEST_DATABASE_URL)("records cleaned meaningful primary text from a supported article", async () => {
         harness = await createIntegrationHarness(
-            database => createApp({ database: database.db }),
-            (database, sourceServer) => createArticleProcessingWorker({ database: database.db, sourceFetchOptions: sourceServer.safeFetchDependencies() }),
+            database => createApp({ database: database.db, embeddingProvider: embeddings }),
+            (database, sourceServer) => createArticleProcessingWorker({ database: database.db, sourceFetchOptions: sourceServer.safeFetchDependencies(), embeddingProvider: embeddings, summaryProvider: summaries, topicTagProvider: topicTags }),
         );
 
         const captureResponse = await fetch(`${harness.apiBaseUrl}/captures`, {
@@ -236,8 +239,8 @@ describe("Extraction", () => {
 
     test.skipIf(!process.env.TEST_DATABASE_URL)("marks a known unsupported Source as Unsupported and skips downstream work", async () => {
         harness = await createIntegrationHarness(
-            database => createApp({ database: database.db }),
-            (database, sourceServer) => createArticleProcessingWorker({ database: database.db, sourceFetchOptions: sourceServer.safeFetchDependencies() }),
+            database => createApp({ database: database.db, embeddingProvider: embeddings }),
+            (database, sourceServer) => createArticleProcessingWorker({ database: database.db, sourceFetchOptions: sourceServer.safeFetchDependencies(), embeddingProvider: embeddings, summaryProvider: summaries, topicTagProvider: topicTags }),
         );
         const captureResponse = await fetch(`${harness.apiBaseUrl}/captures`, {
             method: "POST",
@@ -270,9 +273,12 @@ describe("Extraction", () => {
     ] as const) {
         test.skipIf(!process.env.TEST_DATABASE_URL)(`shows Needs attention after Extraction rejects ${path}`, async () => {
             harness = await createIntegrationHarness(
-                database => createApp({ database: database.db }),
+                database => createApp({ database: database.db, embeddingProvider: embeddings }),
                 (database, sourceServer) => createArticleProcessingWorker({
                     database: database.db,
+                    embeddingProvider: embeddings,
+                    summaryProvider: summaries,
+                    topicTagProvider: topicTags,
                     maxAttempts: 1,
                     sourceFetchOptions: sourceServer.safeFetchDependencies(),
                 }),
@@ -297,9 +303,12 @@ describe("Extraction", () => {
     test.skipIf(!process.env.TEST_DATABASE_URL)("shows Needs attention only after bounded Extraction retries are exhausted", async () => {
         const clock = new ManualClock(new Date());
         harness = await createIntegrationHarness(
-            database => createApp({ database: database.db }),
+            database => createApp({ database: database.db, embeddingProvider: embeddings }),
             (database, sourceServer) => createArticleProcessingWorker({
                 database: database.db,
+                embeddingProvider: embeddings,
+                summaryProvider: summaries,
+                topicTagProvider: topicTags,
                 clock,
                 maxAttempts: 3,
                 retryBaseDelayMs: 1_000,

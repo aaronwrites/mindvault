@@ -3,6 +3,7 @@ import { createApp } from "../src/app";
 import { findLexicalPassages } from "../src/lib/passages/find-lexical-passages";
 import { createArticleProcessingWorker } from "../src/worker";
 import { createIntegrationHarness, type IntegrationHarness } from "./support/integration-harness";
+import { DeterministicEmbeddingProvider, DeterministicGenerationProvider, DeterministicTopicTagGenerationProvider } from "./support/deterministic-runtime";
 
 let harness: IntegrationHarness | undefined;
 
@@ -13,9 +14,10 @@ afterEach(async () => {
 
 describe("Passage generation", () => {
     test.skipIf(!process.env.TEST_DATABASE_URL)("indexes Source Snapshot and Capture Context Passages for exact-language retrieval", async () => {
+        const embeddings = new DeterministicEmbeddingProvider();
         harness = await createIntegrationHarness(
-            database => createApp({ database: database.db }),
-            (database, sourceServer) => createArticleProcessingWorker({ database: database.db, sourceFetchOptions: sourceServer.safeFetchDependencies() }),
+            database => createApp({ database: database.db, embeddingProvider: embeddings }),
+            (database, sourceServer) => createArticleProcessingWorker({ database: database.db, sourceFetchOptions: sourceServer.safeFetchDependencies(), embeddingProvider: embeddings, summaryProvider: new DeterministicGenerationProvider(), topicTagProvider: new DeterministicTopicTagGenerationProvider() }),
         );
         const response = await fetch(`${harness.apiBaseUrl}/captures`, {
             method: "POST",
@@ -49,9 +51,10 @@ describe("Passage generation", () => {
     });
 
     test.skipIf(!process.env.TEST_DATABASE_URL)("creates distinct Source Snapshot and Capture Context Passages without duplicates", async () => {
+        const embeddings = new DeterministicEmbeddingProvider();
         harness = await createIntegrationHarness(
-            database => createApp({ database: database.db }),
-            (database, sourceServer) => createArticleProcessingWorker({ database: database.db, sourceFetchOptions: sourceServer.safeFetchDependencies() }),
+            database => createApp({ database: database.db, embeddingProvider: embeddings }),
+            (database, sourceServer) => createArticleProcessingWorker({ database: database.db, sourceFetchOptions: sourceServer.safeFetchDependencies(), embeddingProvider: embeddings, summaryProvider: new DeterministicGenerationProvider(), topicTagProvider: new DeterministicTopicTagGenerationProvider() }),
         );
         const capture = async (body: Record<string, string>) => {
             const response = await fetch(`${harness!.apiBaseUrl}/captures`, {

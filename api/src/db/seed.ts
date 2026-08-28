@@ -1,53 +1,24 @@
 import { db } from "./index";
-import { embeddings, resources, tags, resourceTags } from "./schema";
-import { generateResourceEmbedding } from "../lib/ai/embeddings";
+import { persistUrlCapture } from "../lib/capture/persist-url-capture";
 
 async function seed() {
-    console.log("Seeding database...");
+    const seedCaptures = [
+        {
+            url: "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Closures",
+            personalNote: "Review lexical scope examples before the next JavaScript session.",
+        },
+        {
+            url: "https://docs.docker.com/compose/",
+            selectedText: "Docker Compose is a tool for defining and running multi-container applications.",
+        },
+    ];
 
-    const [closures, dockerGuide, reactRepo] = await db
-        .insert(resources)
-        .values([
-            {
-                title: "Understanding Closures in JavaScript",
-                url: "https://example.com/closures-guide",
-                sourceType: "article",
-                summary: "A guide to closures in JavaScript, covering lexical scoping and common pitfalls.",
-            },
-            {
-                title: "Docker Compose Best Practices",
-                url: "https://example.com/docker-compose-guide",
-                sourceType: "article",
-                summary: "Practical patterns for structuring multi-service Docker Compose files.",
-            },
-            {
-                title: "facebook/react",
-                url: "https://github.com/facebook/react",
-                sourceType: "repo",
-                summary: "The official React repository — a JavaScript library for building user interfaces.",
-            },
-        ])
-        .returning();
-
-    const [jsTag, dockerTag, reactTag] = await db
-        .insert(tags)
-        .values([{ name: "javascript" }, { name: "docker" }, { name: "react" }])
-        .returning();
-
-    await db.insert(resourceTags).values([
-        { resourceId: closures?.id, tagId: jsTag?.id },
-        { resourceId: dockerGuide?.id, tagId: dockerTag?.id },
-        { resourceId: reactRepo?.id, tagId: reactTag?.id },
-        { resourceId: reactRepo?.id, tagId: jsTag?.id },
-    ]);
-
-    for (const resource of [closures, dockerGuide, reactRepo]) {
-        if (!resource) continue;
-        const embedding = await generateResourceEmbedding(resource);
-        await db.insert(embeddings).values({ resourceId: resource.id, embedding });
+    for (const input of seedCaptures) {
+        const capture = await persistUrlCapture(db, input);
+        console.log(`Created Capture ${capture.captureId} for Knowledge Item ${capture.knowledgeItemId}.`);
     }
 
-    console.log("Seed complete.");
+    console.log("Seeded Captures are Processing. Start the worker to extract, index, and organize them.");
     process.exit(0);
 }
 

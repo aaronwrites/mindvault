@@ -5,6 +5,7 @@ import {
     createIntegrationHarness,
     type IntegrationHarness,
 } from "./support/integration-harness";
+import { DeterministicEmbeddingProvider, DeterministicGenerationProvider, DeterministicTopicTagGenerationProvider } from "./support/deterministic-runtime";
 
 let harness: IntegrationHarness | undefined;
 
@@ -22,11 +23,15 @@ async function startHarness(): Promise<IntegrationHarness> {
 
 describe("URL Capture", () => {
     test.skipIf(!process.env.TEST_DATABASE_URL)("retains Capture Context without scheduling a Refresh when Extraction is recent", async () => {
+        const embeddings = new DeterministicEmbeddingProvider();
         harness = await createIntegrationHarness(
-            database => createApp({ database: database.db }),
+            database => createApp({ database: database.db, embeddingProvider: embeddings }),
             (database, sourceServer) => createArticleProcessingWorker({
                 database: database.db,
                 sourceFetchOptions: sourceServer.safeFetchDependencies(),
+                embeddingProvider: embeddings,
+                summaryProvider: new DeterministicGenerationProvider(),
+                topicTagProvider: new DeterministicTopicTagGenerationProvider(),
             }),
         );
 

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { createApp } from "../src/app";
 import type { EmbeddingProvider } from "../src/lib/ai/providers";
 import { createArticleProcessingWorker } from "../src/worker";
+import { DeterministicGenerationProvider, DeterministicTopicTagGenerationProvider } from "./support/deterministic-runtime";
 import { createIntegrationHarness, type IntegrationHarness } from "./support/integration-harness";
 
 let harness: IntegrationHarness | undefined;
@@ -58,6 +59,8 @@ describe("Knowledge Item Recall", () => {
                 database: database.db,
                 sourceFetchOptions: sourceServer.safeFetchDependencies(),
                 embeddingProvider: embeddings,
+                summaryProvider: new DeterministicGenerationProvider(),
+                topicTagProvider: new DeterministicTopicTagGenerationProvider(),
             }),
         );
         const activeHarness = harness;

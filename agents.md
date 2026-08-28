@@ -33,7 +33,7 @@ mindvault/
     drizzle.config.ts
     drizzle/             Generated migrations
   client/               Next.js frontend using shadcn/ui components
-  docker-compose.yml     Postgres (pgvector) + currently unused Redis
+  docker-compose.yml     PostgreSQL with pgvector
   AGENTS.md
   context.md
 ```
@@ -50,15 +50,15 @@ mindvault/
 ## Commands (api)
 
 - `bun run dev` — start dev server with watch mode
-- `bun run db:seed` — populate DB with sample resources/tags for local testing
+- `bun run db:seed` — create sample Captures for local processing
 - `bun run db:generate` — generate a new migration from schema changes
 - `bun run db:migrate` — apply pending migrations
-- `docker compose up -d` — start Postgres + Redis
+- `docker compose up -d` — start PostgreSQL
 - `docker compose down -v` — full reset (wipes DB volume)
 
 ## Current status
 
-The current implementation is a legacy synchronous prototype: it creates and lists `resources`, infers metadata from title and URL without extracting content, and performs whole-resource vector search. It has no durable Capture/Source/Knowledge Item model, processing lifecycle, Passage retrieval, retries, or authentication. The next authoritative milestone is `.scratch/durable-article-capture-and-retrieval/spec.md`; `CONTEXT.md` is the domain glossary and `docs/adr/` records accepted architectural decisions.
+MindVault durably creates Captures, Sources, Knowledge Items, Capture Context, and Processing Attempts in one transaction. A separate worker extracts Source Snapshots, creates and indexes Passages, then generates Recognition Summaries and Topic Tags. Knowledge Item availability is Processing, Ready, Unsupported, or Needs attention; Organization incomplete is a secondary condition. The authoritative milestone specification is `.scratch/durable-article-capture-and-retrieval/spec.md`; `context.md` is the domain glossary and `docs/adr/` records accepted architectural decisions.
 
 ## Agent skills
 

@@ -5,13 +5,6 @@ import type { EmbeddingProvider } from "./providers";
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 const EMBEDDING_MODEL = process.env.GEMINI_EMBEDDING_MODEL ?? "gemini-embedding-001";
 
-type ResourceEmbeddingInput = {
-    title: string;
-    url: string | null;
-    sourceType: string;
-    summary: string | null;
-};
-
 function normalize(values: number[]): number[] {
     const magnitude = Math.sqrt(values.reduce((sum, value) => sum + value * value, 0));
     if (!Number.isFinite(magnitude) || magnitude === 0) {
@@ -47,17 +40,6 @@ async function generateEmbedding(
     }
 
     return normalize(values);
-}
-
-export function generateResourceEmbedding(resource: ResourceEmbeddingInput): Promise<number[]> {
-    const text = [
-        `Title: ${resource.title}`,
-        `Type: ${resource.sourceType}`,
-        resource.summary ? `Summary: ${resource.summary}` : null,
-        resource.url ? `URL: ${resource.url}` : null,
-    ].filter(Boolean).join("\n");
-
-    return generateEmbedding(text, "RETRIEVAL_DOCUMENT", resource.title);
 }
 
 export function generateQueryEmbedding(query: string): Promise<number[]> {

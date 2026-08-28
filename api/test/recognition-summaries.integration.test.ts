@@ -4,7 +4,7 @@ import type { TextGenerationProvider } from "../src/lib/ai/providers";
 import { createExtractionStageHandler } from "../src/lib/sources/extract-public-textual-source";
 import { createSnapshotPersistenceStageHandler } from "../src/lib/sources/persist-cleaned-source-snapshot";
 import { createArticleProcessingWorker, createProcessingWorker } from "../src/worker";
-import { DeterministicEmbeddingProvider } from "./support/deterministic-runtime";
+import { DeterministicEmbeddingProvider, DeterministicTopicTagGenerationProvider } from "./support/deterministic-runtime";
 import { createIntegrationHarness, type IntegrationHarness } from "./support/integration-harness";
 
 let harness: IntegrationHarness | undefined;
@@ -40,6 +40,7 @@ describe("Recognition Summaries", () => {
                 sourceFetchOptions: sourceServer.safeFetchDependencies(),
                 embeddingProvider: embeddings,
                 summaryProvider: summaries,
+                topicTagProvider: new DeterministicTopicTagGenerationProvider(),
             }),
         );
 
@@ -85,6 +86,7 @@ describe("Recognition Summaries", () => {
                 sourceFetchOptions: sourceServer.safeFetchDependencies(),
                 embeddingProvider: embeddings,
                 summaryProvider: new FailingSummaryProvider(),
+                topicTagProvider: new DeterministicTopicTagGenerationProvider(),
                 maxAttempts: 1,
             }),
         );
@@ -125,6 +127,7 @@ describe("Recognition Summaries", () => {
                 sourceFetchOptions: sourceServer.safeFetchDependencies(),
                 embeddingProvider: embeddings,
                 summaryProvider: summaries,
+                topicTagProvider: new DeterministicTopicTagGenerationProvider(),
             }),
         );
         const captureResponse = await fetch(`${harness.apiBaseUrl}/captures`, {

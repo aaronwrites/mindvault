@@ -3,7 +3,7 @@ import { createApp } from "../src/app";
 import { findSemanticPassages } from "../src/lib/passages/find-semantic-passages";
 import type { EmbeddingProvider } from "../src/lib/ai/providers";
 import { createArticleProcessingWorker } from "../src/worker";
-import { DeterministicEmbeddingProvider, drainEligibleWork } from "./support/deterministic-runtime";
+import { DeterministicEmbeddingProvider, DeterministicGenerationProvider, DeterministicTopicTagGenerationProvider, drainEligibleWork } from "./support/deterministic-runtime";
 import { createIntegrationHarness, type IntegrationHarness } from "./support/integration-harness";
 
 let harness: IntegrationHarness | undefined;
@@ -62,6 +62,8 @@ describe("Semantic Passage indexing", () => {
                 database: database.db,
                 sourceFetchOptions: sourceServer.safeFetchDependencies(),
                 embeddingProvider: embeddings,
+                summaryProvider: new DeterministicGenerationProvider(),
+                topicTagProvider: new DeterministicTopicTagGenerationProvider(),
             }),
         );
         const capture = async () => {
@@ -86,6 +88,8 @@ describe("Semantic Passage indexing", () => {
             database: harness.database.db,
             sourceFetchOptions: harness.sourceServer.safeFetchDependencies(),
             embeddingProvider: new FailingEmbeddingProvider(),
+            summaryProvider: new DeterministicGenerationProvider(),
+            topicTagProvider: new DeterministicTopicTagGenerationProvider(),
             maxAttempts: 1,
         });
         await drainEligibleWork(failedRefreshWorker);
@@ -115,6 +119,8 @@ describe("Semantic Passage indexing", () => {
             database: harness.database.db,
             sourceFetchOptions: harness.sourceServer.safeFetchDependencies(),
             embeddingProvider: embeddings,
+                summaryProvider: new DeterministicGenerationProvider(),
+                topicTagProvider: new DeterministicTopicTagGenerationProvider(),
         });
         await drainEligibleWork(recoveryWorker);
 
@@ -133,6 +139,8 @@ describe("Semantic Passage indexing", () => {
                 database: database.db,
                 sourceFetchOptions: sourceServer.safeFetchDependencies(),
                 embeddingProvider: embeddings,
+                summaryProvider: new DeterministicGenerationProvider(),
+                topicTagProvider: new DeterministicTopicTagGenerationProvider(),
             }),
         );
 
@@ -160,6 +168,8 @@ describe("Semantic Passage indexing", () => {
                 database: database.db,
                 sourceFetchOptions: sourceServer.safeFetchDependencies(),
                 embeddingProvider: embeddings,
+                summaryProvider: new DeterministicGenerationProvider(),
+                topicTagProvider: new DeterministicTopicTagGenerationProvider(),
             }),
         );
 
@@ -208,6 +218,8 @@ describe("Semantic Passage indexing", () => {
                 database: database.db,
                 sourceFetchOptions: sourceServer.safeFetchDependencies(),
                 embeddingProvider: firstProvider,
+                summaryProvider: new DeterministicGenerationProvider(),
+                topicTagProvider: new DeterministicTopicTagGenerationProvider(),
             }),
         );
         const capture = async () => {
@@ -236,6 +248,8 @@ describe("Semantic Passage indexing", () => {
             database: harness.database.db,
             sourceFetchOptions: harness.sourceServer.safeFetchDependencies(),
             embeddingProvider: replacementProvider,
+                summaryProvider: new DeterministicGenerationProvider(),
+                topicTagProvider: new DeterministicTopicTagGenerationProvider(),
         });
         await drainEligibleWork(replacementWorker);
         expect(replacementProvider.calls).toBe(1);
