@@ -21,7 +21,7 @@ export default function Home() {
       query.state.data?.some(
         (item) =>
           item.availability === "processing" ||
-          item.organizationCondition !== "complete",
+          (item.availability === "ready" && item.organizationCondition !== "complete"),
       )
         ? 2_000
         : false,

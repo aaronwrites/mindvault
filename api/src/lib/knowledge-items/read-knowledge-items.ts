@@ -14,6 +14,8 @@ import {
     recognitionSummaries,
     sourceSnapshots,
     sources,
+    knowledgeItemTopicTags,
+    topicTags,
 } from "../../db/schema";
 
 type Database = NodePgDatabase<typeof schema>;
@@ -71,7 +73,7 @@ async function presentKnowledgeItems(
     if (rows.length === 0) return [];
 
     const itemIds = rows.map(row => row.knowledgeItem.id);
-    const [contextRows, attemptRows, summaryRows] = await Promise.all([
+    const [contextRows, attemptRows, summaryRows, topicTagRows] = await Promise.all([
         database
             .select({ knowledgeItemId: captures.knowledgeItemId, kind: captureContexts.kind, text: captureContexts.text })
             .from(captureContexts)
@@ -86,6 +88,11 @@ async function presentKnowledgeItems(
         database.select({ knowledgeItemId: recognitionSummaries.knowledgeItemId, sourceSnapshotId: recognitionSummaries.sourceSnapshotId, text: recognitionSummaries.text })
             .from(recognitionSummaries)
             .where(inArray(recognitionSummaries.knowledgeItemId, itemIds)),
+        database.select({ knowledgeItemId: knowledgeItemTopicTags.knowledgeItemId, sourceSnapshotId: knowledgeItemTopicTags.sourceSnapshotId, canonicalName: topicTags.canonicalName })
+            .from(knowledgeItemTopicTags)
+            .innerJoin(topicTags, eq(topicTags.id, knowledgeItemTopicTags.topicTagId))
+            .where(inArray(knowledgeItemTopicTags.knowledgeItemId, itemIds))
+            .orderBy(topicTags.canonicalName),
     ]);
 
     const contextsByItem = new Map<number, Array<{ kind: string; summary: string }>>();
@@ -100,9 +107,18 @@ async function presentKnowledgeItems(
         if (!latestAttempts.has(attempt.knowledgeItemId)) latestAttempts.set(attempt.knowledgeItemId, attempt);
     }
     const summariesByItem = new Map(summaryRows.map(summary => [summary.knowledgeItemId, summary]));
+    const topicTagsByItem = new Map<number, string[]>();
+    const currentSnapshotByItem = new Map(rows.map(row => [row.knowledgeItem.id, row.source.currentSnapshotId]));
+    for (const tag of topicTagRows) {
+        if (currentSnapshotByItem.get(tag.knowledgeItemId) !== tag.sourceSnapshotId) continue;
+        const tags = topicTagsByItem.get(tag.knowledgeItemId) ?? [];
+        tags.push(tag.canonicalName);
+        topicTagsByItem.set(tag.knowledgeItemId, tags);
+    }
 
     const availabilityByItem = await availabilityByKnowledgeItem(database, rows, latestAttempts, embeddingRepresentation);
     const displayedLatestAttemptStatuses = await latestAttemptStatuses(database, latestAttempts);
+    const organizationConditions = await organizationConditionsByKnowledgeItem(database, rows, attemptRows, latestAttempts, topicTagsByItem);
 
     return rows.map(({ knowledgeItem, source }) => {
         const latestAttempt = latestAttempts.get(knowledgeItem.id);
@@ -117,11 +133,11 @@ async function presentKnowledgeItems(
             },
             captureContexts: contextsByItem.get(knowledgeItem.id) ?? [],
             availability: availabilityByItem.get(knowledgeItem.id) ?? "processing",
-            organizationCondition: "processing",
+            organizationCondition: organizationConditions.get(knowledgeItem.id) ?? "processing",
             recognitionSummary: summariesByItem.get(knowledgeItem.id)?.sourceSnapshotId === source.currentSnapshotId
                 ? summariesByItem.get(knowledgeItem.id)!.text
                 : null,
-            topicTags: [],
+            topicTags: topicTagsByItem.get(knowledgeItem.id) ?? [],
             latestAttempt: latestAttempt ? {
                 id: latestAttempt.id,
                 kind: latestAttempt.kind,
@@ -131,6 +147,41 @@ async function presentKnowledgeItems(
             } : null,
         };
     });
+}
+
+async function organizationConditionsByKnowledgeItem(
+    database: Database,
+    rows: Array<{ knowledgeItem: typeof knowledgeItems.$inferSelect; source: typeof sources.$inferSelect }>,
+    attempts: Array<typeof processingAttempts.$inferSelect>,
+    latestAttempts: Map<number, typeof processingAttempts.$inferSelect>,
+    currentTopicTagsByItem: Map<number, string[]>,
+): Promise<Map<number, KnowledgeItemView["organizationCondition"]>> {
+    if (attempts.length === 0) return new Map();
+    const stages = await database.select({ processingAttemptId: processingStages.processingAttemptId, status: processingStages.status })
+        .from(processingStages)
+        .where(and(
+            inArray(processingStages.processingAttemptId, attempts.map(attempt => attempt.id)),
+            eq(processingStages.kind, "topic-tag-generation"),
+        ));
+    const topicStageByAttempt = new Map(stages.map(stage => [stage.processingAttemptId, stage.status]));
+    const hasFailedTopicTagStageByItem = new Set(attempts.flatMap(attempt =>
+        topicStageByAttempt.get(attempt.id) === "failed" ? [attempt.knowledgeItemId] : [],
+    ));
+    const conditionByItem = new Map([...latestAttempts.values()].map(attempt => {
+        const stageStatus = topicStageByAttempt.get(attempt.id);
+        const condition: KnowledgeItemView["organizationCondition"] = stageStatus === "failed"
+            ? "incomplete"
+            : stageStatus === "completed" || stageStatus === "skipped"
+                ? "complete"
+                : attempt.status === "failed" && hasFailedTopicTagStageByItem.has(attempt.knowledgeItemId)
+                    ? "incomplete"
+                : "processing";
+        return [attempt.knowledgeItemId, condition];
+    }));
+    for (const { knowledgeItem } of rows) {
+        if (currentTopicTagsByItem.has(knowledgeItem.id)) conditionByItem.set(knowledgeItem.id, "complete");
+    }
+    return conditionByItem;
 }
 
 async function latestAttemptStatuses(

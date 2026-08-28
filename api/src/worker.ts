@@ -2,10 +2,11 @@ import { randomUUID } from "node:crypto";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { sql } from "drizzle-orm";
 import { db } from "./db";
-import type { Clock, EmbeddingProvider, TextGenerationProvider } from "./lib/ai/providers";
+import type { Clock, EmbeddingProvider, TextGenerationProvider, TopicTagGenerationProvider } from "./lib/ai/providers";
 import { createGeminiPassageEmbeddingProvider } from "./lib/ai/embeddings";
-import { createGeminiTextGenerationProvider } from "./lib/ai/gemini";
+import { createGeminiTextGenerationProvider, createGeminiTopicTagGenerationProvider } from "./lib/ai/gemini";
 import { createRecognitionSummaryStageHandler } from "./lib/recognition-summaries/generate-recognition-summary";
+import { createTopicTagGenerationStageHandler } from "./lib/topic-tags/generate-topic-tags";
 import { isRequiredRetrievalStage, type ProcessingStageKind } from "./lib/processing/stages";
 import { createExtractionStageHandler } from "./lib/sources/extract-public-textual-source";
 import { createSnapshotPersistenceStageHandler } from "./lib/sources/persist-cleaned-source-snapshot";
@@ -46,8 +47,9 @@ export function createArticleProcessingWorker({
     sourceFetchOptions,
     embeddingProvider = createGeminiPassageEmbeddingProvider(),
     summaryProvider = createGeminiTextGenerationProvider(),
+    topicTagProvider = createGeminiTopicTagGenerationProvider(),
     ...options
-}: Omit<ProcessingWorkerOptions, "handlers"> & { sourceFetchOptions?: SafeFetchOptions; embeddingProvider?: EmbeddingProvider; summaryProvider?: TextGenerationProvider }): ProcessingWorker {
+}: Omit<ProcessingWorkerOptions, "handlers"> & { sourceFetchOptions?: SafeFetchOptions; embeddingProvider?: EmbeddingProvider; summaryProvider?: TextGenerationProvider; topicTagProvider?: TopicTagGenerationProvider }): ProcessingWorker {
     return createProcessingWorker({
         database,
         ...options,
@@ -58,6 +60,7 @@ export function createArticleProcessingWorker({
             "lexical-indexing": createLexicalIndexingStageHandler(database),
             "semantic-indexing": createSemanticIndexingStageHandler(database, embeddingProvider),
             "recognition-summary-generation": createRecognitionSummaryStageHandler(database, summaryProvider),
+            "topic-tag-generation": createTopicTagGenerationStageHandler(database, topicTagProvider),
         },
     });
 }
@@ -177,7 +180,7 @@ async function scheduleRetry(
           AND lease_token = ${stage.leaseToken}
         RETURNING id
     `);
-    if (exhausted && isRequiredRetrievalStage(stage.kind) && result.rows.length > 0) {
+    if (exhausted && (isRequiredRetrievalStage(stage.kind) || stage.kind === "topic-tag-generation") && result.rows.length > 0) {
         await database.update(schema.processingAttempts).set({ status: "failed", failureReason })
             .where(sql`${schema.processingAttempts.id} = ${stage.processingAttemptId}`);
     }

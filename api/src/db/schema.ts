@@ -1,4 +1,4 @@
-import { check, customType, index, pgTable, serial, text, timestamp, jsonb, integer, vector, uniqueIndex } from "drizzle-orm/pg-core";
+import { check, customType, index, pgTable, serial, text, timestamp, jsonb, integer, vector, uniqueIndex, primaryKey } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
 export const EMBEDDING_DIMENSIONS = 768;
@@ -111,6 +111,28 @@ export const recognitionSummaries = pgTable("recognition_summaries", {
     text: text("text").notNull(),
     generatedAt: timestamp("generated_at").notNull().defaultNow(),
 });
+
+export const topicTags = pgTable("topic_tags", {
+    id: serial("id").primaryKey(),
+    canonicalName: text("canonical_name").notNull(),
+    normalizedName: text("normalized_name").notNull().unique(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const topicTagAliases = pgTable("topic_tag_aliases", {
+    id: serial("id").primaryKey(),
+    topicTagId: integer("topic_tag_id").notNull().references(() => topicTags.id, { onDelete: "cascade" }),
+    alias: text("alias").notNull(),
+    normalizedAlias: text("normalized_alias").notNull().unique(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const knowledgeItemTopicTags = pgTable("knowledge_item_topic_tags", {
+    knowledgeItemId: integer("knowledge_item_id").notNull().references(() => knowledgeItems.id, { onDelete: "cascade" }),
+    topicTagId: integer("topic_tag_id").notNull().references(() => topicTags.id, { onDelete: "cascade" }),
+    sourceSnapshotId: integer("source_snapshot_id").notNull().references(() => sourceSnapshots.id, { onDelete: "cascade" }),
+    generatedAt: timestamp("generated_at").notNull().defaultNow(),
+}, table => [primaryKey({ columns: [table.knowledgeItemId, table.topicTagId] })]);
 
 export const passages = pgTable("passages", {
     id: serial("id").primaryKey(),

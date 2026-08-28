@@ -316,4 +316,27 @@ describe("Knowledge Item Capture", () => {
     expect(await screen.findAllByText("Generated recognition summary")).toHaveLength(2);
     expect(screen.getAllByText(summary)).toHaveLength(2);
   });
+
+  test("shows generated Topic Tags and Organization incomplete without hiding Ready content", async () => {
+    const item: KnowledgeItem = {
+      ...processingItem,
+      availability: "ready",
+      organizationCondition: "incomplete",
+      topicTags: ["Machine Learning", "Neural Networks"],
+      latestAttempt: {
+        ...processingItem.latestAttempt!,
+        status: "failed",
+        failureReason: "Topic Tag provider unavailable",
+      },
+    };
+    getKnowledgeItems.mockResolvedValue([item]);
+    renderHome();
+
+    expect(await screen.findByText("Ready")).toBeTruthy();
+    expect(screen.getByRole("region", { name: "Generated Topic Tags" })).toBeTruthy();
+    expect(screen.getByText("Machine Learning")).toBeTruthy();
+    expect(screen.getByText("Neural Networks")).toBeTruthy();
+    expect(screen.getByText(/Organization is incomplete/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Retry processing" })).toBeTruthy();
+  });
 });

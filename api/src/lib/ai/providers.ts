@@ -2,6 +2,15 @@ export interface TextGenerationProvider {
     generate(prompt: string): Promise<string>;
 }
 
+export type GeneratedTopicTag = {
+    name: string;
+    aliases: string[];
+};
+
+export interface TopicTagGenerationProvider {
+    generateTopicTags(prompt: string): Promise<GeneratedTopicTag[]>;
+}
+
 export interface EmbeddingProvider {
     representation: EmbeddingRepresentation;
     embed(text: string): Promise<number[]>;

@@ -65,6 +65,14 @@ export function KnowledgeItemCard({
             <p className="text-sm text-muted-foreground">{knowledgeItem.recognitionSummary}</p>
           </section>
         )}
+        {knowledgeItem.topicTags.length > 0 && (
+          <section aria-label="Generated Topic Tags" className="space-y-1">
+            <p className="text-xs font-medium text-muted-foreground">Generated topic tags</p>
+            <ul className="flex flex-wrap gap-2">
+              {knowledgeItem.topicTags.map((tag) => <li key={tag}><Badge variant="secondary">{tag}</Badge></li>)}
+            </ul>
+          </section>
+        )}
         {knowledgeItem.availability === "processing" && (
           <p className="text-sm text-muted-foreground">
             Capture succeeded. Processing continues in the background.
@@ -73,6 +81,11 @@ export function KnowledgeItemCard({
         {knowledgeItem.availability === "needs-attention" && (
           <p className="text-sm text-muted-foreground">
             Processing needs attention{knowledgeItem.latestAttempt?.failureReason ? `: ${knowledgeItem.latestAttempt.failureReason}` : "."}
+          </p>
+        )}
+        {knowledgeItem.organizationCondition === "incomplete" && (
+          <p className="text-sm text-muted-foreground">
+            Organization is incomplete. Topic Tag generation needs attention, but your Ready content remains available.
           </p>
         )}
         {knowledgeItem.availability === "ready" && knowledgeItem.latestAttempt?.kind === "refresh" &&
