@@ -2,8 +2,10 @@ import { randomUUID } from "node:crypto";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { sql } from "drizzle-orm";
 import { db } from "./db";
-import type { Clock, EmbeddingProvider } from "./lib/ai/providers";
+import type { Clock, EmbeddingProvider, TextGenerationProvider } from "./lib/ai/providers";
 import { createGeminiPassageEmbeddingProvider } from "./lib/ai/embeddings";
+import { createGeminiTextGenerationProvider } from "./lib/ai/gemini";
+import { createRecognitionSummaryStageHandler } from "./lib/recognition-summaries/generate-recognition-summary";
 import { isRequiredRetrievalStage, type ProcessingStageKind } from "./lib/processing/stages";
 import { createExtractionStageHandler } from "./lib/sources/extract-public-textual-source";
 import { createSnapshotPersistenceStageHandler } from "./lib/sources/persist-cleaned-source-snapshot";
@@ -43,8 +45,9 @@ export function createArticleProcessingWorker({
     database,
     sourceFetchOptions,
     embeddingProvider = createGeminiPassageEmbeddingProvider(),
+    summaryProvider = createGeminiTextGenerationProvider(),
     ...options
-}: Omit<ProcessingWorkerOptions, "handlers"> & { sourceFetchOptions?: SafeFetchOptions; embeddingProvider?: EmbeddingProvider }): ProcessingWorker {
+}: Omit<ProcessingWorkerOptions, "handlers"> & { sourceFetchOptions?: SafeFetchOptions; embeddingProvider?: EmbeddingProvider; summaryProvider?: TextGenerationProvider }): ProcessingWorker {
     return createProcessingWorker({
         database,
         ...options,
@@ -54,6 +57,7 @@ export function createArticleProcessingWorker({
             "passage-generation": createPassageGenerationStageHandler(database),
             "lexical-indexing": createLexicalIndexingStageHandler(database),
             "semantic-indexing": createSemanticIndexingStageHandler(database, embeddingProvider),
+            "recognition-summary-generation": createRecognitionSummaryStageHandler(database, summaryProvider),
         },
     });
 }

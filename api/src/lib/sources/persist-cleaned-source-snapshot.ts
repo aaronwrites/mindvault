@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as schema from "../../db/schema";
-import { extractedSources, sourceSnapshots, sources } from "../../db/schema";
+import { extractedSources, processingAttempts, sourceSnapshots, sources } from "../../db/schema";
 import type { ClaimedProcessingStage } from "../../worker";
 
 type Database = NodePgDatabase<typeof schema>;
@@ -39,6 +39,8 @@ export function createSnapshotPersistenceStageHandler(database: Database) {
 
             await transaction.update(sources).set({ currentSnapshotId: snapshot.id })
                 .where(eq(sources.id, extractedSource.sourceId));
+            await transaction.update(processingAttempts).set({ sourceSnapshotId: snapshot.id })
+                .where(eq(processingAttempts.id, stage.processingAttemptId));
         });
     };
 }

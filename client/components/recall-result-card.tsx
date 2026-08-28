@@ -30,7 +30,10 @@ export function RecallResultCard({ result }: { result: RecallKnowledgeItem }) {
       </CardHeader>
       <CardContent className="space-y-4">
         {result.recognitionSummary && (
-          <p className="text-sm text-muted-foreground">{result.recognitionSummary}</p>
+          <section aria-label="Generated Recognition Summary" className="space-y-1">
+            <p className="text-xs font-medium text-muted-foreground">Generated recognition summary</p>
+            <p className="text-sm text-muted-foreground">{result.recognitionSummary}</p>
+          </section>
         )}
         {result.excerpts.map((excerpt, index) => (
           <blockquote key={`${excerpt.origin}-${index}`} className="space-y-1 border-l-2 pl-3 text-sm">

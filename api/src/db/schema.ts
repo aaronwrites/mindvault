@@ -71,6 +71,7 @@ export const captureContexts = pgTable("capture_contexts", {
 export const processingAttempts = pgTable("processing_attempts", {
     id: serial("id").primaryKey(),
     knowledgeItemId: integer("knowledge_item_id").notNull().references(() => knowledgeItems.id),
+    sourceSnapshotId: integer("source_snapshot_id").references(() => sourceSnapshots.id),
     kind: text("kind").notNull(),
     status: text("status").notNull().default("pending"),
     failureReason: text("failure_reason"),
@@ -103,6 +104,13 @@ export const sourceSnapshots = pgTable("source_snapshots", {
     contentHash: text("content_hash").notNull(),
     createdAt: timestamp("created_at").notNull().defaultNow(),
 }, table => [uniqueIndex("source_snapshots_source_content_hash_unique").on(table.sourceId, table.contentHash)]);
+
+export const recognitionSummaries = pgTable("recognition_summaries", {
+    knowledgeItemId: integer("knowledge_item_id").primaryKey().references(() => knowledgeItems.id, { onDelete: "cascade" }),
+    sourceSnapshotId: integer("source_snapshot_id").notNull().references(() => sourceSnapshots.id, { onDelete: "cascade" }),
+    text: text("text").notNull(),
+    generatedAt: timestamp("generated_at").notNull().defaultNow(),
+});
 
 export const passages = pgTable("passages", {
     id: serial("id").primaryKey(),

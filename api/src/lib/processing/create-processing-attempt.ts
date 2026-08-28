@@ -11,8 +11,9 @@ export async function createProcessingAttempt(
     knowledgeItemId: number,
     kind: "initial-capture" | "refresh" | "manual-retry",
     completedStageKinds: ReadonlySet<ProcessingStageKind> = new Set(),
+    sourceSnapshotId?: number,
 ): Promise<number> {
-    const [attempt] = await database.insert(processingAttempts).values({ knowledgeItemId, kind }).returning();
+    const [attempt] = await database.insert(processingAttempts).values({ knowledgeItemId, kind, sourceSnapshotId }).returning();
     if (!attempt) throw new Error("Processing Attempt was not created");
 
     const stages = new Map<ProcessingStageKind, number>();
@@ -50,7 +51,7 @@ export async function createManualRetryProcessingAttempt(database: Database, kno
         const completedStageKinds = new Set(previousStages
             .filter(stage => stage.status === "completed")
             .map(stage => stage.kind as ProcessingStageKind));
-        const retryAttemptId = await createProcessingAttempt(transaction, knowledgeItem.id, "manual-retry", completedStageKinds);
+        const retryAttemptId = await createProcessingAttempt(transaction, knowledgeItem.id, "manual-retry", completedStageKinds, failedAttempt.sourceSnapshotId ?? undefined);
 
         if (completedStageKinds.has("extraction") && !completedStageKinds.has("snapshot-persistence")) {
             const [extractedSource] = await transaction.select()

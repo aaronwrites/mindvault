@@ -59,6 +59,12 @@ export function KnowledgeItemCard({
         <p className="break-all text-sm text-muted-foreground">
           {source.submittedUrl}
         </p>
+        {knowledgeItem.recognitionSummary && (
+          <section aria-label="Generated Recognition Summary" className="space-y-1">
+            <p className="text-xs font-medium text-muted-foreground">Generated recognition summary</p>
+            <p className="text-sm text-muted-foreground">{knowledgeItem.recognitionSummary}</p>
+          </section>
+        )}
         {knowledgeItem.availability === "processing" && (
           <p className="text-sm text-muted-foreground">
             Capture succeeded. Processing continues in the background.

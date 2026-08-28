@@ -1,5 +1,6 @@
 import { GoogleGenAI, Type, type Schema } from "@google/genai";
 import { aiResponseSchema, type AIResponse } from "../../schemas/aiResponseSchema";
+import type { TextGenerationProvider } from "./providers";
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 const MODEL = process.env.GEMINI_MODEL ?? "gemini-3.5-flash";
@@ -76,4 +77,24 @@ export async function extractResourceMetadata(title: string, url: string | null)
     }
 
     return parsed.data;
+}
+
+export function createGeminiTextGenerationProvider(): TextGenerationProvider {
+    return {
+        async generate(prompt: string): Promise<string> {
+            let response;
+            try {
+                response = await ai.models.generateContent({
+                    model: MODEL,
+                    contents: prompt,
+                    config: { temperature: 0.2 },
+                });
+            } catch (error) {
+                throw new Error(`Gemini text generation call failed: ${(error as Error).message}`);
+            }
+            const text = response.text?.trim();
+            if (!text) throw new Error("Gemini returned no generated text");
+            return text;
+        },
+    };
 }

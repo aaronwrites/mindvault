@@ -11,6 +11,7 @@ import {
     passages,
     processingAttempts,
     processingStages,
+    recognitionSummaries,
     sourceSnapshots,
     sources,
 } from "../../db/schema";
@@ -70,7 +71,7 @@ async function presentKnowledgeItems(
     if (rows.length === 0) return [];
 
     const itemIds = rows.map(row => row.knowledgeItem.id);
-    const [contextRows, attemptRows] = await Promise.all([
+    const [contextRows, attemptRows, summaryRows] = await Promise.all([
         database
             .select({ knowledgeItemId: captures.knowledgeItemId, kind: captureContexts.kind, text: captureContexts.text })
             .from(captureContexts)
@@ -82,6 +83,9 @@ async function presentKnowledgeItems(
             .from(processingAttempts)
             .where(inArray(processingAttempts.knowledgeItemId, itemIds))
             .orderBy(desc(processingAttempts.createdAt), desc(processingAttempts.id)),
+        database.select({ knowledgeItemId: recognitionSummaries.knowledgeItemId, sourceSnapshotId: recognitionSummaries.sourceSnapshotId, text: recognitionSummaries.text })
+            .from(recognitionSummaries)
+            .where(inArray(recognitionSummaries.knowledgeItemId, itemIds)),
     ]);
 
     const contextsByItem = new Map<number, Array<{ kind: string; summary: string }>>();
@@ -95,6 +99,7 @@ async function presentKnowledgeItems(
     for (const attempt of attemptRows) {
         if (!latestAttempts.has(attempt.knowledgeItemId)) latestAttempts.set(attempt.knowledgeItemId, attempt);
     }
+    const summariesByItem = new Map(summaryRows.map(summary => [summary.knowledgeItemId, summary]));
 
     const availabilityByItem = await availabilityByKnowledgeItem(database, rows, latestAttempts, embeddingRepresentation);
     const displayedLatestAttemptStatuses = await latestAttemptStatuses(database, latestAttempts);
@@ -113,7 +118,9 @@ async function presentKnowledgeItems(
             captureContexts: contextsByItem.get(knowledgeItem.id) ?? [],
             availability: availabilityByItem.get(knowledgeItem.id) ?? "processing",
             organizationCondition: "processing",
-            recognitionSummary: null,
+            recognitionSummary: summariesByItem.get(knowledgeItem.id)?.sourceSnapshotId === source.currentSnapshotId
+                ? summariesByItem.get(knowledgeItem.id)!.text
+                : null,
             topicTags: [],
             latestAttempt: latestAttempt ? {
                 id: latestAttempt.id,

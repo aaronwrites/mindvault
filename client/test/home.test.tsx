@@ -284,4 +284,36 @@ describe("Knowledge Item Capture", () => {
     expect(await screen.findByText(/EADDRINUSE/)).toBeTruthy();
     expect(screen.getByRole("button", { name: "Open original Source" }).getAttribute("href")).toBe(processingItem.source.submittedUrl);
   });
+
+  test("labels Recognition Summaries as generated enrichment in Knowledge Item and Recall results", async () => {
+    const summary = "A generated description that helps recognize this Knowledge Item.";
+    getKnowledgeItems.mockResolvedValue([{ ...processingItem, recognitionSummary: summary }]);
+    searchKnowledgeItems.mockResolvedValue([
+      {
+        id: 7,
+        title: "Recognition fixture",
+        source: processingItem.source,
+        recognitionSummary: summary,
+        topicTags: [],
+        excerpts: [
+          {
+            text: "Grounded Source text remains separate from generated enrichment.",
+            origin: "source-snapshot",
+            sourceSnapshot: null,
+            ranking: { score: 0.04, lexicalRank: 1 },
+          },
+        ],
+        ranking: { score: 0.04, matchedPassageCount: 1 },
+      },
+    ]);
+    const user = userEvent.setup({ document: dom.window.document });
+    renderHome();
+
+    expect(await screen.findAllByText("Generated recognition summary")).toHaveLength(1);
+    await user.type(screen.getByLabelText("Search your Knowledge Items"), "recognition");
+    await user.click(screen.getByRole("button", { name: "Search" }));
+
+    expect(await screen.findAllByText("Generated recognition summary")).toHaveLength(2);
+    expect(screen.getAllByText(summary)).toHaveLength(2);
+  });
 });
