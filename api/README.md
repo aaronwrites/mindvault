@@ -7,14 +7,20 @@ The API durably Captures public HTTP(S) Sources as Knowledge Items. A separate w
 ```bash
 bun run db:migrate
 bun run dev
-bun run worker
 ```
+
+`bun run dev` starts both the API and its local Processing worker, so new Captures
+will leave Processing automatically. In a deployed or separately managed setup,
+start the worker independently with `bun run worker`.
 
 Development seeding creates sample Captures in the Processing state. Run the worker to process them:
 
 ```bash
 bun run db:seed
 ```
+
+When starting PostgreSQL from the repository root, `docker compose up -d` loads
+the `POSTGRES_*` values from `api/.env`.
 
 ## Tests
 

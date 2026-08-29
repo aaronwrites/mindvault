@@ -58,7 +58,7 @@ mindvault/
 
 ## Current status
 
-MindVault durably creates Captures, Sources, Knowledge Items, Capture Context, and Processing Attempts in one transaction. A separate worker extracts Source Snapshots, creates and indexes Passages, then generates Recognition Summaries and Topic Tags. Knowledge Item availability is Processing, Ready, Unsupported, or Needs attention; Organization incomplete is a secondary condition. The authoritative milestone specification is `.scratch/durable-article-capture-and-retrieval/spec.md`; `context.md` is the domain glossary and `docs/adr/` records accepted architectural decisions.
+MindVault durably creates Captures, Sources, Knowledge Items, Capture Context, and Processing Attempts in one transaction. A separate worker extracts Source Snapshots, creates and indexes Passages, then generates Recognition Summaries and Topic Tags. Knowledge Item availability is Processing, Ready, Unsupported, or Needs attention; Organization incomplete is a secondary condition. The durable article milestone is implemented, and the next authoritative milestone is `.scratch/rich-web-preview-cards/spec.md`; `context.md` is the domain glossary and `docs/adr/` records accepted architectural decisions.
 
 ## Agent skills
 
