@@ -1,4 +1,4 @@
-import { ExternalLink, Globe2 } from "lucide-react";
+import { ExternalLink } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -10,6 +10,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import type { KnowledgeItem } from "@/lib/types";
+import { SourcePreviewFacts, SourcePreviewMedia, sourcePreviewTitle } from "@/components/source-preview";
 
 const labels = {
   processing: "Processing",
@@ -32,33 +33,16 @@ export function KnowledgeItemCard({
 }) {
   const { source } = knowledgeItem;
   const preview = knowledgeItem.sourcePreview;
-  const hostname = readableHostname(source.submittedUrl);
   const retryIsActionable = knowledgeItem.latestAttempt?.status === "failed";
   return (
     <Card className="h-full">
-      {preview?.previewImageUrl ? (
-        // Retained API media is already bounded and validated; Next's optimizer cannot fetch this private API endpoint.
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={preview.previewImageUrl}
-          alt={preview.previewImageAlt ?? ""}
-          className="aspect-[16/7] w-full object-cover"
-        />
-      ) : (
-        <div
-          role="img"
-          aria-label="Webpage preview placeholder"
-          className="flex aspect-[16/7] items-center justify-center bg-muted text-muted-foreground"
-        >
-          <Globe2 aria-hidden="true" className="size-10" />
-        </div>
-      )}
+      <SourcePreviewMedia preview={preview} />
       <CardHeader>
         <Badge variant="outline" className="mb-1 w-fit">
           {labels[knowledgeItem.availability]}
         </Badge>
         <CardTitle className="text-lg leading-snug">
-          <h3>{preview?.title ?? hostname}</h3>
+          <h3>{sourcePreviewTitle(preview, source.submittedUrl)}</h3>
         </CardTitle>
         <CardAction>
           <Button
@@ -75,14 +59,7 @@ export function KnowledgeItemCard({
         </CardAction>
       </CardHeader>
       <CardContent className="flex-1 space-y-3">
-        <p className="text-sm font-medium text-muted-foreground">{displayContentType(preview?.contentType ?? "webpage")}</p>
-        <p className="break-all text-sm text-muted-foreground">{preview?.websiteName ?? hostname}</p>
-        {preview?.description && <p className="text-sm text-muted-foreground">{preview.description}</p>}
-        {(preview?.author || preview?.publishedAt) && (
-          <p className="text-sm text-muted-foreground">
-            {[preview.author, preview.publishedAt ? formatPublicationDate(preview.publishedAt) : null].filter(Boolean).join(" · ")}
-          </p>
-        )}
+        <SourcePreviewFacts preview={preview} submittedUrl={source.submittedUrl} />
         {knowledgeItem.recognitionSummary && (
           <section aria-label="Generated Recognition Summary" className="space-y-1">
             <p className="text-xs font-medium text-muted-foreground">Generated recognition summary</p>
@@ -174,23 +151,4 @@ export function KnowledgeItemCard({
       )}
     </Card>
   );
-}
-
-function readableHostname(address: string) {
-  try {
-    return new URL(address).hostname;
-  } catch {
-    return address;
-  }
-}
-
-function displayContentType(value: string) {
-  return value.replaceAll(/[-_]/g, " ").replace(/\b\w/g, letter => letter.toUpperCase());
-}
-
-function formatPublicationDate(value: string) {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat("en-US", {
-    month: "short", day: "numeric", year: "numeric", timeZone: "UTC",
-  }).format(date);
 }

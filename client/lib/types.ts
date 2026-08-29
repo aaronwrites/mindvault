@@ -39,6 +39,7 @@ export type RecallKnowledgeItem = {
   id: number;
   title: string | null;
   source: KnowledgeItem["source"];
+  sourcePreview: KnowledgeItem["sourcePreview"];
   recognitionSummary: string | null;
   topicTags: string[];
   excerpts: Array<{

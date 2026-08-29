@@ -15,6 +15,7 @@ export type RecallKnowledgeItemResult = {
     id: number;
     title: string | null;
     source: KnowledgeItemView["source"];
+    sourcePreview: KnowledgeItemView["sourcePreview"];
     recognitionSummary: string | null;
     topicTags: string[];
     excerpts: Array<{
@@ -71,6 +72,7 @@ export async function recallKnowledgeItems(database: Database, query: string, em
             id: view.id,
             title: detailsByPassageId.get(match.passages[0]!.passageId)?.sourceSnapshotTitle ?? null,
             source: view.source,
+            sourcePreview: view.sourcePreview,
             recognitionSummary: view.recognitionSummary,
             topicTags: view.topicTags,
             excerpts: match.passages.slice(0, 3).flatMap(passage => {

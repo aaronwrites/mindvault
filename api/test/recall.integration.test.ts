@@ -115,4 +115,44 @@ describe("Knowledge Item Recall", () => {
         expect(emptyResponse.status).toBe(200);
         expect(await emptyResponse.json()).toEqual([]);
     });
+
+    test.skipIf(!process.env.TEST_DATABASE_URL)("returns the current Source Preview without changing grounded Recall evidence", async () => {
+        const embeddings = new RecallCorpusEmbeddingProvider();
+        harness = await createIntegrationHarness(
+            database => createApp({ database: database.db, embeddingProvider: embeddings }),
+            (database, sourceServer) => createArticleProcessingWorker({
+                database: database.db,
+                sourceFetchOptions: sourceServer.safeFetchDependencies(),
+                embeddingProvider: embeddings,
+                summaryProvider: new DeterministicGenerationProvider(),
+                topicTagProvider: new DeterministicTopicTagGenerationProvider(),
+            }),
+        );
+        const activeHarness = harness;
+        const capturedUrl = activeHarness.sourceServer.fetchUrl("/articles/semantic-retention");
+        const captureResponse = await fetch(`${activeHarness.apiBaseUrl}/captures`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ url: capturedUrl }),
+        });
+        expect(captureResponse.status).toBe(201);
+        const capture = await captureResponse.json() as { knowledgeItemId: number };
+        await activeHarness.drainWorker();
+
+        const [list, detail, recall] = await Promise.all([
+            fetch(`${activeHarness.apiBaseUrl}/knowledge-items`).then(response => response.json()),
+            fetch(`${activeHarness.apiBaseUrl}/knowledge-items/${capture.knowledgeItemId}`).then(response => response.json()),
+            fetch(`${activeHarness.apiBaseUrl}/search?q=${encodeURIComponent("How can I remember an article after its original site changes?")}`).then(response => response.json()),
+        ]) as [Array<{ sourcePreview: unknown }>, { sourcePreview: unknown }, Array<{ sourcePreview?: unknown; excerpts: Array<{ text: string; origin: string; sourceSnapshot: { originalUrl: string } | null }> }>];
+
+        expect(recall[0]).toEqual(expect.objectContaining({
+            sourcePreview: detail.sourcePreview,
+            excerpts: [expect.objectContaining({
+                text: retainedPassage,
+                origin: "source-snapshot",
+                sourceSnapshot: expect.objectContaining({ originalUrl: capturedUrl }),
+            })],
+        }));
+        expect(list[0]?.sourcePreview).toEqual(detail.sourcePreview);
+    });
 });

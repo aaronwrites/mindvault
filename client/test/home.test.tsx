@@ -433,6 +433,7 @@ describe("Knowledge Item Capture", () => {
         id: 7,
         title: "Lexical corpus",
         source: processingItem.source,
+        sourcePreview: null,
         recognitionSummary: null,
         topicTags: [],
         excerpts: [
@@ -462,6 +463,91 @@ describe("Knowledge Item Capture", () => {
     expect(screen.getByRole("button", { name: "Open original Source" }).getAttribute("href")).toBe(processingItem.source.submittedUrl);
   });
 
+  test("presents the shared Source Preview while keeping Recall evidence prominent", async () => {
+    getKnowledgeItems.mockResolvedValue([]);
+    searchKnowledgeItems.mockResolvedValue([
+      {
+        id: 7,
+        title: "Trustworthy preview facts",
+        source: processingItem.source,
+        sourcePreview: {
+          title: "Trustworthy preview facts",
+          description: "A source-provided description for recognizing this article.",
+          websiteName: "MindVault Journal",
+          author: "Ada Lovelace",
+          publishedAt: "2026-08-20T00:00:00.000Z",
+          contentType: "article",
+          previewImageUrl: "/source-preview-media/5",
+          previewImageAlt: "A durable knowledge card",
+          faviconUrl: null,
+        },
+        recognitionSummary: "Generated context for recognition.",
+        topicTags: ["durable capture"],
+        excerpts: [
+          {
+            text: "Grounded Source text explains why this Knowledge Item matched.",
+            origin: "source-snapshot",
+            sourceSnapshot: {
+              id: 5,
+              originalUrl: "https://archive.example.com/original-article",
+              finalUrl: processingItem.source.submittedUrl,
+              canonicalUrl: null,
+              extractedAt: processingItem.createdAt,
+            },
+            ranking: { score: 0.04, lexicalRank: 1 },
+          },
+        ],
+        ranking: { score: 0.04, matchedPassageCount: 1 },
+      },
+    ]);
+    const user = userEvent.setup({ document: dom.window.document });
+    renderHome();
+
+    await user.type(screen.getByLabelText("Search your Knowledge Items"), "grounded source");
+    await user.click(screen.getByRole("button", { name: "Search" }));
+
+    expect(await screen.findByRole("heading", { name: "Trustworthy preview facts" })).toBeTruthy();
+    expect(screen.getByRole("img", { name: "A durable knowledge card" }).getAttribute("src")).toBe("/source-preview-media/5");
+    expect(screen.getByText("MindVault Journal")).toBeTruthy();
+    expect(screen.getByText("Source-provided details")).toBeTruthy();
+    expect(screen.getByText("A source-provided description for recognizing this article.")).toBeTruthy();
+    expect(screen.getByText(/Ada Lovelace/)).toBeTruthy();
+    expect(screen.getByText("Grounded Source text explains why this Knowledge Item matched.")).toBeTruthy();
+    expect(screen.getByLabelText("Generated Recognition Summary").textContent).toContain("Generated context for recognition.");
+    expect(screen.getByRole("list", { name: "Generated Topic Tags" }).textContent).toContain("durable capture");
+    expect(screen.getByRole("button", { name: "Open original Source" }).getAttribute("href")).toBe("https://archive.example.com/original-article");
+  });
+
+  test("keeps Recall understandable when no preview image was retained", async () => {
+    getKnowledgeItems.mockResolvedValue([]);
+    searchKnowledgeItems.mockResolvedValue([
+      {
+        id: 7,
+        title: null,
+        source: processingItem.source,
+        sourcePreview: null,
+        recognitionSummary: null,
+        topicTags: [],
+        excerpts: [{
+          text: "Grounded Source text remains available without presentation media.",
+          origin: "source-snapshot",
+          sourceSnapshot: null,
+          ranking: { score: 0.04, lexicalRank: 1 },
+        }],
+        ranking: { score: 0.04, matchedPassageCount: 1 },
+      },
+    ]);
+    const user = userEvent.setup({ document: dom.window.document });
+    renderHome();
+
+    await user.type(screen.getByLabelText("Search your Knowledge Items"), "grounded source");
+    await user.click(screen.getByRole("button", { name: "Search" }));
+
+    expect(await screen.findByRole("img", { name: "Webpage preview placeholder" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "example.com" })).toBeTruthy();
+    expect(screen.getByText("Grounded Source text remains available without presentation media.")).toBeTruthy();
+  });
+
   test("labels Recognition Summaries as generated enrichment in Knowledge Item and Recall results", async () => {
     const summary = "A generated description that helps recognize this Knowledge Item.";
     getKnowledgeItems.mockResolvedValue([{ ...processingItem, recognitionSummary: summary }]);
@@ -470,6 +556,7 @@ describe("Knowledge Item Capture", () => {
         id: 7,
         title: "Recognition fixture",
         source: processingItem.source,
+        sourcePreview: null,
         recognitionSummary: summary,
         topicTags: [],
         excerpts: [
