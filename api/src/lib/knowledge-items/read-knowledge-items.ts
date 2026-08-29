@@ -13,6 +13,7 @@ import {
     processingStages,
     recognitionSummaries,
     sourceSnapshots,
+    sourcePreviews,
     sources,
     knowledgeItemTopicTags,
     topicTags,
@@ -31,6 +32,17 @@ export type KnowledgeItemView = {
         normalizedUrl: string;
         kind: string;
     };
+    sourcePreview: {
+        title: string;
+        description: string | null;
+        websiteName: string | null;
+        author: string | null;
+        publishedAt: string | null;
+        contentType: string | null;
+        previewImageUrl: string | null;
+        previewImageAlt: string | null;
+        faviconUrl: string | null;
+    } | null;
     captureContexts: Array<{ kind: string; summary: string }>;
     availability: KnowledgeItemAvailability;
     organizationCondition: "processing" | "complete" | "incomplete";
@@ -73,7 +85,8 @@ async function presentKnowledgeItems(
     if (rows.length === 0) return [];
 
     const itemIds = rows.map(row => row.knowledgeItem.id);
-    const [contextRows, attemptRows, summaryRows, topicTagRows] = await Promise.all([
+    const currentSnapshotIds = rows.flatMap(row => row.source.currentSnapshotId === null ? [] : [row.source.currentSnapshotId]);
+    const [contextRows, attemptRows, summaryRows, topicTagRows, previewRows] = await Promise.all([
         database
             .select({ knowledgeItemId: captures.knowledgeItemId, kind: captureContexts.kind, text: captureContexts.text })
             .from(captureContexts)
@@ -93,6 +106,8 @@ async function presentKnowledgeItems(
             .innerJoin(topicTags, eq(topicTags.id, knowledgeItemTopicTags.topicTagId))
             .where(inArray(knowledgeItemTopicTags.knowledgeItemId, itemIds))
             .orderBy(topicTags.canonicalName),
+        currentSnapshotIds.length === 0 ? [] : database.select().from(sourcePreviews)
+            .where(inArray(sourcePreviews.sourceSnapshotId, currentSnapshotIds)),
     ]);
 
     const contextsByItem = new Map<number, Array<{ kind: string; summary: string }>>();
@@ -107,6 +122,7 @@ async function presentKnowledgeItems(
         if (!latestAttempts.has(attempt.knowledgeItemId)) latestAttempts.set(attempt.knowledgeItemId, attempt);
     }
     const summariesByItem = new Map(summaryRows.map(summary => [summary.knowledgeItemId, summary]));
+    const previewsBySnapshot = new Map(previewRows.map(preview => [preview.sourceSnapshotId, preview]));
     const topicTagsByItem = new Map<number, string[]>();
     const currentSnapshotByItem = new Map(rows.map(row => [row.knowledgeItem.id, row.source.currentSnapshotId]));
     for (const tag of topicTagRows) {
@@ -131,6 +147,7 @@ async function presentKnowledgeItems(
                 normalizedUrl: source.normalizedUrl,
                 kind: source.sourceKind,
             },
+            sourcePreview: source.currentSnapshotId === null ? null : previewFor(previewsBySnapshot.get(source.currentSnapshotId)),
             captureContexts: contextsByItem.get(knowledgeItem.id) ?? [],
             availability: availabilityByItem.get(knowledgeItem.id) ?? "processing",
             organizationCondition: organizationConditions.get(knowledgeItem.id) ?? "processing",
@@ -147,6 +164,21 @@ async function presentKnowledgeItems(
             } : null,
         };
     });
+}
+
+function previewFor(preview: typeof sourcePreviews.$inferSelect | undefined): KnowledgeItemView["sourcePreview"] {
+    if (!preview) return null;
+    return {
+        title: preview.title,
+        description: preview.description,
+        websiteName: preview.websiteName,
+        author: preview.author,
+        publishedAt: preview.publishedAt ? toIsoString(preview.publishedAt) : null,
+        contentType: preview.contentType,
+        previewImageUrl: preview.previewImageUrl,
+        previewImageAlt: preview.previewImageAlt,
+        faviconUrl: preview.faviconUrl,
+    };
 }
 
 async function organizationConditionsByKnowledgeItem(

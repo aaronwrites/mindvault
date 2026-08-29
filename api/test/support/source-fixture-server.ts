@@ -25,6 +25,18 @@ export async function startSourceFixtureServer(): Promise<SourceFixtureServer> {
         };
 
         if (path === "/articles/first") return html(200, article("First article", "A deterministic article about durable capture."));
+        if (path === "/articles/preview-facts") return html(200, `<!doctype html>
+<html><head>
+<meta content="article" property="og:type">
+<meta content="A durable knowledge card" property="og:image:alt">
+<meta content="/media/preview.png" property="og:image">
+<meta content="MindVault Journal" property="og:site_name">
+<meta content="Trustworthy preview facts" property="og:title">
+<meta content="A source-provided description for recognizing this article." name="description">
+<meta content="Ada Lovelace" name="author">
+<meta content="2026-08-20" property="article:published_time">
+<link href="/favicon.ico" rel="icon"><title>Fallback document title</title></head>
+<body><main><article><h1>Meaningful extraction title</h1><p>This article has enough meaningful primary text to preserve trustworthy retrieval while separately projecting source-provided facts for a recognisable Preview Card in the library.</p><p>Its metadata intentionally uses varied attribute order so the document parser, rather than a fragile regular expression, determines each optional Source Preview field.</p></article></main></body></html>`);
         if (path === "/articles/semantic-retention") return html(200, article("Retained knowledge", "MindVault preserves useful article text in a durable Source Snapshot so the knowledge remains available when the original website changes or disappears. This fixture supplies enough meaningful primary text for trustworthy conceptual retrieval after a public article is no longer available at its original address."));
         if (path === "/articles/semantic-unrelated") return html(200, article("Unrelated knowledge", "This fixture explains how PostgreSQL text search supports exact technical identifiers such as error messages, version numbers, and command-line flags. Its deliberately unrelated topic makes the expected conceptual match a property of the fixed corpus rather than the fake embedding provider's implementation."));
         if (path === "/articles/lexical-corpus") return html(200, article("Lexical corpus", "Run the git rebase --autosquash command before publishing. Pass the --max-old-space-size=4096 flag to Node.js when a build needs more memory. The service reported the error message EADDRINUSE while binding its listener. OAuth2 is the authorization protocol used by this fixture. PostgreSQL 18 supplies the text-search index. The deployment identifier release-2026-08-25 must remain traceable through processing history. This deliberately detailed corpus verifies exact-language Passage retrieval across commands, flags, error messages, acronyms, versions, and identifiers."));

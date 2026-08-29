@@ -10,6 +10,17 @@ export type KnowledgeItem = {
     normalizedUrl: string;
     kind: string;
   };
+  sourcePreview: {
+    title: string;
+    description: string | null;
+    websiteName: string | null;
+    author: string | null;
+    publishedAt: string | null;
+    contentType: string | null;
+    previewImageUrl: string | null;
+    previewImageAlt: string | null;
+    faviconUrl: string | null;
+  } | null;
   captureContexts: Array<{ kind: string; summary: string }>;
   availability: KnowledgeItemAvailability;
   organizationCondition: "processing" | "complete" | "incomplete";

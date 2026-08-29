@@ -67,6 +67,7 @@ export async function createManualRetryProcessingAttempt(database: Database, kno
                 finalUrl: extractedSource.finalUrl,
                 canonicalUrl: extractedSource.canonicalUrl,
                 permanentRedirects: extractedSource.permanentRedirects,
+                sourcePreview: extractedSource.sourcePreview,
                 extractedAt: extractedSource.extractedAt,
             });
         }

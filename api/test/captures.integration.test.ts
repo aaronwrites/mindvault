@@ -202,6 +202,7 @@ describe("URL Capture", () => {
                     normalizedUrl: "https://docs.example.com/capture",
                     kind: "web",
                 },
+                sourcePreview: null,
                 captureContexts: [
                     { kind: "selected-source-text", summary: "A memorable source-authored detail." },
                     { kind: "personal-note", summary: "Use this in the retrieval design." },

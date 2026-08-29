@@ -2,7 +2,8 @@ import { createHash } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as schema from "../../db/schema";
-import { extractedSources, processingAttempts, sourceSnapshots, sources } from "../../db/schema";
+import { extractedSources, processingAttempts, sourcePreviews, sourceSnapshots, sources } from "../../db/schema";
+import type { ExtractedSourcePreview } from "./extract-source-preview";
 import type { ClaimedProcessingStage } from "../../worker";
 
 type Database = NodePgDatabase<typeof schema>;
@@ -36,6 +37,20 @@ export function createSnapshotPersistenceStageHandler(database: Database) {
                     eq(sourceSnapshots.contentHash, contentHash),
                 ));
             if (!snapshot) throw new Error("Source Snapshot persistence could not identify the stored snapshot");
+
+            const preview = extractedSource.sourcePreview as ExtractedSourcePreview;
+            await transaction.insert(sourcePreviews).values({
+                sourceSnapshotId: snapshot.id,
+                title: preview.title,
+                description: preview.description,
+                websiteName: preview.websiteName,
+                author: preview.author,
+                publishedAt: preview.publishedAt ? new Date(preview.publishedAt) : null,
+                contentType: preview.contentType,
+                previewImageUrl: preview.previewImageUrl,
+                previewImageAlt: preview.previewImageAlt,
+                faviconUrl: preview.faviconUrl,
+            }).onConflictDoNothing();
 
             await transaction.update(sources).set({ currentSnapshotId: snapshot.id })
                 .where(eq(sources.id, extractedSource.sourceId));

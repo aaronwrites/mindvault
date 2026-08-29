@@ -15,6 +15,41 @@ afterEach(async () => {
 });
 
 describe("Extraction", () => {
+    test.skipIf(!process.env.TEST_DATABASE_URL)("projects complete Source Preview facts consistently after asynchronous processing", async () => {
+        harness = await createIntegrationHarness(
+            database => createApp({ database: database.db, embeddingProvider: embeddings }),
+            (database, sourceServer) => createArticleProcessingWorker({ database: database.db, sourceFetchOptions: sourceServer.safeFetchDependencies(), embeddingProvider: embeddings, summaryProvider: summaries, topicTagProvider: topicTags }),
+        );
+        const response = await fetch(`${harness.apiBaseUrl}/captures`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ url: harness.sourceServer.fetchUrl("/articles/preview-facts") }),
+        });
+        const capture = await response.json() as { knowledgeItemId: number; knowledgeItem: { sourcePreview: null } };
+
+        expect(capture.knowledgeItem.sourcePreview).toBeNull();
+        await harness.drainWorker();
+
+        const [listResponse, detailResponse] = await Promise.all([
+            fetch(`${harness.apiBaseUrl}/knowledge-items`),
+            fetch(`${harness.apiBaseUrl}/knowledge-items/${capture.knowledgeItemId}`),
+        ]);
+        const expectedPreview = {
+            title: "Trustworthy preview facts",
+            description: "A source-provided description for recognizing this article.",
+            websiteName: "MindVault Journal",
+            author: "Ada Lovelace",
+            publishedAt: "2026-08-20T00:00:00.000Z",
+            contentType: "article",
+            previewImageUrl: harness.sourceServer.fetchUrl("/media/preview.png"),
+            previewImageAlt: "A durable knowledge card",
+            faviconUrl: harness.sourceServer.fetchUrl("/favicon.ico"),
+        };
+        const listedItems = await listResponse.json() as Array<unknown>;
+        expect(listedItems[0]).toEqual(expect.objectContaining({ sourcePreview: expectedPreview }));
+        expect(await detailResponse.json()).toEqual(expect.objectContaining({ sourcePreview: expectedPreview }));
+    });
+
     test.skipIf(!process.env.TEST_DATABASE_URL)("persists immutable cleaned Source Snapshots without duplicating unchanged content", async () => {
         harness = await createIntegrationHarness(
             database => createApp({ database: database.db, embeddingProvider: embeddings }),

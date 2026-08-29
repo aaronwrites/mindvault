@@ -53,6 +53,7 @@ const processingItem: KnowledgeItem = {
     normalizedUrl: "https://example.com/article",
     kind: "web",
   },
+  sourcePreview: null,
   captureContexts: [
     { kind: "personal-note", summary: "Read this after the design review." },
   ],
@@ -89,6 +90,38 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("Knowledge Item Capture", () => {
+  test("progressively presents Source facts separately from generated enrichment", async () => {
+    const recognizedItem: KnowledgeItem = {
+      ...processingItem,
+      availability: "ready",
+      sourcePreview: {
+        title: "Trustworthy &lt; Source title",
+        description: "Source-provided description.",
+        websiteName: "MindVault Journal",
+        author: "Ada Lovelace",
+        publishedAt: "2026-08-20T00:00:00.000Z",
+        contentType: "article",
+        previewImageUrl: null,
+        previewImageAlt: null,
+        faviconUrl: null,
+      },
+      recognitionSummary: "Generated recognition summary.",
+      topicTags: ["durable capture"],
+      latestAttempt: { ...processingItem.latestAttempt!, status: "completed" },
+    };
+    getKnowledgeItems.mockResolvedValue([recognizedItem]);
+    renderHome();
+
+    expect(await screen.findByRole("heading", { name: "Trustworthy &lt; Source title" })).toBeTruthy();
+    expect(screen.getByText("MindVault Journal")).toBeTruthy();
+    expect(screen.getByText("Article")).toBeTruthy();
+    expect(screen.getByText("Source-provided description.")).toBeTruthy();
+    expect(screen.getByText(/Ada Lovelace/)).toBeTruthy();
+    expect(screen.getByText(/Aug 20, 2026/)).toBeTruthy();
+    expect(screen.getByLabelText("Generated Recognition Summary").textContent).toContain("Generated recognition summary.");
+    expect(screen.getByLabelText("Generated Topic Tags").textContent).toContain("durable capture");
+  });
+
   test("accepts the minimal URL form and displays a captured item as Processing immediately", async () => {
     getKnowledgeItems.mockResolvedValue([]);
     createCapture.mockResolvedValue({

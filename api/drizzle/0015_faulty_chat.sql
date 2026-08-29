@@ -1,0 +1,1 @@
+ALTER TABLE "source_previews" ALTER COLUMN "content_type" DROP NOT NULL;

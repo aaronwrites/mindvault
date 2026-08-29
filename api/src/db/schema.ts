@@ -60,6 +60,7 @@ export const extractedSources = pgTable("extracted_sources", {
     finalUrl: text("final_url").notNull(),
     canonicalUrl: text("canonical_url"),
     permanentRedirects: jsonb("permanent_redirects").notNull(),
+    sourcePreview: jsonb("source_preview").notNull(),
     extractedAt: timestamp("extracted_at").notNull().defaultNow(),
 });
 
@@ -76,6 +77,20 @@ export const sourceSnapshots = pgTable("source_snapshots", {
     contentHash: text("content_hash").notNull(),
     createdAt: timestamp("created_at").notNull().defaultNow(),
 }, table => [uniqueIndex("source_snapshots_source_content_hash_unique").on(table.sourceId, table.contentHash)]);
+
+export const sourcePreviews = pgTable("source_previews", {
+    sourceSnapshotId: integer("source_snapshot_id").primaryKey().references(() => sourceSnapshots.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    description: text("description"),
+    websiteName: text("website_name"),
+    author: text("author"),
+    publishedAt: timestamp("published_at"),
+    contentType: text("content_type"),
+    previewImageUrl: text("preview_image_url"),
+    previewImageAlt: text("preview_image_alt"),
+    faviconUrl: text("favicon_url"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+});
 
 export const recognitionSummaries = pgTable("recognition_summaries", {
     knowledgeItemId: integer("knowledge_item_id").primaryKey().references(() => knowledgeItems.id, { onDelete: "cascade" }),

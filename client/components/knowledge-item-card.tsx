@@ -31,6 +31,7 @@ export function KnowledgeItemCard({
   isRetrying?: boolean;
 }) {
   const { source } = knowledgeItem;
+  const preview = knowledgeItem.sourcePreview;
   const hostname = readableHostname(source.submittedUrl);
   const retryIsActionable = knowledgeItem.latestAttempt?.status === "failed";
   return (
@@ -47,7 +48,7 @@ export function KnowledgeItemCard({
           {labels[knowledgeItem.availability]}
         </Badge>
         <CardTitle className="text-lg leading-snug">
-          <h3>{hostname}</h3>
+          <h3>{preview?.title ?? hostname}</h3>
         </CardTitle>
         <CardAction>
           <Button
@@ -64,10 +65,14 @@ export function KnowledgeItemCard({
         </CardAction>
       </CardHeader>
       <CardContent className="flex-1 space-y-3">
-        <p className="text-sm font-medium text-muted-foreground">Webpage</p>
-        <p className="break-all text-sm text-muted-foreground">
-          {source.submittedUrl}
-        </p>
+        <p className="text-sm font-medium text-muted-foreground">{displayContentType(preview?.contentType ?? "webpage")}</p>
+        <p className="break-all text-sm text-muted-foreground">{preview?.websiteName ?? hostname}</p>
+        {preview?.description && <p className="text-sm text-muted-foreground">{preview.description}</p>}
+        {(preview?.author || preview?.publishedAt) && (
+          <p className="text-sm text-muted-foreground">
+            {[preview.author, preview.publishedAt ? formatPublicationDate(preview.publishedAt) : null].filter(Boolean).join(" · ")}
+          </p>
+        )}
         {knowledgeItem.recognitionSummary && (
           <section aria-label="Generated Recognition Summary" className="space-y-1">
             <p className="text-xs font-medium text-muted-foreground">Generated recognition summary</p>
@@ -167,4 +172,15 @@ function readableHostname(address: string) {
   } catch {
     return address;
   }
+}
+
+function displayContentType(value: string) {
+  return value.replaceAll(/[-_]/g, " ").replace(/\b\w/g, letter => letter.toUpperCase());
+}
+
+function formatPublicationDate(value: string) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat("en-US", {
+    month: "short", day: "numeric", year: "numeric", timeZone: "UTC",
+  }).format(date);
 }
