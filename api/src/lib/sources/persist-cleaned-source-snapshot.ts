@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as schema from "../../db/schema";
-import { extractedSources, processingAttempts, sourcePreviews, sourceSnapshots, sources } from "../../db/schema";
+import { extractedSources, processingAttempts, sourcePreviews, sourceSnapshots } from "../../db/schema";
 import type { ExtractedSourcePreview } from "./extract-source-preview";
 import type { SafeFetchOptions } from "./fetch-public-source";
 import { retainSourcePreviewMedia } from "./retain-source-preview-media";
@@ -17,8 +17,9 @@ export function createSnapshotPersistenceStageHandler(database: Database, source
             .where(eq(extractedSources.processingAttemptId, stage.processingAttemptId));
         if (!extractedSource) throw new Error("Source Snapshot persistence could not find successful Extraction output");
 
-        const contentHash = contentHashFor(extractedSource.primaryText);
-        const { snapshotId, preview } = await database.transaction(async transaction => {
+        const preview = extractedSource.sourcePreview as ExtractedSourcePreview;
+        const contentHash = contentHashFor(extractedSource.primaryText, preview);
+        const { snapshotId } = await database.transaction(async transaction => {
             await transaction.insert(sourceSnapshots).values({
                 sourceId: extractedSource.sourceId,
                 title: extractedSource.title,
@@ -40,7 +41,6 @@ export function createSnapshotPersistenceStageHandler(database: Database, source
                 ));
             if (!snapshot) throw new Error("Source Snapshot persistence could not identify the stored snapshot");
 
-            const preview = extractedSource.sourcePreview as ExtractedSourcePreview;
             await transaction.insert(sourcePreviews).values({
                 sourceSnapshotId: snapshot.id,
                 title: preview.title,
@@ -54,11 +54,9 @@ export function createSnapshotPersistenceStageHandler(database: Database, source
                 faviconUrl: preview.faviconUrl,
             }).onConflictDoNothing();
 
-            await transaction.update(sources).set({ currentSnapshotId: snapshot.id })
-                .where(eq(sources.id, extractedSource.sourceId));
             await transaction.update(processingAttempts).set({ sourceSnapshotId: snapshot.id })
                 .where(eq(processingAttempts.id, stage.processingAttemptId));
-            return { snapshotId: snapshot.id, preview };
+            return { snapshotId: snapshot.id };
         });
 
         try {
@@ -69,6 +67,6 @@ export function createSnapshotPersistenceStageHandler(database: Database, source
     };
 }
 
-export function contentHashFor(primaryText: string): string {
-    return createHash("sha256").update(primaryText, "utf8").digest("hex");
+export function contentHashFor(primaryText: string, sourcePreview: ExtractedSourcePreview): string {
+    return createHash("sha256").update(JSON.stringify({ primaryText, sourcePreview }), "utf8").digest("hex");
 }

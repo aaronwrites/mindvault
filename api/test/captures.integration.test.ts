@@ -250,7 +250,7 @@ describe("URL Capture", () => {
             knowledge_items: "1",
             capture_contexts: "2",
             processing_attempts: "1",
-            processing_stages: "7",
+            processing_stages: "8",
         });
         const contexts = await runningHarness.database.pool.query<{ kind: string; text: string }>(
             "SELECT kind, text FROM capture_contexts ORDER BY kind",
@@ -271,8 +271,9 @@ describe("URL Capture", () => {
             { kind: "passage-generation", prerequisite: "snapshot-persistence" },
             { kind: "lexical-indexing", prerequisite: "passage-generation" },
             { kind: "semantic-indexing", prerequisite: "passage-generation" },
-            { kind: "recognition-summary-generation", prerequisite: "snapshot-persistence" },
-            { kind: "topic-tag-generation", prerequisite: "snapshot-persistence" },
+            { kind: "snapshot-activation", prerequisite: "semantic-indexing" },
+            { kind: "recognition-summary-generation", prerequisite: "snapshot-activation" },
+            { kind: "topic-tag-generation", prerequisite: "snapshot-activation" },
         ]);
     });
 

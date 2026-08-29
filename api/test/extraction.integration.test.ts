@@ -132,6 +132,100 @@ describe("Extraction", () => {
         expect(currentSnapshot.rows[0]?.current_snapshot_id).toBe(snapshots.rows[1]?.id);
     });
 
+    test.skipIf(!process.env.TEST_DATABASE_URL)("keeps the current Preview and generated enrichment until a changed Refresh has a trustworthy representation", async () => {
+        let worker: ReturnType<typeof createArticleProcessingWorker> | undefined;
+        harness = await createIntegrationHarness(
+            database => createApp({ database: database.db, embeddingProvider: embeddings }),
+            (database, sourceServer) => {
+                worker = createArticleProcessingWorker({ database: database.db, sourceFetchOptions: sourceServer.safeFetchDependencies(), embeddingProvider: embeddings, summaryProvider: summaries, topicTagProvider: topicTags });
+                return worker;
+            },
+        );
+        const captureResponse = await fetch(`${harness.apiBaseUrl}/captures`, {
+            method: "POST", headers: { "content-type": "application/json" },
+            body: JSON.stringify({ url: harness.sourceServer.fetchUrl("/articles/changed") }),
+        });
+        const capture = await captureResponse.json() as { knowledgeItemId: number; sourceId: number };
+        await harness.drainWorker();
+        const original = await (await fetch(`${harness.apiBaseUrl}/knowledge-items/${capture.knowledgeItemId}`)).json() as {
+            sourcePreview: { title: string; previewImageUrl: string | null }; recognitionSummary: string | null; topicTags: string[];
+        };
+
+        harness.sourceServer.setChangedArticleVersion(2);
+        const refreshResponse = await fetch(`${harness.apiBaseUrl}/knowledge-items/${capture.knowledgeItemId}/refresh`, { method: "POST" });
+        expect(refreshResponse.status).toBe(202);
+        await worker!.runEligibleWork(); // Extraction
+        await worker!.runEligibleWork(); // Source Snapshot persistence and media retention
+
+        const pending = await (await fetch(`${harness.apiBaseUrl}/knowledge-items/${capture.knowledgeItemId}`)).json() as typeof original & { availability: string; latestAttempt: { status: string } };
+        expect(pending).toEqual(expect.objectContaining({
+            availability: "ready",
+            sourcePreview: original.sourcePreview,
+            recognitionSummary: original.recognitionSummary,
+            topicTags: original.topicTags,
+            latestAttempt: expect.objectContaining({ status: "pending" }),
+        }));
+
+        await worker!.runEligibleWork(); // Passage generation
+        await worker!.runEligibleWork(); // Lexical indexing
+        await worker!.runEligibleWork(); // Semantic indexing
+        await worker!.runEligibleWork(); // Activate the trustworthy changed representation
+
+        const [list, detail, recall] = await Promise.all([
+            fetch(`${harness.apiBaseUrl}/knowledge-items`).then(response => response.json()),
+            fetch(`${harness.apiBaseUrl}/knowledge-items/${capture.knowledgeItemId}`).then(response => response.json()),
+            fetch(`${harness.apiBaseUrl}/search?q=later%20version`).then(response => response.json()),
+        ]) as [Array<{ sourcePreview: unknown; recognitionSummary: string | null; topicTags: string[] }>, { sourcePreview: unknown; recognitionSummary: string | null; topicTags: string[] }, Array<{ sourcePreview: unknown; recognitionSummary: string | null; topicTags: string[] }>];
+        const changedPreview = expect.objectContaining({ title: "Changed article: later version", previewImageUrl: expect.stringMatching(/^\/source-preview-media\/\d+$/) });
+        expect(list[0]).toEqual(expect.objectContaining({ sourcePreview: changedPreview, recognitionSummary: original.recognitionSummary, topicTags: original.topicTags }));
+        expect(detail).toEqual(expect.objectContaining({ sourcePreview: changedPreview, recognitionSummary: original.recognitionSummary, topicTags: original.topicTags }));
+        expect(recall[0]).toEqual(expect.objectContaining({ sourcePreview: changedPreview, recognitionSummary: original.recognitionSummary, topicTags: original.topicTags }));
+
+        await harness.drainWorker();
+        const history = await harness.database.pool.query<{ snapshot_id: number; title: string; source_url: string }>(`
+            SELECT preview.source_snapshot_id AS snapshot_id, preview.title, media.source_url
+            FROM source_previews AS preview
+            INNER JOIN source_preview_media AS media ON media.source_snapshot_id = preview.source_snapshot_id
+            WHERE preview.source_snapshot_id IN (SELECT id FROM source_snapshots WHERE source_id = $1)
+            ORDER BY preview.source_snapshot_id
+        `, [capture.sourceId]);
+        expect(history.rows).toEqual([
+            expect.objectContaining({ title: "Changed article: original version", source_url: harness.sourceServer.fetchUrl("/media/preview-one.png") }),
+            expect.objectContaining({ title: "Changed article: later version", source_url: harness.sourceServer.fetchUrl("/media/preview-two.png") }),
+        ]);
+    });
+
+    test.skipIf(!process.env.TEST_DATABASE_URL)("creates a new Source Snapshot when only Source Preview facts and media change", async () => {
+        harness = await createIntegrationHarness(
+            database => createApp({ database: database.db, embeddingProvider: embeddings }),
+            (database, sourceServer) => createArticleProcessingWorker({ database: database.db, sourceFetchOptions: sourceServer.safeFetchDependencies(), embeddingProvider: embeddings, summaryProvider: summaries, topicTagProvider: topicTags }),
+        );
+        const captureResponse = await fetch(`${harness.apiBaseUrl}/captures`, {
+            method: "POST", headers: { "content-type": "application/json" },
+            body: JSON.stringify({ url: harness.sourceServer.fetchUrl("/articles/metadata-only-changed") }),
+        });
+        const capture = await captureResponse.json() as { knowledgeItemId: number; sourceId: number };
+        await harness.drainWorker();
+
+        harness.sourceServer.setMetadataOnlyArticleVersion(2);
+        expect((await fetch(`${harness.apiBaseUrl}/knowledge-items/${capture.knowledgeItemId}/refresh`, { method: "POST" })).status).toBe(202);
+        await harness.drainWorker();
+
+        const item = await (await fetch(`${harness.apiBaseUrl}/knowledge-items/${capture.knowledgeItemId}`)).json() as { sourcePreview: { title: string; previewImageAlt: string | null } };
+        expect(item.sourcePreview).toEqual(expect.objectContaining({ title: "Metadata-only later Preview", previewImageAlt: "Later metadata image" }));
+        const snapshots = await harness.database.pool.query<{ title: string; source_url: string }>(`
+            SELECT preview.title, media.source_url
+            FROM source_previews AS preview
+            INNER JOIN source_preview_media AS media ON media.source_snapshot_id = preview.source_snapshot_id
+            WHERE preview.source_snapshot_id IN (SELECT id FROM source_snapshots WHERE source_id = $1)
+            ORDER BY preview.source_snapshot_id
+        `, [capture.sourceId]);
+        expect(snapshots.rows).toEqual([
+            { title: "Metadata-only original Preview", source_url: harness.sourceServer.fetchUrl("/media/preview-one.png") },
+            { title: "Metadata-only later Preview", source_url: harness.sourceServer.fetchUrl("/media/preview-two.png") },
+        ]);
+    });
+
     test.skipIf(!process.env.TEST_DATABASE_URL)("keeps an item Ready when its optional preview image is missing", async () => {
         harness = await createIntegrationHarness(
             database => createApp({ database: database.db, embeddingProvider: embeddings }),
@@ -328,7 +422,7 @@ describe("Extraction", () => {
             "SELECT status FROM processing_stages WHERE processing_attempt_id = $1 ORDER BY id",
             [capture.processingAttemptId],
         );
-        expect(stages.rows.map(stage => stage.status)).toEqual(["completed", "skipped", "skipped", "skipped", "skipped", "skipped", "skipped"]);
+        expect(stages.rows.map(stage => stage.status)).toEqual(["completed", "skipped", "skipped", "skipped", "skipped", "skipped", "skipped", "skipped"]);
     });
 
     for (const [path, failureReason] of [
@@ -389,7 +483,7 @@ describe("Extraction", () => {
         });
         const capture = await captureResponse.json() as { knowledgeItemId: number };
 
-        clock.advance(100);
+        clock.advance(1_000);
         await harness.drainWorker();
         clock.advance(1_000);
         await harness.drainWorker();

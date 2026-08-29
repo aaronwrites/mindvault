@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { sql, type SQL } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as schema from "../../db/schema";
-import { knowledgeItems, passageEmbeddings, passages, processingAttempts, sources } from "../../db/schema";
+import { knowledgeItems, passageEmbeddings, passages, processingAttempts } from "../../db/schema";
 import { validateEmbedding, type EmbeddingProvider } from "../ai/providers";
 import type { ClaimedProcessingStage } from "../../worker";
 
@@ -12,16 +12,15 @@ export function createSemanticIndexingStageHandler(database: Database, embedding
     return async (stage: ClaimedProcessingStage): Promise<void> => {
         const [attempt] = await database.select({
             knowledgeItemId: processingAttempts.knowledgeItemId,
-            currentSnapshotId: sources.currentSnapshotId,
+            sourceSnapshotId: processingAttempts.sourceSnapshotId,
         }).from(processingAttempts)
             .innerJoin(knowledgeItems, eq(knowledgeItems.id, processingAttempts.knowledgeItemId))
-            .innerJoin(sources, eq(sources.id, knowledgeItems.sourceId))
             .where(eq(processingAttempts.id, stage.processingAttemptId));
         if (!attempt) throw new Error("Semantic indexing could not find the Processing Attempt");
-        const currentSnapshotId = attempt.currentSnapshotId;
-        if (!currentSnapshotId) throw new Error("Semantic indexing could not find the current Source Snapshot");
+        const sourceSnapshotId = attempt.sourceSnapshotId;
+        if (!sourceSnapshotId) throw new Error("Semantic indexing could not find the Source Snapshot produced by this Processing Attempt");
 
-        const eligiblePassages = passagesEligibleForSemanticIndex({ ...attempt, currentSnapshotId });
+        const eligiblePassages = passagesEligibleForSemanticIndex({ ...attempt, sourceSnapshotId });
         const candidates = await database.select({
             id: passages.id,
             text: passages.text,
@@ -90,9 +89,9 @@ function stableJson(value: unknown): string {
     return JSON.stringify(value);
 }
 
-export function passagesEligibleForSemanticIndex(attempt: { currentSnapshotId: number; knowledgeItemId: number }): SQL {
+export function passagesEligibleForSemanticIndex(attempt: { sourceSnapshotId: number; knowledgeItemId: number }): SQL {
     return sql`(
-        source_snapshot_id = ${attempt.currentSnapshotId}
+        source_snapshot_id = ${attempt.sourceSnapshotId}
         OR capture_context_id IN (
             SELECT id FROM capture_contexts
             WHERE capture_id IN (

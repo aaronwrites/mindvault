@@ -4,6 +4,7 @@ export const processingStageKinds = [
     "passage-generation",
     "lexical-indexing",
     "semantic-indexing",
+    "snapshot-activation",
     "recognition-summary-generation",
     "topic-tag-generation",
 ] as const;
@@ -16,6 +17,7 @@ export const requiredRetrievalStageKinds: ReadonlySet<ProcessingStageKind> = new
     "passage-generation",
     "lexical-indexing",
     "semantic-indexing",
+    "snapshot-activation",
 ]);
 
 export function isRequiredRetrievalStage(kind: string): boolean {

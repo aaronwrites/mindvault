@@ -128,9 +128,7 @@ async function presentKnowledgeItems(
     const previewsBySnapshot = new Map(previewRows.map(preview => [preview.sourceSnapshotId, preview]));
     const mediaBySnapshot = new Map(previewMediaRows.map(media => [media.sourceSnapshotId, media]));
     const topicTagsByItem = new Map<number, string[]>();
-    const currentSnapshotByItem = new Map(rows.map(row => [row.knowledgeItem.id, row.source.currentSnapshotId]));
     for (const tag of topicTagRows) {
-        if (currentSnapshotByItem.get(tag.knowledgeItemId) !== tag.sourceSnapshotId) continue;
         const tags = topicTagsByItem.get(tag.knowledgeItemId) ?? [];
         tags.push(tag.canonicalName);
         topicTagsByItem.set(tag.knowledgeItemId, tags);
@@ -155,9 +153,7 @@ async function presentKnowledgeItems(
             captureContexts: contextsByItem.get(knowledgeItem.id) ?? [],
             availability: availabilityByItem.get(knowledgeItem.id) ?? "processing",
             organizationCondition: organizationConditions.get(knowledgeItem.id) ?? "processing",
-            recognitionSummary: summariesByItem.get(knowledgeItem.id)?.sourceSnapshotId === source.currentSnapshotId
-                ? summariesByItem.get(knowledgeItem.id)!.text
-                : null,
+            recognitionSummary: summariesByItem.get(knowledgeItem.id)?.text ?? null,
             topicTags: topicTagsByItem.get(knowledgeItem.id) ?? [],
             latestAttempt: latestAttempt ? {
                 id: latestAttempt.id,

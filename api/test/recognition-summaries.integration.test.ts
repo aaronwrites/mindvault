@@ -117,7 +117,7 @@ describe("Recognition Summaries", () => {
         }]);
     });
 
-    test.skipIf(!process.env.TEST_DATABASE_URL)("does not present a previous Source Snapshot's summary while a Refresh summary is incomplete", async () => {
+    test.skipIf(!process.env.TEST_DATABASE_URL)("keeps a previous Recognition Summary visible while a Refresh summary is incomplete", async () => {
         const embeddings = new DeterministicEmbeddingProvider();
         const summaries = new RecordingSummaryProvider();
         harness = await createIntegrationHarness(
@@ -149,11 +149,13 @@ describe("Recognition Summaries", () => {
                 handlers: { extraction, "snapshot-persistence": snapshots },
             });
             while (await worker.runEligibleWork()) {
-                // Complete only the refresh stages needed to make the new Source Snapshot current.
+                // Complete only the Refresh stages before trustworthy representation activation.
             }
         })();
 
         const detailResponse = await fetch(`${harness.apiBaseUrl}/knowledge-items/${capture.knowledgeItemId}`);
-        expect(await detailResponse.json()).toEqual(expect.objectContaining({ recognitionSummary: null }));
+        expect(await detailResponse.json()).toEqual(expect.objectContaining({
+            recognitionSummary: "A generated description of durable Capture and visible Processing Attempts.",
+        }));
     });
 });

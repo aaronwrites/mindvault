@@ -11,17 +11,17 @@ export function createPassageGenerationStageHandler(database: Database) {
     return async (stage: ClaimedProcessingStage): Promise<void> => {
         const [attempt] = await database.select({
             knowledgeItemId: processingAttempts.knowledgeItemId,
-            currentSnapshotId: sources.currentSnapshotId,
+            sourceSnapshotId: processingAttempts.sourceSnapshotId,
         }).from(processingAttempts)
             .innerJoin(knowledgeItems, eq(knowledgeItems.id, processingAttempts.knowledgeItemId))
             .innerJoin(sources, eq(sources.id, knowledgeItems.sourceId))
             .where(eq(processingAttempts.id, stage.processingAttemptId));
-        if (!attempt?.currentSnapshotId) throw new Error("Passage generation could not find the current Source Snapshot");
+        if (!attempt?.sourceSnapshotId) throw new Error("Passage generation could not find the Source Snapshot produced by this Processing Attempt");
 
         const [snapshot] = await database.select({ id: sourceSnapshots.id, primaryText: sourceSnapshots.primaryText })
             .from(sourceSnapshots)
-            .where(eq(sourceSnapshots.id, attempt.currentSnapshotId));
-        if (!snapshot) throw new Error("Passage generation could not find the current Source Snapshot content");
+            .where(eq(sourceSnapshots.id, attempt.sourceSnapshotId));
+        if (!snapshot) throw new Error("Passage generation could not find the Source Snapshot content");
 
         const contexts = await database.select({ id: captureContexts.id, kind: captureContexts.kind, text: captureContexts.text })
             .from(captureContexts)

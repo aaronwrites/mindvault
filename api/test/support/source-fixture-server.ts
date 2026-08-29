@@ -4,6 +4,7 @@ import type { SafeFetchDependencies } from "../../src/lib/sources/fetch-public-s
 export type SourceFixtureServer = {
     baseUrl: string;
     setChangedArticleVersion(version: 1 | 2): void;
+    setMetadataOnlyArticleVersion(version: 1 | 2): void;
     setPreviewImageAvailable(available: boolean): void;
     fetchUrl(path: string): string;
     safeFetchDependencies(): SafeFetchDependencies;
@@ -16,6 +17,7 @@ const article = (title: string, body: string, canonical?: string) => `<!doctype 
 
 export async function startSourceFixtureServer(): Promise<SourceFixtureServer> {
     let changedArticleVersion: 1 | 2 = 1;
+    let metadataOnlyArticleVersion: 1 | 2 = 1;
     let previewImageAvailable = true;
     let baseUrl = "";
 
@@ -52,9 +54,21 @@ export async function startSourceFixtureServer(): Promise<SourceFixtureServer> {
 <footer>Copyright and privacy policy</footer></body></html>`);
         if (path === "/articles/repeated") return html(200, article("First article", "A deterministic article about durable capture."));
         if (path === "/articles/changed") {
-            return html(200, article("Changed article", changedArticleVersion === 1
-                ? "The original content explains how durable Source Snapshots preserve cleaned primary text and provenance after a public article changes or disappears. It is deliberately long enough to pass the meaningful-text quality threshold."
-                : "The meaningfully changed content explains how a new immutable Source Snapshot preserves a later version while earlier extracted knowledge and provenance remain available for trustworthy retrieval."));
+            const isLaterVersion = changedArticleVersion === 2;
+            return html(200, `<!doctype html><html><head>
+<meta property="og:type" content="article"><meta property="og:title" content="${isLaterVersion ? "Changed article: later version" : "Changed article: original version"}">
+<meta property="og:description" content="${isLaterVersion ? "Later Source Preview facts." : "Original Source Preview facts."}">
+<meta property="og:image" content="/media/preview-${isLaterVersion ? "two" : "one"}.png"><meta property="og:image:alt" content="${isLaterVersion ? "Later preview image" : "Original preview image"}">
+<title>Changed article</title></head><body><main><article><h1>Changed article</h1><p>${isLaterVersion
+                ? "The meaningfully changed content explains how a new immutable Source Snapshot preserves a later version while earlier extracted knowledge and provenance remain available for trustworthy retrieval."
+                : "The original content explains how durable Source Snapshots preserve cleaned primary text and provenance after a public article changes or disappears. It is deliberately long enough to pass the meaningful-text quality threshold."}</p></article></main></body></html>`);
+        }
+        if (path === "/articles/metadata-only-changed") {
+            const isLaterVersion = metadataOnlyArticleVersion === 2;
+            return html(200, `<!doctype html><html><head>
+<meta property="og:type" content="article"><meta property="og:title" content="${isLaterVersion ? "Metadata-only later Preview" : "Metadata-only original Preview"}">
+<meta property="og:image" content="/media/preview-${isLaterVersion ? "two" : "one"}.png"><meta property="og:image:alt" content="${isLaterVersion ? "Later metadata image" : "Original metadata image"}">
+<title>Stable article content</title></head><body><main><article><h1>Stable article content</h1><p>This primary text deliberately remains identical while Source Preview metadata changes, proving that recognizable Source facts and retained media carry their own immutable provenance through Refresh.</p></article></main></body></html>`);
         }
         if (path === "/canonical") return html(200, article("Canonical article", "Canonical fixture content establishes that a declared canonical address is strong identity evidence when separate captures begin at different public URLs. Extraction preserves the address originally captured, the fetched final address, and this canonical address for later Source Snapshot provenance.", `${baseUrl}/articles/canonical-target`));
         if (path === "/invalid-canonical") return html(200, article("Invalid canonical article", "This article contains enough meaningful text to be captured even though its canonical declaration is malformed. Extraction must treat invalid canonical markup as absent identity evidence instead of failing a safely fetched and otherwise supported public textual Source.", "http://["));
@@ -68,6 +82,12 @@ export async function startSourceFixtureServer(): Promise<SourceFixtureServer> {
             if (!previewImageAvailable) return html(404, "Preview image unavailable");
             response.writeHead(200, { "content-type": "image/png" });
             return response.end(Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL9aQAAAABJRU5ErkJggg==", "base64"));
+        }
+        if (path === "/media/preview-one.png" || path === "/media/preview-two.png") {
+            response.writeHead(200, { "content-type": "image/png" });
+            return response.end(Buffer.from(path.endsWith("one.png")
+                ? "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL9aQAAAABJRU5ErkJggg=="
+                : "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9JzD8AAAAASUVORK5CYII=", "base64"));
         }
         if (path === "/unsupported.pdf") {
             response.writeHead(200, { "content-type": "application/pdf" });
@@ -98,6 +118,9 @@ export async function startSourceFixtureServer(): Promise<SourceFixtureServer> {
         baseUrl,
         setChangedArticleVersion(version) {
             changedArticleVersion = version;
+        },
+        setMetadataOnlyArticleVersion(version) {
+            metadataOnlyArticleVersion = version;
         },
         setPreviewImageAvailable(available) {
             previewImageAvailable = available;

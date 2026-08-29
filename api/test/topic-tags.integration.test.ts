@@ -143,6 +143,7 @@ describe("Topic Tags", () => {
             { kind: "passage-generation", attempt_count: 0 },
             { kind: "lexical-indexing", attempt_count: 0 },
             { kind: "semantic-indexing", attempt_count: 0 },
+            { kind: "snapshot-activation", attempt_count: 0 },
             { kind: "recognition-summary-generation", attempt_count: 0 },
             { kind: "topic-tag-generation", attempt_count: 1 },
         ]);

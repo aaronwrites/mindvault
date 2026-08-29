@@ -10,6 +10,7 @@ import { createTopicTagGenerationStageHandler } from "./lib/topic-tags/generate-
 import { isRequiredRetrievalStage, type ProcessingStageKind } from "./lib/processing/stages";
 import { createExtractionStageHandler } from "./lib/sources/extract-public-textual-source";
 import { createSnapshotPersistenceStageHandler } from "./lib/sources/persist-cleaned-source-snapshot";
+import { createSourceSnapshotActivationStageHandler } from "./lib/sources/activate-source-snapshot";
 import { createPassageGenerationStageHandler } from "./lib/passages/generate-passages";
 import { createLexicalIndexingStageHandler } from "./lib/passages/index-lexical-passages";
 import { createSemanticIndexingStageHandler } from "./lib/passages/index-semantic-passages";
@@ -59,6 +60,7 @@ export function createArticleProcessingWorker({
             "passage-generation": createPassageGenerationStageHandler(database),
             "lexical-indexing": createLexicalIndexingStageHandler(database),
             "semantic-indexing": createSemanticIndexingStageHandler(database, embeddingProvider),
+            "snapshot-activation": createSourceSnapshotActivationStageHandler(database),
             "recognition-summary-generation": createRecognitionSummaryStageHandler(database, summaryProvider),
             "topic-tag-generation": createTopicTagGenerationStageHandler(database, topicTagProvider),
         },

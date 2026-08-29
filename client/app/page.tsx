@@ -21,7 +21,11 @@ export default function Home() {
       query.state.data?.some(
         (item) =>
           item.availability === "processing" ||
-          (item.availability === "ready" && item.organizationCondition !== "complete"),
+          (item.availability === "ready" && (
+            item.organizationCondition !== "complete" ||
+            (item.latestAttempt?.kind === "refresh" &&
+              (item.latestAttempt.status === "pending" || item.latestAttempt.status === "running"))
+          )),
       )
         ? 2_000
         : false,

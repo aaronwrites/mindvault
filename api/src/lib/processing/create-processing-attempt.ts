@@ -90,12 +90,16 @@ function prerequisiteFor(kind: ProcessingStageKind): ProcessingStageKind | undef
         case "snapshot-persistence":
             return "extraction";
         case "passage-generation":
-        case "recognition-summary-generation":
-        case "topic-tag-generation":
             return "snapshot-persistence";
         case "lexical-indexing":
+            return "passage-generation";
         case "semantic-indexing":
             return "passage-generation";
+        case "snapshot-activation":
+            return "semantic-indexing";
+        case "recognition-summary-generation":
+        case "topic-tag-generation":
+            return "snapshot-activation";
         default:
             return undefined;
     }

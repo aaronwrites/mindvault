@@ -345,6 +345,43 @@ describe("Knowledge Item Capture", () => {
     await waitFor(() => expect(refreshKnowledgeItem.mock.calls[0]?.[0]).toBe(readyItem.id));
   });
 
+  test("keeps polling a Ready card while Refresh is pending, then presents its changed Preview", async () => {
+    const refreshingItem: KnowledgeItem = {
+      ...processingItem,
+      availability: "ready",
+      sourcePreview: {
+        title: "Original Source Preview",
+        description: "Original facts remain visible while Refresh runs.",
+        websiteName: null,
+        author: null,
+        publishedAt: null,
+        contentType: "article",
+        previewImageUrl: "/source-preview-media/1",
+        previewImageAlt: "Original preview image",
+        faviconUrl: null,
+      },
+      recognitionSummary: "Generated recognition summary remains labelled.",
+      topicTags: ["Testing"],
+      latestAttempt: { ...processingItem.latestAttempt!, kind: "refresh", status: "pending" },
+    };
+    getKnowledgeItems
+      .mockResolvedValueOnce([refreshingItem])
+      .mockResolvedValueOnce([{
+        ...refreshingItem,
+        sourcePreview: { ...refreshingItem.sourcePreview!, title: "Changed Source Preview", previewImageUrl: "/source-preview-media/2", previewImageAlt: "Changed preview image" },
+        latestAttempt: { ...refreshingItem.latestAttempt!, status: "completed" },
+      }]);
+    renderHome();
+
+    expect(await screen.findByRole("heading", { name: "Original Source Preview" })).toBeTruthy();
+    expect(screen.getByText(/Refresh underway/)).toBeTruthy();
+    expect(screen.getByLabelText("Generated Recognition Summary").textContent).toContain("Generated recognition summary remains labelled.");
+    await waitFor(() => expect(getKnowledgeItems).toHaveBeenCalledTimes(2), { timeout: 3_000 });
+    expect(await screen.findByRole("heading", { name: "Changed Source Preview" })).toBeTruthy();
+    expect(screen.getByRole("img", { name: "Changed preview image" }).getAttribute("src")).toBe("/source-preview-media/2");
+    expect(screen.getByLabelText("Generated Topic Tags").textContent).toContain("Testing");
+  });
+
   test("offers Retry only for a Knowledge Item that needs attention and updates it as retry processing begins", async () => {
     const needsAttentionItem: KnowledgeItem = {
       ...processingItem,
