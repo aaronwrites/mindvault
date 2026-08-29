@@ -36,13 +36,23 @@ export function KnowledgeItemCard({
   const retryIsActionable = knowledgeItem.latestAttempt?.status === "failed";
   return (
     <Card className="h-full">
-      <div
-        role="img"
-        aria-label="Webpage preview placeholder"
-        className="flex aspect-[16/7] items-center justify-center bg-muted text-muted-foreground"
-      >
-        <Globe2 aria-hidden="true" className="size-10" />
-      </div>
+      {preview?.previewImageUrl ? (
+        // Retained API media is already bounded and validated; Next's optimizer cannot fetch this private API endpoint.
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={preview.previewImageUrl}
+          alt={preview.previewImageAlt ?? ""}
+          className="aspect-[16/7] w-full object-cover"
+        />
+      ) : (
+        <div
+          role="img"
+          aria-label="Webpage preview placeholder"
+          className="flex aspect-[16/7] items-center justify-center bg-muted text-muted-foreground"
+        >
+          <Globe2 aria-hidden="true" className="size-10" />
+        </div>
+      )}
       <CardHeader>
         <Badge variant="outline" className="mb-1 w-fit">
           {labels[knowledgeItem.availability]}

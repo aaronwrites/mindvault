@@ -7,6 +7,11 @@ const tsvector = customType<{ data: string }>({
         return "tsvector";
     },
 });
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({
+    dataType() {
+        return "bytea";
+    },
+});
 export const captureContextKinds = ["selected-source-text", "personal-note"] as const;
 export type CaptureContextKind = typeof captureContextKinds[number];
 
@@ -89,6 +94,15 @@ export const sourcePreviews = pgTable("source_previews", {
     previewImageUrl: text("preview_image_url"),
     previewImageAlt: text("preview_image_alt"),
     faviconUrl: text("favicon_url"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const sourcePreviewMedia = pgTable("source_preview_media", {
+    sourceSnapshotId: integer("source_snapshot_id").primaryKey().references(() => sourceSnapshots.id, { onDelete: "cascade" }),
+    sourceUrl: text("source_url").notNull(),
+    contentType: text("content_type").notNull(),
+    alternativeText: text("alternative_text"),
+    bytes: bytea("bytes").notNull(),
     createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

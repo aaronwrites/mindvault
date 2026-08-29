@@ -4,6 +4,7 @@ import type { SafeFetchDependencies } from "../../src/lib/sources/fetch-public-s
 export type SourceFixtureServer = {
     baseUrl: string;
     setChangedArticleVersion(version: 1 | 2): void;
+    setPreviewImageAvailable(available: boolean): void;
     fetchUrl(path: string): string;
     safeFetchDependencies(): SafeFetchDependencies;
     close(): Promise<void>;
@@ -15,6 +16,7 @@ const article = (title: string, body: string, canonical?: string) => `<!doctype 
 
 export async function startSourceFixtureServer(): Promise<SourceFixtureServer> {
     let changedArticleVersion: 1 | 2 = 1;
+    let previewImageAvailable = true;
     let baseUrl = "";
 
     const server: Server = createServer((request, response) => {
@@ -37,6 +39,9 @@ export async function startSourceFixtureServer(): Promise<SourceFixtureServer> {
 <meta content="2026-08-20" property="article:published_time">
 <link href="/favicon.ico" rel="icon"><title>Fallback document title</title></head>
 <body><main><article><h1>Meaningful extraction title</h1><p>This article has enough meaningful primary text to preserve trustworthy retrieval while separately projecting source-provided facts for a recognisable Preview Card in the library.</p><p>Its metadata intentionally uses varied attribute order so the document parser, rather than a fragile regular expression, determines each optional Source Preview field.</p></article></main></body></html>`);
+        if (path === "/articles/missing-preview-image") return html(200, `<!doctype html><html><head>
+<meta content="/media/missing.png" property="og:image"><title>Missing preview image</title></head>
+<body><main><article><h1>Missing preview image</h1><p>This article has enough meaningful primary text to remain Ready when its optional preview image cannot be retained.</p><p>Preview media failure must remain separate from trustworthy Extraction and retrieval availability.</p></article></main></body></html>`);
         if (path === "/articles/semantic-retention") return html(200, article("Retained knowledge", "MindVault preserves useful article text in a durable Source Snapshot so the knowledge remains available when the original website changes or disappears. This fixture supplies enough meaningful primary text for trustworthy conceptual retrieval after a public article is no longer available at its original address."));
         if (path === "/articles/semantic-unrelated") return html(200, article("Unrelated knowledge", "This fixture explains how PostgreSQL text search supports exact technical identifiers such as error messages, version numbers, and command-line flags. Its deliberately unrelated topic makes the expected conceptual match a property of the fixed corpus rather than the fake embedding provider's implementation."));
         if (path === "/articles/lexical-corpus") return html(200, article("Lexical corpus", "Run the git rebase --autosquash command before publishing. Pass the --max-old-space-size=4096 flag to Node.js when a build needs more memory. The service reported the error message EADDRINUSE while binding its listener. OAuth2 is the authorization protocol used by this fixture. PostgreSQL 18 supplies the text-search index. The deployment identifier release-2026-08-25 must remain traceable through processing history. This deliberately detailed corpus verifies exact-language Passage retrieval across commands, flags, error messages, acronyms, versions, and identifiers."));
@@ -58,6 +63,11 @@ export async function startSourceFixtureServer(): Promise<SourceFixtureServer> {
         if (path === "/redirect/permanent") {
             response.writeHead(308, { location: "/articles/canonical-target" });
             return response.end();
+        }
+        if (path === "/media/preview.png") {
+            if (!previewImageAvailable) return html(404, "Preview image unavailable");
+            response.writeHead(200, { "content-type": "image/png" });
+            return response.end(Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL9aQAAAABJRU5ErkJggg==", "base64"));
         }
         if (path === "/unsupported.pdf") {
             response.writeHead(200, { "content-type": "application/pdf" });
@@ -88,6 +98,9 @@ export async function startSourceFixtureServer(): Promise<SourceFixtureServer> {
         baseUrl,
         setChangedArticleVersion(version) {
             changedArticleVersion = version;
+        },
+        setPreviewImageAvailable(available) {
+            previewImageAvailable = available;
         },
         fetchUrl(path) {
             return `${baseUrl}${path}`;

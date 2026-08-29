@@ -4,11 +4,13 @@ import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as schema from "../../db/schema";
 import { extractedSources, processingAttempts, sourcePreviews, sourceSnapshots, sources } from "../../db/schema";
 import type { ExtractedSourcePreview } from "./extract-source-preview";
+import type { SafeFetchOptions } from "./fetch-public-source";
+import { retainSourcePreviewMedia } from "./retain-source-preview-media";
 import type { ClaimedProcessingStage } from "../../worker";
 
 type Database = NodePgDatabase<typeof schema>;
 
-export function createSnapshotPersistenceStageHandler(database: Database) {
+export function createSnapshotPersistenceStageHandler(database: Database, sourceFetchOptions: SafeFetchOptions = {}) {
     return async (stage: ClaimedProcessingStage): Promise<void> => {
         const [extractedSource] = await database.select()
             .from(extractedSources)
@@ -16,7 +18,7 @@ export function createSnapshotPersistenceStageHandler(database: Database) {
         if (!extractedSource) throw new Error("Source Snapshot persistence could not find successful Extraction output");
 
         const contentHash = contentHashFor(extractedSource.primaryText);
-        await database.transaction(async transaction => {
+        const { snapshotId, preview } = await database.transaction(async transaction => {
             await transaction.insert(sourceSnapshots).values({
                 sourceId: extractedSource.sourceId,
                 title: extractedSource.title,
@@ -56,7 +58,14 @@ export function createSnapshotPersistenceStageHandler(database: Database) {
                 .where(eq(sources.id, extractedSource.sourceId));
             await transaction.update(processingAttempts).set({ sourceSnapshotId: snapshot.id })
                 .where(eq(processingAttempts.id, stage.processingAttemptId));
+            return { snapshotId: snapshot.id, preview };
         });
+
+        try {
+            await retainSourcePreviewMedia(database, snapshotId, preview, sourceFetchOptions);
+        } catch {
+            // Preview media is optional presentation enrichment and must never fail Extraction.
+        }
     };
 }
 

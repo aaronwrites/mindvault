@@ -55,7 +55,7 @@ export function createArticleProcessingWorker({
         ...options,
         handlers: {
             extraction: createExtractionStageHandler(database, sourceFetchOptions),
-            "snapshot-persistence": createSnapshotPersistenceStageHandler(database),
+            "snapshot-persistence": createSnapshotPersistenceStageHandler(database, sourceFetchOptions),
             "passage-generation": createPassageGenerationStageHandler(database),
             "lexical-indexing": createLexicalIndexingStageHandler(database),
             "semantic-indexing": createSemanticIndexingStageHandler(database, embeddingProvider),

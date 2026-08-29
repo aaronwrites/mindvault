@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
     fetchPublicSource,
+    fetchPublicPreviewMedia,
     isPublicIpAddress,
     type SafeFetchDependencies,
     type SafeFetchTransport,
@@ -10,7 +11,7 @@ import { classifySourceSupport } from "../src/lib/sources/classify-source-suppor
 type StubResponse = {
     status: number;
     headers?: Record<string, string>;
-    body?: string;
+    body?: string | Uint8Array;
 };
 
 const publicAddressResolver: SafeFetchDependencies["resolveAddresses"] = async hostname => {
@@ -26,13 +27,76 @@ function transport(responses: Record<string, StubResponse>): SafeFetchTransport 
             return {
                 status: response.status,
                 headers: response.headers ?? { "content-type": "text/html; charset=utf-8" },
-                body: new TextEncoder().encode(response.body ?? "article body"),
+                body: typeof response.body === "string" || response.body === undefined
+                    ? new TextEncoder().encode(response.body ?? "article body")
+                    : response.body,
             };
         },
     };
 }
 
 describe("public Source fetch policy", () => {
+    test("fetches only a bounded, correctly labelled raster preview image", async () => {
+        const png = Uint8Array.from(Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL9aQAAAABJRU5ErkJggg==", "base64"));
+
+        const result = await fetchPublicPreviewMedia("https://example.com/preview.png", {
+            resolveAddresses: publicAddressResolver,
+            transport: transport({
+                "https://example.com/preview.png": { status: 200, headers: { "content-type": "image/png" }, body: png },
+            }),
+        });
+
+        expect(result).toEqual({
+            ok: true,
+            response: expect.objectContaining({ contentType: "image/png", body: png }),
+            permanentRedirects: [],
+        });
+    });
+
+    test("rejects a response that claims to be an image but has no supported image signature", async () => {
+        const result = await fetchPublicPreviewMedia("https://example.com/not-an-image", {
+            resolveAddresses: publicAddressResolver,
+            transport: transport({
+                "https://example.com/not-an-image": { status: 200, headers: { "content-type": "image/png" }, body: "<html>not an image</html>" },
+            }),
+        });
+
+        expect(result).toEqual({ ok: false, failure: { kind: "invalid-media-content" } });
+    });
+
+    test("applies the public-network, redirect, type, size, and timeout protections to preview media", async () => {
+        const unsafe = await fetchPublicPreviewMedia("https://unsafe.example/image.png", {
+            resolveAddresses: publicAddressResolver,
+            transport: { fetch: async () => { throw new Error("transport must not run"); } },
+        });
+        expect(unsafe).toEqual({ ok: false, failure: { kind: "unsafe-network-target", url: "https://unsafe.example/image.png" } });
+
+        const unsafeRedirect = await fetchPublicPreviewMedia("https://safe.example/image.png", {
+            resolveAddresses: publicAddressResolver,
+            transport: transport({ "https://safe.example/image.png": { status: 302, headers: { location: "https://unsafe.example/image.png" } } }),
+        });
+        expect(unsafeRedirect).toEqual({ ok: false, failure: { kind: "unsafe-network-target", url: "https://unsafe.example/image.png" } });
+
+        const unsupported = await fetchPublicPreviewMedia("https://safe.example/image.svg", {
+            resolveAddresses: publicAddressResolver,
+            transport: transport({ "https://safe.example/image.svg": { status: 200, headers: { "content-type": "image/svg+xml" } } }),
+        });
+        expect(unsupported).toEqual({ ok: false, failure: { kind: "unsupported-content-type", contentType: "image/svg+xml" } });
+
+        const oversized = await fetchPublicPreviewMedia("https://safe.example/large.png", {
+            maxResponseBytes: 8,
+            resolveAddresses: publicAddressResolver,
+            transport: transport({ "https://safe.example/large.png": { status: 200, headers: { "content-type": "image/png" }, body: "nine bytes" } }),
+        });
+        expect(oversized).toEqual({ ok: false, failure: { kind: "response-too-large", maxResponseBytes: 8 } });
+
+        const timedOut = await fetchPublicPreviewMedia("https://safe.example/stalled.png", {
+            timeoutMs: 10,
+            resolveAddresses: publicAddressResolver,
+            transport: { fetch: () => new Promise(() => {}) },
+        });
+        expect(timedOut).toEqual({ ok: false, failure: { kind: "timeout" } });
+    });
     test("selects the public textual adapter for a bounded HTML article", async () => {
         const fetched = await fetchPublicSource("https://example.com/article", {
             resolveAddresses: publicAddressResolver,

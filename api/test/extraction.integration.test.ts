@@ -41,13 +41,19 @@ describe("Extraction", () => {
             author: "Ada Lovelace",
             publishedAt: "2026-08-20T00:00:00.000Z",
             contentType: "article",
-            previewImageUrl: harness.sourceServer.fetchUrl("/media/preview.png"),
+            previewImageUrl: expect.stringMatching(/^\/source-preview-media\/\d+$/),
             previewImageAlt: "A durable knowledge card",
             faviconUrl: harness.sourceServer.fetchUrl("/favicon.ico"),
         };
         const listedItems = await listResponse.json() as Array<unknown>;
         expect(listedItems[0]).toEqual(expect.objectContaining({ sourcePreview: expectedPreview }));
         expect(await detailResponse.json()).toEqual(expect.objectContaining({ sourcePreview: expectedPreview }));
+        const previewImageUrl = (listedItems[0] as { sourcePreview: { previewImageUrl: string } }).sourcePreview.previewImageUrl;
+        harness.sourceServer.setPreviewImageAvailable(false);
+        const retainedMedia = await fetch(`${harness.apiBaseUrl}${previewImageUrl}`);
+        expect(retainedMedia.headers.get("content-type")).toBe("image/png");
+        expect(retainedMedia.headers.get("x-content-type-options")).toBe("nosniff");
+        expect(new Uint8Array(await retainedMedia.arrayBuffer())).toEqual(Uint8Array.from(Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL9aQAAAABJRU5ErkJggg==", "base64")));
     });
 
     test.skipIf(!process.env.TEST_DATABASE_URL)("persists immutable cleaned Source Snapshots without duplicating unchanged content", async () => {
@@ -124,6 +130,32 @@ describe("Extraction", () => {
         ]);
         expect(snapshots.rows[0]?.content_hash).not.toBe(snapshots.rows[1]?.content_hash);
         expect(currentSnapshot.rows[0]?.current_snapshot_id).toBe(snapshots.rows[1]?.id);
+    });
+
+    test.skipIf(!process.env.TEST_DATABASE_URL)("keeps an item Ready when its optional preview image is missing", async () => {
+        harness = await createIntegrationHarness(
+            database => createApp({ database: database.db, embeddingProvider: embeddings }),
+            (database, sourceServer) => createArticleProcessingWorker({ database: database.db, sourceFetchOptions: sourceServer.safeFetchDependencies(), embeddingProvider: embeddings, summaryProvider: summaries, topicTagProvider: topicTags }),
+        );
+        const response = await fetch(`${harness.apiBaseUrl}/captures`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ url: harness.sourceServer.fetchUrl("/articles/missing-preview-image") }),
+        });
+        const capture = await response.json() as { knowledgeItemId: number };
+
+        await harness.drainWorker();
+
+        const item = await (await fetch(`${harness.apiBaseUrl}/knowledge-items/${capture.knowledgeItemId}`)).json() as {
+            availability: string;
+            organizationCondition: string;
+            sourcePreview: { previewImageUrl: string | null };
+        };
+        expect(item).toEqual(expect.objectContaining({
+            availability: "ready",
+            organizationCondition: "complete",
+            sourcePreview: expect.objectContaining({ previewImageUrl: null }),
+        }));
     });
 
     test.skipIf(!process.env.TEST_DATABASE_URL)("reconciles canonical Sources without losing Capture Context or Processing Attempt history", async () => {

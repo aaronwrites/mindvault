@@ -1,0 +1,1 @@
+ALTER TABLE "source_preview_media" ADD COLUMN "alternative_text" text;

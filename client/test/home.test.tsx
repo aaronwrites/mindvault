@@ -38,6 +38,7 @@ mock.module("@/lib/api", () => ({
   refreshKnowledgeItem,
   retryKnowledgeItem,
   searchKnowledgeItems,
+  API_URL: "http://localhost:4000",
   knowledgeItemKeys: { all: ["knowledge-items"] },
   recallKeys: { all: ["knowledge-items", "recall"], search: (query: string) => ["knowledge-items", "recall", query] },
 }));
@@ -101,8 +102,8 @@ describe("Knowledge Item Capture", () => {
         author: "Ada Lovelace",
         publishedAt: "2026-08-20T00:00:00.000Z",
         contentType: "article",
-        previewImageUrl: null,
-        previewImageAlt: null,
+        previewImageUrl: "/source-preview-media/1",
+        previewImageAlt: "A durable knowledge card",
         faviconUrl: null,
       },
       recognitionSummary: "Generated recognition summary.",
@@ -118,6 +119,7 @@ describe("Knowledge Item Capture", () => {
     expect(screen.getByText("Source-provided description.")).toBeTruthy();
     expect(screen.getByText(/Ada Lovelace/)).toBeTruthy();
     expect(screen.getByText(/Aug 20, 2026/)).toBeTruthy();
+    expect(screen.getByRole("img", { name: "A durable knowledge card" }).getAttribute("src")).toBe("/source-preview-media/1");
     expect(screen.getByLabelText("Generated Recognition Summary").textContent).toContain("Generated recognition summary.");
     expect(screen.getByLabelText("Generated Topic Tags").textContent).toContain("durable capture");
   });
@@ -176,6 +178,31 @@ describe("Knowledge Item Capture", () => {
       ),
     ).toBeTruthy();
     expect(screen.getByText("Read this after the design review.")).toBeTruthy();
+  });
+
+  test("keeps a completed card understandable when no preview image was retained", async () => {
+    getKnowledgeItems.mockResolvedValue([{
+      ...processingItem,
+      availability: "ready",
+      sourcePreview: {
+        title: "A sparse but useful article",
+        description: null,
+        websiteName: null,
+        author: null,
+        publishedAt: null,
+        contentType: "article",
+        previewImageUrl: null,
+        previewImageAlt: null,
+        faviconUrl: null,
+      },
+      latestAttempt: { ...processingItem.latestAttempt!, status: "completed" },
+    }]);
+    renderHome();
+
+    expect(await screen.findByRole("heading", { name: "A sparse but useful article" })).toBeTruthy();
+    expect(screen.getByRole("img", { name: "Webpage preview placeholder" })).toBeTruthy();
+    expect(screen.getByText("Article")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Open original webpage: https://example.com/article" })).toBeTruthy();
   });
 
   test("polls Processing Knowledge Items until their status becomes stable", async () => {

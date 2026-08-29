@@ -14,6 +14,7 @@ import {
     recognitionSummaries,
     sourceSnapshots,
     sourcePreviews,
+    sourcePreviewMedia,
     sources,
     knowledgeItemTopicTags,
     topicTags,
@@ -86,7 +87,7 @@ async function presentKnowledgeItems(
 
     const itemIds = rows.map(row => row.knowledgeItem.id);
     const currentSnapshotIds = rows.flatMap(row => row.source.currentSnapshotId === null ? [] : [row.source.currentSnapshotId]);
-    const [contextRows, attemptRows, summaryRows, topicTagRows, previewRows] = await Promise.all([
+    const [contextRows, attemptRows, summaryRows, topicTagRows, previewRows, previewMediaRows] = await Promise.all([
         database
             .select({ knowledgeItemId: captures.knowledgeItemId, kind: captureContexts.kind, text: captureContexts.text })
             .from(captureContexts)
@@ -108,6 +109,8 @@ async function presentKnowledgeItems(
             .orderBy(topicTags.canonicalName),
         currentSnapshotIds.length === 0 ? [] : database.select().from(sourcePreviews)
             .where(inArray(sourcePreviews.sourceSnapshotId, currentSnapshotIds)),
+        currentSnapshotIds.length === 0 ? [] : database.select({ sourceSnapshotId: sourcePreviewMedia.sourceSnapshotId, alternativeText: sourcePreviewMedia.alternativeText }).from(sourcePreviewMedia)
+            .where(inArray(sourcePreviewMedia.sourceSnapshotId, currentSnapshotIds)),
     ]);
 
     const contextsByItem = new Map<number, Array<{ kind: string; summary: string }>>();
@@ -123,6 +126,7 @@ async function presentKnowledgeItems(
     }
     const summariesByItem = new Map(summaryRows.map(summary => [summary.knowledgeItemId, summary]));
     const previewsBySnapshot = new Map(previewRows.map(preview => [preview.sourceSnapshotId, preview]));
+    const mediaBySnapshot = new Map(previewMediaRows.map(media => [media.sourceSnapshotId, media]));
     const topicTagsByItem = new Map<number, string[]>();
     const currentSnapshotByItem = new Map(rows.map(row => [row.knowledgeItem.id, row.source.currentSnapshotId]));
     for (const tag of topicTagRows) {
@@ -147,7 +151,7 @@ async function presentKnowledgeItems(
                 normalizedUrl: source.normalizedUrl,
                 kind: source.sourceKind,
             },
-            sourcePreview: source.currentSnapshotId === null ? null : previewFor(previewsBySnapshot.get(source.currentSnapshotId)),
+            sourcePreview: source.currentSnapshotId === null ? null : previewFor(previewsBySnapshot.get(source.currentSnapshotId), mediaBySnapshot.get(source.currentSnapshotId)),
             captureContexts: contextsByItem.get(knowledgeItem.id) ?? [],
             availability: availabilityByItem.get(knowledgeItem.id) ?? "processing",
             organizationCondition: organizationConditions.get(knowledgeItem.id) ?? "processing",
@@ -166,7 +170,10 @@ async function presentKnowledgeItems(
     });
 }
 
-function previewFor(preview: typeof sourcePreviews.$inferSelect | undefined): KnowledgeItemView["sourcePreview"] {
+function previewFor(
+    preview: typeof sourcePreviews.$inferSelect | undefined,
+    media: { sourceSnapshotId: number; alternativeText: string | null } | undefined,
+): KnowledgeItemView["sourcePreview"] {
     if (!preview) return null;
     return {
         title: preview.title,
@@ -175,8 +182,8 @@ function previewFor(preview: typeof sourcePreviews.$inferSelect | undefined): Kn
         author: preview.author,
         publishedAt: preview.publishedAt ? toIsoString(preview.publishedAt) : null,
         contentType: preview.contentType,
-        previewImageUrl: preview.previewImageUrl,
-        previewImageAlt: preview.previewImageAlt,
+        previewImageUrl: media ? `/source-preview-media/${preview.sourceSnapshotId}` : null,
+        previewImageAlt: media?.alternativeText ?? null,
         faviconUrl: preview.faviconUrl,
     };
 }

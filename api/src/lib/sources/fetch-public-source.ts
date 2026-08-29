@@ -9,6 +9,7 @@ export type SafeFetchTarget = {
     address: string;
     timeoutMs: number;
     maxResponseBytes: number;
+    accept: string;
     signal: AbortSignal;
 };
 
@@ -26,10 +27,13 @@ export type SafeFetchDependencies = {
 };
 
 export type SafeFetchOptions = SafeFetchDependencies & {
+    responseProfile?: SafeFetchResponseProfile;
     timeoutMs?: number;
     maxResponseBytes?: number;
     maxRedirects?: number;
 };
+
+export type SafeFetchResponseProfile = "public-textual-source" | "preview-media";
 
 export type SafeFetchFailure =
     | { kind: "unsupported-protocol"; url: string }
@@ -39,6 +43,7 @@ export type SafeFetchFailure =
     | { kind: "invalid-redirect"; url: string }
     | { kind: "http-status"; status: number }
     | { kind: "unsupported-content-type"; contentType: string | null }
+    | { kind: "invalid-media-content" }
     | { kind: "response-too-large"; maxResponseBytes: number }
     | { kind: "timeout"; url?: string }
     | { kind: "transport-error" };
@@ -58,11 +63,20 @@ export type SafeFetchResult =
 const defaultTimeoutMs = 10_000;
 const defaultMaxResponseBytes = 1_048_576;
 const defaultMaxRedirects = 5;
+const previewMediaMaxResponseBytes = 524_288;
 
 class TransportTimeoutError extends Error {}
 class ResponseTooLargeError extends Error {}
 
 export async function fetchPublicSource(value: string, options: SafeFetchOptions = {}): Promise<SafeFetchResult> {
+    return fetchPublicResource(value, { ...options, responseProfile: "public-textual-source" });
+}
+
+export async function fetchPublicPreviewMedia(value: string, options: SafeFetchOptions = {}): Promise<SafeFetchResult> {
+    return fetchPublicResource(value, { ...options, responseProfile: "preview-media", maxResponseBytes: Math.min(options.maxResponseBytes ?? previewMediaMaxResponseBytes, previewMediaMaxResponseBytes) });
+}
+
+export async function fetchPublicResource(value: string, options: SafeFetchOptions = {}): Promise<SafeFetchResult> {
     let original: URL;
     try {
         original = new URL(value);
@@ -71,8 +85,9 @@ export async function fetchPublicSource(value: string, options: SafeFetchOptions
     }
     if (!isSupportedProtocol(original)) return { ok: false, failure: { kind: "unsupported-protocol", url: original.toString() } };
 
+    const responseProfile = options.responseProfile ?? "public-textual-source";
     const timeoutMs = boundedLimit(options.timeoutMs, defaultTimeoutMs);
-    const maxResponseBytes = boundedLimit(options.maxResponseBytes, defaultMaxResponseBytes);
+    const maxResponseBytes = boundedLimit(options.maxResponseBytes, responseProfile === "preview-media" ? previewMediaMaxResponseBytes : defaultMaxResponseBytes);
     const maxRedirects = boundedLimit(options.maxRedirects, defaultMaxRedirects);
     const resolveAddresses = options.resolveAddresses ?? resolvePublicAddresses;
     const transport = options.transport ?? nodeTransport;
@@ -92,6 +107,7 @@ export async function fetchPublicSource(value: string, options: SafeFetchOptions
                 address: addressResult.address,
                 timeoutMs,
                 maxResponseBytes,
+                accept: acceptHeaderFor(responseProfile),
                 signal,
             }), timeoutMs);
         } catch (error) {
@@ -124,8 +140,11 @@ export async function fetchPublicSource(value: string, options: SafeFetchOptions
         if (fetched.status < 200 || fetched.status >= 300) return { ok: false, failure: { kind: "http-status", status: fetched.status } };
 
         const contentType = fetched.headers["content-type"]?.split(";", 1)[0]?.trim().toLowerCase() ?? null;
-        if (!contentType || !isTextualContentType(contentType)) {
+        if (!contentType || !isAllowedContentType(contentType, responseProfile)) {
             return { ok: false, failure: { kind: "unsupported-content-type", contentType } };
+        }
+        if (responseProfile === "preview-media" && !hasMatchingImageSignature(contentType, fetched.body)) {
+            return { ok: false, failure: { kind: "invalid-media-content" } };
         }
         return {
             ok: true,
@@ -167,8 +186,37 @@ function isSupportedProtocol(url: URL): boolean {
     return url.protocol === "http:" || url.protocol === "https:";
 }
 
-function isTextualContentType(contentType: string): boolean {
+function isAllowedContentType(contentType: string, responseProfile: SafeFetchResponseProfile): boolean {
+    if (responseProfile === "preview-media") return supportedPreviewMediaContentTypes.has(contentType);
     return contentType.startsWith("text/") || contentType === "application/xhtml+xml" || contentType === "application/xml";
+}
+
+const supportedPreviewMediaContentTypes = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
+
+function acceptHeaderFor(responseProfile: SafeFetchResponseProfile): string {
+    return responseProfile === "preview-media"
+        ? "image/png, image/jpeg, image/gif, image/webp"
+        : "text/html, text/plain, application/xhtml+xml, application/xml";
+}
+
+function hasMatchingImageSignature(contentType: string, body: Uint8Array): boolean {
+    const beginsWith = (...bytes: number[]) => bytes.every((byte, index) => body[index] === byte);
+    if (contentType === "image/png") return body.length >= 33
+        && beginsWith(137, 80, 78, 71, 13, 10, 26, 10)
+        && beginsWithAt(body, 12, 73, 72, 68, 82);
+    if (contentType === "image/jpeg") return body.length >= 4 && beginsWith(255, 216, 255)
+        && body[body.length - 2] === 255 && body[body.length - 1] === 217;
+    if (contentType === "image/gif") return body.length >= 14
+        && (beginsWith(71, 73, 70, 56, 55, 97) || beginsWith(71, 73, 70, 56, 57, 97))
+        && body[body.length - 1] === 59;
+    if (contentType === "image/webp") return beginsWith(82, 73, 70, 70) && body.length >= 12
+        && beginsWithAt(body, 8, 87, 69, 66, 80)
+        && new DataView(body.buffer, body.byteOffset, body.byteLength).getUint32(4, true) + 8 === body.length;
+    return false;
+}
+
+function beginsWithAt(body: Uint8Array, offset: number, ...bytes: number[]): boolean {
+    return bytes.every((byte, index) => body[offset + index] === byte);
 }
 
 function isRedirect(status: number): boolean {
@@ -206,7 +254,7 @@ const nodeTransport: SafeFetchTransport = {
                 port: url.port || undefined,
                 path: `${url.pathname}${url.search}`,
                 method: "GET",
-                headers: { host: url.host, accept: "text/html, text/plain, application/xhtml+xml, application/xml" },
+                headers: { host: url.host, accept: target.accept },
                 servername: url.hostname,
             }, response => {
                 const contentLength = Number(response.headers["content-length"]);
