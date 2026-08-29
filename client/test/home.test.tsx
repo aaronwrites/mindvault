@@ -14,7 +14,7 @@ Object.assign(globalThis, {
   IS_REACT_ACT_ENVIRONMENT: true,
 });
 
-const { cleanup, render, screen, waitFor } =
+const { act, cleanup, render, screen, waitFor } =
   await import("@testing-library/react");
 const { default: userEvent } = await import("@testing-library/user-event");
 const { QueryClient, QueryClientProvider } =
@@ -118,6 +118,26 @@ describe("Knowledge Item Capture", () => {
     );
     expect(await screen.findByText("Processing")).toBeTruthy();
     expect(
+      screen.getByRole("heading", { name: "example.com" }),
+    ).toBeTruthy();
+    expect(screen.getByText("Webpage")).toBeTruthy();
+    expect(
+      screen.getByRole("img", { name: "Webpage preview placeholder" }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("button", {
+        name: "Open original webpage: https://example.com/article",
+      }),
+    ).toBeTruthy();
+    const originalWebpageAction = screen.getByRole("button", {
+      name: "Open original webpage: https://example.com/article",
+    });
+    expect(originalWebpageAction.getAttribute("href")).toBe(
+      processingItem.source.submittedUrl,
+    );
+    expect(originalWebpageAction.getAttribute("target")).toBe("_blank");
+    expect(originalWebpageAction.getAttribute("rel")).toBe("noopener noreferrer");
+    expect(
       screen.getByText(
         "Capture succeeded. Processing continues in the background.",
       ),
@@ -132,6 +152,7 @@ describe("Knowledge Item Capture", () => {
         {
           ...processingItem,
           availability: "ready",
+          recognitionSummary: "A newly available generated description.",
           latestAttempt: {
             ...processingItem.latestAttempt!,
             status: "completed",
@@ -145,6 +166,102 @@ describe("Knowledge Item Capture", () => {
       timeout: 3_000,
     });
     expect(await screen.findByText("Ready")).toBeTruthy();
+    expect(
+      screen.getByRole("heading", { name: "example.com" }),
+    ).toBeTruthy();
+    expect(screen.getByText("Webpage")).toBeTruthy();
+    expect(
+      screen.getByRole("img", { name: "Webpage preview placeholder" }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("button", {
+        name: "Open original webpage: https://example.com/article",
+      }),
+    ).toBeTruthy();
+    expect(
+      screen.getByText("A newly available generated description."),
+    ).toBeTruthy();
+  });
+
+  test("keeps a newly captured Processing Preview Card when an older library request completes", async () => {
+    let resolveInitialLibraryRequest: ((items: KnowledgeItem[]) => void) | undefined;
+    getKnowledgeItems.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveInitialLibraryRequest = resolve;
+        }),
+    );
+    createCapture.mockResolvedValue({
+      captureId: 1,
+      sourceId: 1,
+      knowledgeItemId: 1,
+      processingAttemptId: 1,
+      availability: "processing",
+      organizationCondition: "complete",
+      knowledgeItem: processingItem,
+    });
+    const user = userEvent.setup({ document: dom.window.document });
+    renderHome();
+
+    await user.type(screen.getByLabelText("URL"), processingItem.source.submittedUrl);
+    await user.click(screen.getByRole("button", { name: "Capture to MindVault" }));
+    expect(await screen.findByRole("heading", { name: "example.com" })).toBeTruthy();
+
+    await act(async () => resolveInitialLibraryRequest?.([]));
+
+    await waitFor(() =>
+      expect(screen.queryByText("Loading Knowledge Items…")).toBeNull(),
+    );
+    expect(await screen.findByRole("heading", { name: "example.com" })).toBeTruthy();
+    expect(screen.getByText("Processing")).toBeTruthy();
+  });
+
+  test("keeps the latest repeated Capture when an older library request includes the same Knowledge Item", async () => {
+    let resolveInitialLibraryRequest: ((items: KnowledgeItem[]) => void) | undefined;
+    const existingKnowledgeItem: KnowledgeItem = {
+      ...processingItem,
+      availability: "ready",
+      captureContexts: [],
+      latestAttempt: {
+        ...processingItem.latestAttempt!,
+        status: "completed",
+      },
+    };
+    const repeatedCapture: KnowledgeItem = {
+      ...processingItem,
+      captureContexts: [
+        { kind: "personal-note", summary: "Keep the latest Capture Context." },
+      ],
+    };
+    getKnowledgeItems.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveInitialLibraryRequest = resolve;
+        }),
+    );
+    createCapture.mockResolvedValue({
+      captureId: 2,
+      sourceId: 1,
+      knowledgeItemId: 1,
+      processingAttemptId: 2,
+      availability: "processing",
+      organizationCondition: "complete",
+      knowledgeItem: repeatedCapture,
+    });
+    const user = userEvent.setup({ document: dom.window.document });
+    renderHome();
+
+    await user.type(screen.getByLabelText("URL"), repeatedCapture.source.submittedUrl);
+    await user.click(screen.getByRole("button", { name: "Capture to MindVault" }));
+    expect(await screen.findByText("Keep the latest Capture Context.")).toBeTruthy();
+
+    await act(async () => resolveInitialLibraryRequest?.([existingKnowledgeItem]));
+
+    await waitFor(() =>
+      expect(screen.queryByText("Loading Knowledge Items…")).toBeNull(),
+    );
+    expect(screen.getByText("Processing")).toBeTruthy();
+    expect(screen.getByText("Keep the latest Capture Context.")).toBeTruthy();
   });
 
   test("offers an accessible Refresh action while keeping Ready content visible", async () => {

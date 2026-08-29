@@ -54,7 +54,8 @@ export default function Home() {
     queryFn: () => searchKnowledgeItems(searchQuery),
     enabled: Boolean(searchQuery),
   });
-  function showCapturedItem(knowledgeItem: KnowledgeItem) {
+  async function showCapturedItem(knowledgeItem: KnowledgeItem) {
+    await queryClient.cancelQueries({ queryKey: knowledgeItemKeys.all });
     queryClient.setQueryData<KnowledgeItem[]>(
       knowledgeItemKeys.all,
       (current) => [

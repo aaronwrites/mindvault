@@ -1,4 +1,4 @@
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, Globe2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -31,23 +31,31 @@ export function KnowledgeItemCard({
   isRetrying?: boolean;
 }) {
   const { source } = knowledgeItem;
+  const hostname = readableHostname(source.submittedUrl);
   const retryIsActionable = knowledgeItem.latestAttempt?.status === "failed";
   return (
     <Card className="h-full">
+      <div
+        role="img"
+        aria-label="Webpage preview placeholder"
+        className="flex aspect-[16/7] items-center justify-center bg-muted text-muted-foreground"
+      >
+        <Globe2 aria-hidden="true" className="size-10" />
+      </div>
       <CardHeader>
         <Badge variant="outline" className="mb-1 w-fit">
           {labels[knowledgeItem.availability]}
         </Badge>
         <CardTitle className="text-lg leading-snug">
-          <h3>Captured link</h3>
+          <h3>{hostname}</h3>
         </CardTitle>
         <CardAction>
           <Button
             variant="ghost"
             size="icon"
-            aria-label={`Open ${source.submittedUrl}`}
+            aria-label={`Open original webpage: ${source.submittedUrl}`}
             render={
-              <a href={source.submittedUrl} target="_blank" rel="noreferrer" />
+              <a href={source.submittedUrl} target="_blank" rel="noopener noreferrer" />
             }
             nativeButton={false}
           >
@@ -56,6 +64,7 @@ export function KnowledgeItemCard({
         </CardAction>
       </CardHeader>
       <CardContent className="flex-1 space-y-3">
+        <p className="text-sm font-medium text-muted-foreground">Webpage</p>
         <p className="break-all text-sm text-muted-foreground">
           {source.submittedUrl}
         </p>
@@ -150,4 +159,12 @@ export function KnowledgeItemCard({
       )}
     </Card>
   );
+}
+
+function readableHostname(address: string) {
+  try {
+    return new URL(address).hostname;
+  } catch {
+    return address;
+  }
 }

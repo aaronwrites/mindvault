@@ -20,18 +20,18 @@ import type { KnowledgeItem } from "@/lib/types";
 export function CaptureForm({
   onCaptured,
 }: {
-  onCaptured: (knowledgeItem: KnowledgeItem) => void;
+  onCaptured: (knowledgeItem: KnowledgeItem) => void | Promise<void>;
 }) {
   const [url, setUrl] = useState("");
   const [selectedText, setSelectedText] = useState("");
   const [personalNote, setPersonalNote] = useState("");
   const captureMutation = useMutation({
     mutationFn: createCapture,
-    onSuccess: ({ knowledgeItem }) => {
+    onSuccess: async ({ knowledgeItem }) => {
       setUrl("");
       setSelectedText("");
       setPersonalNote("");
-      onCaptured(knowledgeItem);
+      await onCaptured(knowledgeItem);
     },
   });
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
