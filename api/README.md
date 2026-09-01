@@ -31,3 +31,9 @@ TEST_DATABASE_URL=postgres://user:password@localhost:5432/postgres bun test
 The integration harness creates a uniquely named database from this connection,
 applies the checked-in forward migrations, and drops it after each test. Never
 point `TEST_DATABASE_URL` at a database containing development data.
+
+## Original File storage
+
+Original Files use the `cloudinary` SDK only inside `src/lib/original-files/cloudinary-original-file-storage.ts`. It is the server-only adapter for authenticated retention, short-lived signed access, and idempotent deletion; the rest of the application depends only on the provider-neutral storage boundary.
+
+Set `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, and `CLOUDINARY_API_SECRET` only in the API environment when file storage is enabled. Their absence does not prevent the URL-only API from starting.
