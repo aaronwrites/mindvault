@@ -11,6 +11,8 @@ Object.assign(globalThis, {
   navigator: dom.window.navigator,
   HTMLElement: dom.window.HTMLElement,
   Node: dom.window.Node,
+  requestAnimationFrame: (callback: FrameRequestCallback) => setTimeout(callback, 0),
+  cancelAnimationFrame: (id: number) => clearTimeout(id),
   IS_REACT_ACT_ENVIRONMENT: true,
 });
 
@@ -29,12 +31,17 @@ const createCapture =
       personalNote?: string;
     }) => Promise<CaptureResponse>
   >();
+const createOriginalFileCapture =
+  mock<
+    (input: { file: File; personalNote?: string }) => Promise<CaptureResponse>
+  >();
 const refreshKnowledgeItem = mock<(knowledgeItemId: number) => Promise<{ processingAttemptId: number; knowledgeItem: KnowledgeItem }>>();
 const retryKnowledgeItem = mock<(knowledgeItemId: number) => Promise<{ processingAttemptId: number; knowledgeItem: KnowledgeItem }>>();
 const searchKnowledgeItems = mock<(query: string) => Promise<RecallKnowledgeItem[]>>();
 mock.module("@/lib/api", () => ({
   getKnowledgeItems,
   createCapture,
+  createOriginalFileCapture,
   refreshKnowledgeItem,
   retryKnowledgeItem,
   searchKnowledgeItems,
@@ -84,6 +91,7 @@ function renderHome() {
 beforeEach(() => {
   getKnowledgeItems.mockReset();
   createCapture.mockReset();
+  createOriginalFileCapture.mockReset();
   refreshKnowledgeItem.mockReset();
   retryKnowledgeItem.mockReset();
   searchKnowledgeItems.mockReset();
@@ -91,6 +99,64 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("Knowledge Item Capture", () => {
+  test("captures one Original File with a personal note and presents its provenance without processing actions", async () => {
+    const originalFileItem: KnowledgeItem = {
+      id: 2,
+      createdAt: "2026-09-01T10:00:00.000Z",
+      source: {
+        id: 2,
+        kind: "pdf",
+        submittedUrl: "",
+        normalizedUrl: "",
+        filename: "../design notes.pdf",
+        mediaType: "application/pdf",
+        byteSize: 1_536,
+      },
+      sourcePreview: null,
+      captureContexts: [{ kind: "personal-note", summary: "Keep for the proposal." }],
+      availability: "unsupported",
+      organizationCondition: "complete",
+      recognitionSummary: null,
+      topicTags: [],
+      latestAttempt: null,
+    };
+    getKnowledgeItems.mockResolvedValue([]);
+    createOriginalFileCapture.mockResolvedValue({
+      captureId: 2,
+      sourceId: 2,
+      knowledgeItemId: 2,
+      processingAttemptId: null,
+      availability: "unsupported",
+      organizationCondition: "complete",
+      reused: true,
+      restoredFromTrash: false,
+      knowledgeItem: originalFileItem,
+    });
+    const user = userEvent.setup({ document: dom.window.document });
+    renderHome();
+
+    await user.click(screen.getByRole("radio", { name: /File/ }));
+    await user.upload(screen.getByLabelText("Choose Original File"), new File(["proposal"], "design notes.pdf", { type: "application/pdf" }));
+    await user.type(screen.getByLabelText("Personal note (optional)"), "Keep for the proposal.");
+    await user.click(screen.getByRole("button", { name: "Capture file to MindVault" }));
+
+    await waitFor(() => expect(createOriginalFileCapture.mock.calls[0]?.[0]).toEqual({
+      file: expect.any(File),
+      personalNote: "Keep for the proposal.",
+    }));
+    expect(await screen.findByRole("heading", { name: "design notes.pdf" })).toBeTruthy();
+    expect(screen.getByText("Unsupported")).toBeTruthy();
+    expect(screen.getByText("PDF")).toBeTruthy();
+    expect(screen.getByText("application/pdf")).toBeTruthy();
+    expect(screen.getByText("1.5 KB")).toBeTruthy();
+    expect(screen.getByRole("img", { name: "PDF file placeholder" })).toBeTruthy();
+    expect(screen.getByText("Reused the existing Knowledge Item.")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Refresh" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Retry processing" })).toBeNull();
+    expect(screen.queryByLabelText("Generated Recognition Summary")).toBeNull();
+    expect(screen.queryByLabelText("Generated Topic Tags")).toBeNull();
+  });
+
   test("progressively presents Source facts separately from generated enrichment", async () => {
     const recognizedItem: KnowledgeItem = {
       ...processingItem,

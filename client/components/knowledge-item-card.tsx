@@ -10,7 +10,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import type { KnowledgeItem } from "@/lib/types";
-import { SourcePreviewFacts, SourcePreviewMedia, sourcePreviewTitle } from "@/components/source-preview";
+import { OriginalFilePlaceholder, SourcePreviewFacts, SourcePreviewMedia, formatByteSize, originalFileTitle, sourceKindLabel, sourcePreviewTitle } from "@/components/source-preview";
 
 const labels = {
   processing: "Processing",
@@ -33,18 +33,19 @@ export function KnowledgeItemCard({
 }) {
   const { source } = knowledgeItem;
   const preview = knowledgeItem.sourcePreview;
+  const isOriginalFile = source.filename !== undefined;
   const retryIsActionable = knowledgeItem.latestAttempt?.status === "failed";
   return (
     <Card className="h-full">
-      <SourcePreviewMedia preview={preview} />
+      {isOriginalFile ? <OriginalFilePlaceholder sourceKind={source.kind} /> : <SourcePreviewMedia preview={preview} />}
       <CardHeader>
         <Badge variant="outline" className="mb-1 w-fit">
           {labels[knowledgeItem.availability]}
         </Badge>
         <CardTitle className="text-lg leading-snug">
-          <h3>{sourcePreviewTitle(preview, source.submittedUrl)}</h3>
+          <h3>{isOriginalFile ? originalFileTitle(source.filename, source.kind) : sourcePreviewTitle(preview, source.submittedUrl!)}</h3>
         </CardTitle>
-        <CardAction>
+        {!isOriginalFile && <CardAction>
           <Button
             variant="ghost"
             size="icon"
@@ -56,17 +57,22 @@ export function KnowledgeItemCard({
           >
             <ExternalLink />
           </Button>
-        </CardAction>
+        </CardAction>}
       </CardHeader>
       <CardContent className="flex-1 space-y-3">
-        <SourcePreviewFacts preview={preview} submittedUrl={source.submittedUrl} />
-        {knowledgeItem.recognitionSummary && (
+        {isOriginalFile ? <section aria-label="Original File details" className="space-y-1 text-sm text-muted-foreground">
+          <p className="font-medium">{sourceKindLabel(source.kind)}</p>
+          {source.mediaType && <p>{source.mediaType}</p>}
+          {formatByteSize(source.byteSize) && <p>{formatByteSize(source.byteSize)}</p>}
+          <p>Captured {new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }).format(new Date(knowledgeItem.createdAt))}</p>
+        </section> : <SourcePreviewFacts preview={preview} submittedUrl={source.submittedUrl!} />}
+        {!isOriginalFile && knowledgeItem.recognitionSummary && (
           <section aria-label="Generated Recognition Summary" className="space-y-1">
             <p className="text-xs font-medium text-muted-foreground">Generated recognition summary</p>
             <p className="text-sm text-muted-foreground">{knowledgeItem.recognitionSummary}</p>
           </section>
         )}
-        {knowledgeItem.topicTags.length > 0 && (
+        {!isOriginalFile && knowledgeItem.topicTags.length > 0 && (
           <section aria-label="Generated Topic Tags" className="space-y-1">
             <p className="text-xs font-medium text-muted-foreground">Generated topic tags</p>
             <ul className="flex flex-wrap gap-2">
@@ -74,40 +80,40 @@ export function KnowledgeItemCard({
             </ul>
           </section>
         )}
-        {knowledgeItem.availability === "processing" && (
+        {!isOriginalFile && knowledgeItem.availability === "processing" && (
           <p className="text-sm text-muted-foreground">
             Capture succeeded. Processing continues in the background.
           </p>
         )}
-        {knowledgeItem.availability === "needs-attention" && (
+        {!isOriginalFile && knowledgeItem.availability === "needs-attention" && (
           <p className="text-sm text-muted-foreground">
             Processing needs attention{knowledgeItem.latestAttempt?.failureReason ? `: ${knowledgeItem.latestAttempt.failureReason}` : "."}
           </p>
         )}
-        {knowledgeItem.organizationCondition === "incomplete" && (
+        {!isOriginalFile && knowledgeItem.organizationCondition === "incomplete" && (
           <p className="text-sm text-muted-foreground">
             Organization is incomplete. Topic Tag generation needs attention, but your Ready content remains available.
           </p>
         )}
-        {knowledgeItem.availability === "ready" && knowledgeItem.latestAttempt?.kind === "refresh" &&
+        {!isOriginalFile && knowledgeItem.availability === "ready" && knowledgeItem.latestAttempt?.kind === "refresh" &&
           (knowledgeItem.latestAttempt.status === "pending" || knowledgeItem.latestAttempt.status === "running") && (
             <p className="text-sm text-muted-foreground">
               Refresh underway. Your Ready content remains available.
             </p>
           )}
-        {knowledgeItem.availability === "ready" && knowledgeItem.latestAttempt?.kind === "refresh" &&
+        {!isOriginalFile && knowledgeItem.availability === "ready" && knowledgeItem.latestAttempt?.kind === "refresh" &&
           knowledgeItem.latestAttempt.status === "failed" && (
             <p className="text-sm text-muted-foreground">
               Refresh could not update this Source. Your existing Ready content remains available.
             </p>
           )}
-        {knowledgeItem.availability === "ready" && knowledgeItem.latestAttempt?.kind === "manual-retry" &&
+        {!isOriginalFile && knowledgeItem.availability === "ready" && knowledgeItem.latestAttempt?.kind === "manual-retry" &&
           (knowledgeItem.latestAttempt.status === "pending" || knowledgeItem.latestAttempt.status === "running") && (
             <p className="text-sm text-muted-foreground">
               Retrying failed processing. Your Ready content remains available.
             </p>
           )}
-        {knowledgeItem.latestAttempt && (
+        {!isOriginalFile && knowledgeItem.latestAttempt && (
           <p className="text-sm text-muted-foreground">
             Latest attempt:{" "}
             {knowledgeItem.latestAttempt.kind.replaceAll("-", " ")} (
@@ -116,7 +122,7 @@ export function KnowledgeItemCard({
         )}
       </CardContent>
       <CardFooter className="gap-3">
-        {knowledgeItem.availability === "ready" && !retryIsActionable && (
+        {!isOriginalFile && knowledgeItem.availability === "ready" && !retryIsActionable && (
           <Button
             variant="outline"
             onClick={() => onRefresh(knowledgeItem.id)}
@@ -125,7 +131,7 @@ export function KnowledgeItemCard({
             {isRefreshing ? "Refreshing…" : "Refresh"}
           </Button>
         )}
-        {retryIsActionable && (
+        {!isOriginalFile && retryIsActionable && (
           <Button
             variant="outline"
             onClick={() => onRetry(knowledgeItem.id)}

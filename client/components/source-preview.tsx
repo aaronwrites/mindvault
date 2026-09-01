@@ -1,4 +1,4 @@
-import { Globe2 } from "lucide-react";
+import { FileText, Globe2 } from "lucide-react";
 import type { KnowledgeItem } from "@/lib/types";
 
 type SourcePreview = KnowledgeItem["sourcePreview"];
@@ -15,6 +15,11 @@ export function SourcePreviewMedia({ preview }: { preview: SourcePreview }) {
       <Globe2 aria-hidden="true" className="size-10" />
     </div>
   );
+}
+
+export function OriginalFilePlaceholder({ sourceKind }: { sourceKind: string }) {
+  const label = `${sourceKindLabel(sourceKind)} file placeholder`;
+  return <div role="img" aria-label={label} className="flex aspect-[16/7] items-center justify-center bg-muted text-muted-foreground"><FileText aria-hidden="true" className="size-10" /></div>;
 }
 
 export function SourcePreviewFacts({ preview, submittedUrl }: { preview: SourcePreview; submittedUrl: string }) {
@@ -35,6 +40,24 @@ export function SourcePreviewFacts({ preview, submittedUrl }: { preview: SourceP
 
 export function sourcePreviewTitle(preview: SourcePreview, submittedUrl: string) {
   return preview?.title ?? readableHostname(submittedUrl);
+}
+
+export function originalFileTitle(filename: string | null | undefined, sourceKind: string) {
+  const safe = filename?.split(/[\\/]/).at(-1)?.replace(/[\u0000-\u001F\u007F]/g, " ").replace(/\s+/g, " ").trim();
+  return safe || `${sourceKindLabel(sourceKind)} file`;
+}
+
+export function sourceKindLabel(value: string) {
+  if (value === "pdf") return "PDF";
+  return displayContentType(value);
+}
+
+export function formatByteSize(bytes: number | undefined) {
+  if (bytes === undefined || !Number.isFinite(bytes) || bytes < 0) return null;
+  const units = ["B", "KB", "MB", "GB"];
+  const index = Math.min(Math.floor(Math.log(Math.max(bytes, 1)) / Math.log(1024)), units.length - 1);
+  const value = bytes / 1024 ** index;
+  return `${value >= 10 || index === 0 ? Math.round(value) : value.toFixed(1)} ${units[index]}`;
 }
 
 function readableHostname(address: string) {

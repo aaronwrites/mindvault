@@ -17,6 +17,9 @@ export const recallKeys = {
 async function getErrorMessage(response: Response, fallback: string) {
   const body = await response.json().catch(() => null);
 
+  if (body?.retryable === true) {
+    return "Original File storage is temporarily unavailable. Try again; your selected file and note are still available.";
+  }
   if (typeof body?.error === "string") return body.error;
   if (typeof body?.error?.formErrors?.[0] === "string")
     return body.error.formErrors[0];
@@ -69,6 +72,28 @@ export async function createCapture(input: {
   if (!response.ok) {
     throw new Error(
       await getErrorMessage(response, "Could not capture this URL."),
+    );
+  }
+
+  return response.json();
+}
+
+export async function createOriginalFileCapture(input: {
+  file: File;
+  personalNote?: string;
+}): Promise<CaptureResponse> {
+  const body = new FormData();
+  body.set("file", input.file, input.file.name);
+  if (input.personalNote) body.set("personalNote", input.personalNote);
+
+  const response = await fetch(`${API_URL}/captures/file`, {
+    method: "POST",
+    body,
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      await getErrorMessage(response, "Could not capture this Original File."),
     );
   }
 

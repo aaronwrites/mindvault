@@ -6,9 +6,12 @@ export type KnowledgeItem = {
   createdAt: string;
   source: {
     id: number;
+    kind: string;
     submittedUrl: string;
     normalizedUrl: string;
-    kind: string;
+    filename?: string | null;
+    mediaType?: string;
+    byteSize?: number;
   };
   sourcePreview: {
     title: string;
@@ -69,6 +72,8 @@ export type CaptureResponse = {
   availability: KnowledgeItemAvailability;
   organizationCondition: "processing" | "complete" | "incomplete";
   knowledgeItem: KnowledgeItem;
+  reused?: boolean;
+  restoredFromTrash?: boolean;
 };
 
 export type RefreshKnowledgeItemResponse = {
