@@ -1,7 +1,7 @@
 import { eq, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as schema from "../../db/schema";
-import { captures, extractedSources, knowledgeItems, processingAttempts, sourceSnapshots, sources } from "../../db/schema";
+import { captures, extractedSources, knowledgeItems, processingAttempts, sourceSnapshots, sources, webpageSources } from "../../db/schema";
 import { normalizeCaptureUrl } from "../capture/normalize-capture-url";
 
 type Database = NodePgDatabase<typeof schema>;
@@ -23,10 +23,13 @@ export async function reconcileExtractedSourceIdentity(
         return currentSource;
     }
     await transaction.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${identityUrl}, 0))`);
-    const [identifiedSource] = await transaction.select().from(sources).where(eq(sources.normalizedUrl, identityUrl));
+    const identifiedSource = (await transaction.select({ source: sources })
+        .from(webpageSources)
+        .innerJoin(sources, eq(sources.id, webpageSources.sourceId))
+        .where(eq(webpageSources.normalizedUrl, identityUrl)))[0]?.source;
 
     if (!identifiedSource) {
-        await transaction.update(sources).set({ normalizedUrl: identityUrl }).where(eq(sources.id, source.id));
+        await transaction.update(webpageSources).set({ normalizedUrl: identityUrl }).where(eq(webpageSources.sourceId, source.id));
         const [updatedSource] = await transaction.select().from(sources).where(eq(sources.id, source.id));
         if (!updatedSource) throw new Error("Source identity reconciliation could not find its Source");
         return updatedSource;

@@ -17,23 +17,85 @@ export type CaptureContextKind = typeof captureContextKinds[number];
 
 export const sources = pgTable("sources", {
     id: serial("id").primaryKey(),
-    submittedUrl: text("submitted_url").notNull(),
-    normalizedUrl: text("normalized_url").notNull(),
-    sourceKind: text("source_kind").notNull().default("web"),
+    provenanceKind: text("provenance_kind").notNull(),
+    sourceKind: text("source_kind").notNull(),
     currentSnapshotId: integer("current_snapshot_id"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
-}, table => [uniqueIndex("sources_normalized_url_unique").on(table.normalizedUrl)]);
+}, table => [
+    check("sources_provenance_kind", sql`${table.provenanceKind} IN ('webpage', 'original-file')`),
+]);
+
+export const webpageSources = pgTable("webpage_sources", {
+    sourceId: integer("source_id").primaryKey().references(() => sources.id, { onDelete: "cascade" }),
+    submittedUrl: text("submitted_url").notNull(),
+    normalizedUrl: text("normalized_url").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+}, table => [uniqueIndex("webpage_sources_normalized_url_unique").on(table.normalizedUrl)]);
+
+export const originalFiles = pgTable("original_files", {
+    sourceId: integer("source_id").primaryKey().references(() => sources.id, { onDelete: "cascade" }),
+    contentHash: text("content_hash").notNull(),
+    byteSize: integer("byte_size").notNull(),
+    detectedMediaType: text("detected_media_type").notNull(),
+    detectedSourceKind: text("detected_source_kind").notNull(),
+    storageProvider: text("storage_provider").notNull(),
+    providerIdentity: text("provider_identity").notNull(),
+    storageLocator: text("storage_locator"),
+    storageState: text("storage_state").notNull().default("pending-upload"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+}, table => [
+    uniqueIndex("original_files_content_hash_unique").on(table.contentHash),
+    uniqueIndex("original_files_provider_identity_unique").on(table.storageProvider, table.providerIdentity),
+    check("original_files_positive_byte_size", sql`${table.byteSize} > 0`),
+    check("original_files_storage_state", sql`${table.storageState} IN ('pending-upload', 'stored', 'pending-deletion')`),
+    check("original_files_complete_provider_state", sql`(
+        (${table.storageState} = 'pending-upload' AND ${table.storageLocator} IS NULL)
+        OR (${table.storageState} IN ('stored', 'pending-deletion') AND ${table.storageLocator} IS NOT NULL)
+    )`),
+]);
+
+export const originalFileOperations = pgTable("original_file_operations", {
+    id: serial("id").primaryKey(),
+    originalFileSourceId: integer("original_file_source_id").notNull().references(() => originalFiles.sourceId, { onDelete: "cascade" }),
+    kind: text("kind").notNull(),
+    status: text("status").notNull().default("pending"),
+    availableAt: timestamp("available_at").notNull().defaultNow(),
+    leaseToken: text("lease_token"),
+    leaseExpiresAt: timestamp("lease_expires_at"),
+    attemptCount: integer("attempt_count").notNull().default(0),
+    failureReason: text("failure_reason"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+}, table => [
+    check("original_file_operations_kind", sql`${table.kind} IN ('upload', 'delete')`),
+    check("original_file_operations_status", sql`${table.status} IN ('pending', 'running', 'completed', 'failed')`),
+    check("original_file_operations_lease", sql`(
+        (${table.status} = 'running' AND ${table.leaseToken} IS NOT NULL AND ${table.leaseExpiresAt} IS NOT NULL)
+        OR (${table.status} <> 'running' AND ${table.leaseToken} IS NULL AND ${table.leaseExpiresAt} IS NULL)
+    )`),
+]);
 
 export const knowledgeItems = pgTable("knowledge_items", {
     id: serial("id").primaryKey(),
     sourceId: integer("source_id").notNull().references(() => sources.id),
+    lifecycleState: text("lifecycle_state").notNull().default("active"),
+    trashedAt: timestamp("trashed_at"),
+    deletionRequestedAt: timestamp("deletion_requested_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
-}, table => [uniqueIndex("knowledge_items_source_id_unique").on(table.sourceId)]);
+}, table => [
+    uniqueIndex("knowledge_items_source_id_unique").on(table.sourceId),
+    check("knowledge_items_lifecycle_state", sql`${table.lifecycleState} IN ('active', 'trashed', 'pending-permanent-deletion')`),
+    check("knowledge_items_lifecycle_timestamps", sql`(
+        (${table.lifecycleState} = 'active' AND ${table.trashedAt} IS NULL AND ${table.deletionRequestedAt} IS NULL)
+        OR (${table.lifecycleState} = 'trashed' AND ${table.trashedAt} IS NOT NULL AND ${table.deletionRequestedAt} IS NULL)
+        OR (${table.lifecycleState} = 'pending-permanent-deletion' AND ${table.trashedAt} IS NOT NULL AND ${table.deletionRequestedAt} IS NOT NULL)
+    )`),
+]);
 
 export const captures = pgTable("captures", {
     id: serial("id").primaryKey(),
     sourceId: integer("source_id").notNull().references(() => sources.id),
     knowledgeItemId: integer("knowledge_item_id").notNull().references(() => knowledgeItems.id),
+    submittedFilename: text("submitted_filename"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

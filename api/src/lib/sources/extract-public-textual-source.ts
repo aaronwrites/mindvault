@@ -1,7 +1,7 @@
 import { and, eq, ne, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as schema from "../../db/schema";
-import { extractedSources, knowledgeItems, processingAttempts, processingStages, sources } from "../../db/schema";
+import { extractedSources, knowledgeItems, processingAttempts, processingStages, sources, webpageSources } from "../../db/schema";
 import { classifySourceSupport } from "./classify-source-support";
 import { fetchPublicSource, type SafeFetchOptions } from "./fetch-public-source";
 import { reconcileExtractedSourceIdentity } from "./reconcile-source-identity";
@@ -73,10 +73,11 @@ export function createExtractionStageHandler(database: Database, fetchOptions: S
 }
 
 async function sourceForAttempt(database: Database, processingAttemptId: number) {
-    const [row] = await database.select({ id: sources.id, submittedUrl: sources.submittedUrl })
+    const [row] = await database.select({ id: sources.id, submittedUrl: webpageSources.submittedUrl })
         .from(processingAttempts)
         .innerJoin(knowledgeItems, eq(knowledgeItems.id, processingAttempts.knowledgeItemId))
         .innerJoin(sources, eq(sources.id, knowledgeItems.sourceId))
+        .innerJoin(webpageSources, eq(webpageSources.sourceId, sources.id))
         .where(eq(processingAttempts.id, processingAttemptId));
     return row;
 }

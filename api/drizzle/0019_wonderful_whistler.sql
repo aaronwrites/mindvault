@@ -1,0 +1,1 @@
+ALTER TABLE "original_files" ADD COLUMN "detected_source_kind" text NOT NULL;

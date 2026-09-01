@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "original_files_provider_identity_unique" ON "original_files" USING btree ("storage_provider","provider_identity");

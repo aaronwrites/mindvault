@@ -1,5 +1,5 @@
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import * as schema from "../../db/schema";
 import type { CaptureContextKind } from "../../db/schema";
 import {
@@ -7,6 +7,7 @@ import {
     captures,
     knowledgeItems,
     sources,
+    webpageSources,
 } from "../../db/schema";
 import type { CreateCaptureInput } from "../../schemas/capture";
 import { normalizeCaptureUrl } from "./normalize-capture-url";
@@ -26,14 +27,24 @@ export async function persistUrlCapture(
 ): Promise<PersistedCapture> {
     return database.transaction(async transaction => {
         const normalizedUrl = normalizeCaptureUrl(input.url);
-        const [createdSource] = await transaction.insert(sources).values({
-            submittedUrl: input.url,
-            normalizedUrl,
-        }).onConflictDoNothing().returning();
-        const source = createdSource ?? (await transaction
-            .select()
-            .from(sources)
-            .where(eq(sources.normalizedUrl, normalizedUrl)))[0];
+        await transaction.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${normalizedUrl}, 0))`);
+        const existingSource = (await transaction
+            .select({ source: sources })
+            .from(webpageSources)
+            .innerJoin(sources, eq(sources.id, webpageSources.sourceId))
+            .where(eq(webpageSources.normalizedUrl, normalizedUrl)))[0]?.source;
+        const [createdSource] = existingSource ? [] : await transaction.insert(sources).values({
+            provenanceKind: "webpage",
+            sourceKind: "web",
+        }).returning();
+        if (createdSource) {
+            await transaction.insert(webpageSources).values({
+                sourceId: createdSource.id,
+                submittedUrl: input.url,
+                normalizedUrl,
+            });
+        }
+        const source = createdSource ?? existingSource;
         if (!source) throw new Error("Source was not created");
 
         const knowledgeItem = createdSource

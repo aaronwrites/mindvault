@@ -16,6 +16,7 @@ import {
     sourcePreviews,
     sourcePreviewMedia,
     sources,
+    webpageSources,
     knowledgeItemTopicTags,
     topicTags,
 } from "../../db/schema";
@@ -60,9 +61,10 @@ export type KnowledgeItemView = {
 
 export async function listKnowledgeItems(database: Database, embeddingRepresentation: EmbeddingProvider["representation"]): Promise<KnowledgeItemView[]> {
     const rows = await database
-        .select({ knowledgeItem: knowledgeItems, source: sources })
+        .select({ knowledgeItem: knowledgeItems, source: sources, webpageSource: webpageSources })
         .from(knowledgeItems)
         .innerJoin(sources, eq(knowledgeItems.sourceId, sources.id))
+        .innerJoin(webpageSources, eq(webpageSources.sourceId, sources.id))
         .orderBy(desc(knowledgeItems.createdAt));
 
     return presentKnowledgeItems(database, rows, embeddingRepresentation);
@@ -70,9 +72,10 @@ export async function listKnowledgeItems(database: Database, embeddingRepresenta
 
 export async function getKnowledgeItem(database: Database, id: number, embeddingRepresentation: EmbeddingProvider["representation"]): Promise<KnowledgeItemView | undefined> {
     const rows = await database
-        .select({ knowledgeItem: knowledgeItems, source: sources })
+        .select({ knowledgeItem: knowledgeItems, source: sources, webpageSource: webpageSources })
         .from(knowledgeItems)
         .innerJoin(sources, eq(knowledgeItems.sourceId, sources.id))
+        .innerJoin(webpageSources, eq(webpageSources.sourceId, sources.id))
         .where(eq(knowledgeItems.id, id));
 
     return (await presentKnowledgeItems(database, rows, embeddingRepresentation))[0];
@@ -80,7 +83,7 @@ export async function getKnowledgeItem(database: Database, id: number, embedding
 
 async function presentKnowledgeItems(
     database: Database,
-    rows: Array<{ knowledgeItem: typeof knowledgeItems.$inferSelect; source: typeof sources.$inferSelect }>,
+    rows: Array<{ knowledgeItem: typeof knowledgeItems.$inferSelect; source: typeof sources.$inferSelect; webpageSource: typeof webpageSources.$inferSelect }>,
     embeddingRepresentation: EmbeddingProvider["representation"],
 ): Promise<KnowledgeItemView[]> {
     if (rows.length === 0) return [];
@@ -138,15 +141,15 @@ async function presentKnowledgeItems(
     const displayedLatestAttemptStatuses = await latestAttemptStatuses(database, latestAttempts);
     const organizationConditions = await organizationConditionsByKnowledgeItem(database, rows, attemptRows, latestAttempts, topicTagsByItem);
 
-    return rows.map(({ knowledgeItem, source }) => {
+    return rows.map(({ knowledgeItem, source, webpageSource }) => {
         const latestAttempt = latestAttempts.get(knowledgeItem.id);
         return {
             id: knowledgeItem.id,
             createdAt: toIsoString(knowledgeItem.createdAt),
             source: {
                 id: source.id,
-                submittedUrl: source.submittedUrl,
-                normalizedUrl: source.normalizedUrl,
+                submittedUrl: webpageSource.submittedUrl,
+                normalizedUrl: webpageSource.normalizedUrl,
                 kind: source.sourceKind,
             },
             sourcePreview: source.currentSnapshotId === null ? null : previewFor(previewsBySnapshot.get(source.currentSnapshotId), mediaBySnapshot.get(source.currentSnapshotId)),
@@ -186,7 +189,7 @@ function previewFor(
 
 async function organizationConditionsByKnowledgeItem(
     database: Database,
-    rows: Array<{ knowledgeItem: typeof knowledgeItems.$inferSelect; source: typeof sources.$inferSelect }>,
+    rows: Array<{ knowledgeItem: typeof knowledgeItems.$inferSelect; source: typeof sources.$inferSelect; webpageSource: typeof webpageSources.$inferSelect }>,
     attempts: Array<typeof processingAttempts.$inferSelect>,
     latestAttempts: Map<number, typeof processingAttempts.$inferSelect>,
     currentTopicTagsByItem: Map<number, string[]>,
@@ -247,7 +250,7 @@ async function latestAttemptStatuses(
 
 async function availabilityByKnowledgeItem(
     database: Database,
-    items: Array<{ knowledgeItem: typeof knowledgeItems.$inferSelect; source: typeof sources.$inferSelect }>,
+    items: Array<{ knowledgeItem: typeof knowledgeItems.$inferSelect; source: typeof sources.$inferSelect; webpageSource: typeof webpageSources.$inferSelect }>,
     latestAttempts: Map<number, typeof processingAttempts.$inferSelect>,
     embeddingRepresentation: EmbeddingProvider["representation"],
 ): Promise<Map<number, KnowledgeItemAvailability>> {
