@@ -17,6 +17,7 @@ import {
     sourcePreviewMedia,
     sources,
     webpageSources,
+    originalFiles,
     knowledgeItemTopicTags,
     topicTags,
 } from "../../db/schema";
@@ -30,9 +31,12 @@ export type KnowledgeItemView = {
     createdAt: string;
     source: {
         id: number;
-        submittedUrl: string;
-        normalizedUrl: string;
         kind: string;
+        submittedUrl?: string;
+        normalizedUrl?: string;
+        filename?: string | null;
+        mediaType?: string;
+        byteSize?: number;
     };
     sourcePreview: {
         title: string;
@@ -61,10 +65,11 @@ export type KnowledgeItemView = {
 
 export async function listKnowledgeItems(database: Database, embeddingRepresentation: EmbeddingProvider["representation"]): Promise<KnowledgeItemView[]> {
     const rows = await database
-        .select({ knowledgeItem: knowledgeItems, source: sources, webpageSource: webpageSources })
+        .select({ knowledgeItem: knowledgeItems, source: sources, webpageSource: webpageSources, originalFile: originalFiles })
         .from(knowledgeItems)
         .innerJoin(sources, eq(knowledgeItems.sourceId, sources.id))
-        .innerJoin(webpageSources, eq(webpageSources.sourceId, sources.id))
+        .leftJoin(webpageSources, eq(webpageSources.sourceId, sources.id))
+        .leftJoin(originalFiles, eq(originalFiles.sourceId, sources.id))
         .orderBy(desc(knowledgeItems.createdAt));
 
     return presentKnowledgeItems(database, rows, embeddingRepresentation);
@@ -72,10 +77,11 @@ export async function listKnowledgeItems(database: Database, embeddingRepresenta
 
 export async function getKnowledgeItem(database: Database, id: number, embeddingRepresentation: EmbeddingProvider["representation"]): Promise<KnowledgeItemView | undefined> {
     const rows = await database
-        .select({ knowledgeItem: knowledgeItems, source: sources, webpageSource: webpageSources })
+        .select({ knowledgeItem: knowledgeItems, source: sources, webpageSource: webpageSources, originalFile: originalFiles })
         .from(knowledgeItems)
         .innerJoin(sources, eq(knowledgeItems.sourceId, sources.id))
-        .innerJoin(webpageSources, eq(webpageSources.sourceId, sources.id))
+        .leftJoin(webpageSources, eq(webpageSources.sourceId, sources.id))
+        .leftJoin(originalFiles, eq(originalFiles.sourceId, sources.id))
         .where(eq(knowledgeItems.id, id));
 
     return (await presentKnowledgeItems(database, rows, embeddingRepresentation))[0];
@@ -83,7 +89,7 @@ export async function getKnowledgeItem(database: Database, id: number, embedding
 
 async function presentKnowledgeItems(
     database: Database,
-    rows: Array<{ knowledgeItem: typeof knowledgeItems.$inferSelect; source: typeof sources.$inferSelect; webpageSource: typeof webpageSources.$inferSelect }>,
+    rows: Array<{ knowledgeItem: typeof knowledgeItems.$inferSelect; source: typeof sources.$inferSelect; webpageSource: typeof webpageSources.$inferSelect | null; originalFile: typeof originalFiles.$inferSelect | null }>,
     embeddingRepresentation: EmbeddingProvider["representation"],
 ): Promise<KnowledgeItemView[]> {
     if (rows.length === 0) return [];
@@ -122,6 +128,10 @@ async function presentKnowledgeItems(
         contexts.push({ kind: context.kind, summary: summarize(context.text) });
         contextsByItem.set(context.knowledgeItemId, contexts);
     }
+    const filenameRows = await database.select({ knowledgeItemId: captures.knowledgeItemId, filename: captures.submittedFilename })
+        .from(captures).where(inArray(captures.knowledgeItemId, itemIds)).orderBy(captures.id);
+    const filenamesByItem = new Map<number, string | null>();
+    for (const capture of filenameRows) if (capture.filename !== null) filenamesByItem.set(capture.knowledgeItemId, capture.filename);
 
     const latestAttempts = new Map<number, typeof processingAttempts.$inferSelect>();
     for (const attempt of attemptRows) {
@@ -141,21 +151,21 @@ async function presentKnowledgeItems(
     const displayedLatestAttemptStatuses = await latestAttemptStatuses(database, latestAttempts);
     const organizationConditions = await organizationConditionsByKnowledgeItem(database, rows, attemptRows, latestAttempts, topicTagsByItem);
 
-    return rows.map(({ knowledgeItem, source, webpageSource }) => {
+    return rows.map(({ knowledgeItem, source, webpageSource, originalFile }) => {
         const latestAttempt = latestAttempts.get(knowledgeItem.id);
         return {
             id: knowledgeItem.id,
             createdAt: toIsoString(knowledgeItem.createdAt),
             source: {
                 id: source.id,
-                submittedUrl: webpageSource.submittedUrl,
-                normalizedUrl: webpageSource.normalizedUrl,
                 kind: source.sourceKind,
+                ...(webpageSource ? { submittedUrl: webpageSource.submittedUrl, normalizedUrl: webpageSource.normalizedUrl } : {}),
+                ...(originalFile ? { filename: filenamesByItem.get(knowledgeItem.id) ?? null, mediaType: originalFile.detectedMediaType, byteSize: originalFile.byteSize } : {}),
             },
             sourcePreview: source.currentSnapshotId === null ? null : previewFor(previewsBySnapshot.get(source.currentSnapshotId), mediaBySnapshot.get(source.currentSnapshotId)),
             captureContexts: contextsByItem.get(knowledgeItem.id) ?? [],
             availability: availabilityByItem.get(knowledgeItem.id) ?? "processing",
-            organizationCondition: organizationConditions.get(knowledgeItem.id) ?? "processing",
+            organizationCondition: source.provenanceKind === "original-file" ? "complete" : organizationConditions.get(knowledgeItem.id) ?? "processing",
             recognitionSummary: summariesByItem.get(knowledgeItem.id)?.text ?? null,
             topicTags: topicTagsByItem.get(knowledgeItem.id) ?? [],
             latestAttempt: latestAttempt ? {
@@ -189,7 +199,7 @@ function previewFor(
 
 async function organizationConditionsByKnowledgeItem(
     database: Database,
-    rows: Array<{ knowledgeItem: typeof knowledgeItems.$inferSelect; source: typeof sources.$inferSelect; webpageSource: typeof webpageSources.$inferSelect }>,
+    rows: Array<{ knowledgeItem: typeof knowledgeItems.$inferSelect; source: typeof sources.$inferSelect; webpageSource: typeof webpageSources.$inferSelect | null; originalFile: typeof originalFiles.$inferSelect | null }>,
     attempts: Array<typeof processingAttempts.$inferSelect>,
     latestAttempts: Map<number, typeof processingAttempts.$inferSelect>,
     currentTopicTagsByItem: Map<number, string[]>,
@@ -250,7 +260,7 @@ async function latestAttemptStatuses(
 
 async function availabilityByKnowledgeItem(
     database: Database,
-    items: Array<{ knowledgeItem: typeof knowledgeItems.$inferSelect; source: typeof sources.$inferSelect; webpageSource: typeof webpageSources.$inferSelect }>,
+    items: Array<{ knowledgeItem: typeof knowledgeItems.$inferSelect; source: typeof sources.$inferSelect; webpageSource: typeof webpageSources.$inferSelect | null; originalFile: typeof originalFiles.$inferSelect | null }>,
     latestAttempts: Map<number, typeof processingAttempts.$inferSelect>,
     embeddingRepresentation: EmbeddingProvider["representation"],
 ): Promise<Map<number, KnowledgeItemAvailability>> {
@@ -307,7 +317,9 @@ async function availabilityByKnowledgeItem(
                     && passagesForSnapshot.every(passage => passage.lexicalSearch !== null && indexedPassageIds.has(passage.id));
             });
         const latestAttempt = latestAttempts.get(knowledgeItem.id);
-        const availability: KnowledgeItemAvailability = hasTrustworthyRepresentation
+        const availability: KnowledgeItemAvailability = source.provenanceKind === "original-file"
+            ? "unsupported"
+            : hasTrustworthyRepresentation
             ? "ready"
             : latestAttempt?.status === "unsupported"
                 ? "unsupported"

@@ -26,6 +26,7 @@ export function cloudinaryOriginalFileStorageFromEnvironment(environment: NodeJS
 }
 
 export class CloudinaryOriginalFileStorage implements OriginalFileStorage {
+    readonly provider = "cloudinary";
     #prefix: string;
 
     constructor(config: CloudinaryOriginalFileStorageConfig) {

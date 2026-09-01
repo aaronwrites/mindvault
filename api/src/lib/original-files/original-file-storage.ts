@@ -16,6 +16,7 @@ export type OriginalFileAccess = {
 };
 
 export interface OriginalFileStorage {
+    readonly provider: string;
     upload(upload: OriginalFileStorageUpload): Promise<StoredOriginalFile>;
     inspectUpload(providerIdentity: string): Promise<StoredOriginalFile | null>;
     createSignedAccess(request: { locator: string; expiresAt: Date }): Promise<OriginalFileAccess>;

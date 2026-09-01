@@ -4,11 +4,14 @@ import { OriginalFileStorageError, type OriginalFileStorage, type OriginalFileSt
 type StoredFakeFile = Omit<StoredOriginalFile, "reused"> & { bytes: Buffer };
 
 export class DeterministicOriginalFileStorageFake implements OriginalFileStorage {
+    readonly provider = "deterministic";
     #files = new Map<string, StoredFakeFile>();
     #outage = false;
     #nextUploadFailure: OriginalFileStorageError | null = null;
     #nextDeletionFailure: OriginalFileStorageError | null = null;
     #nextAmbiguousUpload: OriginalFileStorageError | null = null;
+
+    get uploadedFileCount() { return this.#files.size; }
     #delayMs = 0;
 
     setOutage(outage: boolean) { this.#outage = outage; }
