@@ -4,16 +4,21 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { CaptureForm } from "@/components/capture-form";
 import { KnowledgeItemCard } from "@/components/knowledge-item-card";
+import { originalFileTitle, sourcePreviewTitle } from "@/components/source-preview";
 import { RecallResultCard } from "@/components/recall-result-card";
 import { SearchForm } from "@/components/search-form";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { getKnowledgeItems, knowledgeItemKeys, recallKeys, refreshKnowledgeItem, retryKnowledgeItem, searchKnowledgeItems } from "@/lib/api";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { getKnowledgeItems, getTrashedKnowledgeItems, knowledgeItemKeys, permanentlyDeleteKnowledgeItem, recallKeys, refreshKnowledgeItem, restoreKnowledgeItem, retryKnowledgeItem, searchKnowledgeItems, trashKnowledgeItem } from "@/lib/api";
 import type { KnowledgeItem } from "@/lib/types";
 
 export default function Home() {
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
+  const [showTrash, setShowTrash] = useState(false);
+  const [permanentDeletionTarget, setPermanentDeletionTarget] = useState<KnowledgeItem | null>(null);
   const knowledgeItemsQuery = useQuery({
     queryKey: knowledgeItemKeys.all,
     queryFn: getKnowledgeItems,
@@ -32,6 +37,13 @@ export default function Home() {
     refetchIntervalInBackground: true,
   });
   const knowledgeItems = knowledgeItemsQuery.data ?? [];
+  const trashQuery = useQuery({ queryKey: knowledgeItemKeys.trash, queryFn: getTrashedKnowledgeItems, enabled: showTrash, refetchInterval: query => query.state.data?.some(item => item.lifecycleState === "pending-permanent-deletion") ? 2_000 : false });
+  const trashedKnowledgeItems = trashQuery.data ?? [];
+  const permanentDeletionLabel = permanentDeletionTarget
+    ? permanentDeletionTarget.source.filename !== undefined
+      ? originalFileTitle(permanentDeletionTarget.source.filename, permanentDeletionTarget.source.kind)
+      : sourcePreviewTitle(permanentDeletionTarget.sourcePreview, permanentDeletionTarget.source.submittedUrl)
+    : "this Knowledge Item";
   async function updateKnowledgeItemAfterProcessingAttempt({ knowledgeItem }: { knowledgeItem: KnowledgeItem }) {
     queryClient.setQueryData<KnowledgeItem[]>(
       knowledgeItemKeys.all,
@@ -53,6 +65,28 @@ export default function Home() {
     mutationFn: retryKnowledgeItem,
     onSuccess: updateKnowledgeItemAfterProcessingAttempt,
   });
+  const trashMutation = useMutation({
+    mutationFn: trashKnowledgeItem,
+    onSuccess: async (_, id) => {
+      queryClient.setQueryData<KnowledgeItem[]>(knowledgeItemKeys.all, current => (current ?? []).filter(item => item.id !== id));
+      await Promise.all([queryClient.invalidateQueries({ queryKey: knowledgeItemKeys.trash }), queryClient.invalidateQueries({ queryKey: recallKeys.all })]);
+    },
+  });
+  const restoreMutation = useMutation({
+    mutationFn: restoreKnowledgeItem,
+    onSuccess: async ({ knowledgeItem }, id) => {
+      queryClient.setQueryData<KnowledgeItem[]>(knowledgeItemKeys.trash, current => (current ?? []).filter(item => item.id !== id));
+      queryClient.setQueryData<KnowledgeItem[]>(knowledgeItemKeys.all, current => [knowledgeItem, ...(current ?? []).filter(item => item.id !== knowledgeItem.id)]);
+      await Promise.all([queryClient.invalidateQueries({ queryKey: knowledgeItemKeys.all }), queryClient.invalidateQueries({ queryKey: knowledgeItemKeys.trash }), queryClient.invalidateQueries({ queryKey: recallKeys.all })]);
+    },
+  });
+  const permanentlyDeleteMutation = useMutation({
+    mutationFn: permanentlyDeleteKnowledgeItem,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: knowledgeItemKeys.trash });
+    },
+  });
+  function confirmPermanentDeletion(knowledgeItem: KnowledgeItem) { setPermanentDeletionTarget(knowledgeItem); }
   const recallQuery = useQuery({
     queryKey: recallKeys.search(searchQuery),
     queryFn: () => searchKnowledgeItems(searchQuery),
@@ -81,8 +115,8 @@ export default function Home() {
           Capture useful knowledge without interrupting your flow.
         </p>
       </header>
-      <CaptureForm onCaptured={showCapturedItem} />
-      <section aria-labelledby="recall-heading" className="space-y-4">
+      {!showTrash && <CaptureForm onCaptured={showCapturedItem} />}
+      {!showTrash && <section aria-labelledby="recall-heading" className="space-y-4">
         <div>
           <h2 id="recall-heading" className="text-2xl font-semibold tracking-tight">Recall your Knowledge Items</h2>
           <p className="mt-1 text-sm text-muted-foreground">Search by meaning or exact language such as an error message, command, or identifier.</p>
@@ -96,7 +130,7 @@ export default function Home() {
         {recallQuery.data && recallQuery.data.length > 0 && (
           <div className="grid gap-4 md:grid-cols-2">{recallQuery.data.map(result => <RecallResultCard key={result.id} result={result} />)}</div>
         )}
-      </section>
+      </section>}
       <section aria-labelledby="knowledge-items-heading" className="space-y-5">
         <div>
           <div>
@@ -104,25 +138,25 @@ export default function Home() {
               id="knowledge-items-heading"
               className="text-2xl font-semibold tracking-tight"
             >
-              Your Knowledge Items
+              {showTrash ? "Trash" : "Your Knowledge Items"}
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              {knowledgeItems.length}{" "}
-              {knowledgeItems.length === 1 ? "item" : "items"} captured
+              {showTrash ? `${trashedKnowledgeItems.length} ${trashedKnowledgeItems.length === 1 ? "item" : "items"} retained in Trash.` : `${knowledgeItems.length} ${knowledgeItems.length === 1 ? "item" : "items"} captured`}
             </p>
+            <Button variant="outline" className="mt-3" onClick={() => setShowTrash(value => !value)}>{showTrash ? "Back to Knowledge Items" : "View Trash"}</Button>
           </div>
         </div>
-        {knowledgeItemsQuery.isPending && (
+        {(showTrash ? trashQuery.isPending : knowledgeItemsQuery.isPending) && (
           <Card role="status">
             <CardContent className="py-3 text-center text-muted-foreground">
               Loading Knowledge Items…
             </CardContent>
           </Card>
         )}
-        {knowledgeItemsQuery.error && (
+        {(showTrash ? trashQuery.error : knowledgeItemsQuery.error) && (
           <Alert variant="destructive">
             <AlertDescription>
-              {knowledgeItemsQuery.error.message}
+              {(showTrash ? trashQuery.error : knowledgeItemsQuery.error)?.message}
             </AlertDescription>
           </Alert>
         )}
@@ -136,28 +170,49 @@ export default function Home() {
             <AlertDescription>{retryMutation.error.message}</AlertDescription>
           </Alert>
         )}
-        {!knowledgeItemsQuery.isPending &&
-          !knowledgeItemsQuery.error &&
-          knowledgeItems.length === 0 && (
+        {trashMutation.error && <Alert variant="destructive"><AlertDescription>{trashMutation.error.message}</AlertDescription></Alert>}
+        {restoreMutation.error && <Alert variant="destructive"><AlertDescription>{restoreMutation.error.message}</AlertDescription></Alert>}
+        {permanentlyDeleteMutation.error && <Alert variant="destructive"><AlertDescription>{permanentlyDeleteMutation.error.message}</AlertDescription></Alert>}
+        {!(showTrash ? trashQuery.isPending : knowledgeItemsQuery.isPending) &&
+          !(showTrash ? trashQuery.error : knowledgeItemsQuery.error) &&
+          (showTrash ? trashedKnowledgeItems : knowledgeItems).length === 0 && (
             <Card>
               <CardContent className="py-3 text-center text-muted-foreground">
-                Your vault is empty. Capture your first link above.
+                {showTrash ? "Trash is empty. Items you move here can be restored." : "Your vault is empty. Capture your first link above."}
               </CardContent>
             </Card>
           )}
         <div className="grid gap-4 md:grid-cols-2">
-          {knowledgeItems.map((knowledgeItem) => (
+          {(showTrash ? trashedKnowledgeItems : knowledgeItems).map((knowledgeItem) => (
             <KnowledgeItemCard
               key={knowledgeItem.id}
               knowledgeItem={knowledgeItem}
               onRefresh={(knowledgeItemId) => refreshMutation.mutate(knowledgeItemId)}
               onRetry={(knowledgeItemId) => retryMutation.mutate(knowledgeItemId)}
+              onTrash={(knowledgeItemId) => trashMutation.mutate(knowledgeItemId)}
+              onRestore={(knowledgeItemId) => restoreMutation.mutate(knowledgeItemId)}
+              onPermanentlyDelete={confirmPermanentDeletion}
               isRefreshing={refreshMutation.isPending && refreshMutation.variables === knowledgeItem.id}
               isRetrying={retryMutation.isPending && retryMutation.variables === knowledgeItem.id}
+              isTrashing={trashMutation.isPending && trashMutation.variables === knowledgeItem.id}
+              isRestoring={restoreMutation.isPending && restoreMutation.variables === knowledgeItem.id}
+              isPermanentlyDeleting={permanentlyDeleteMutation.isPending && permanentlyDeleteMutation.variables === knowledgeItem.id}
             />
           ))}
         </div>
       </section>
+      <AlertDialog open={permanentDeletionTarget !== null} onOpenChange={open => { if (!open) setPermanentDeletionTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete permanently?</AlertDialogTitle>
+            <AlertDialogDescription>This permanently removes “{permanentDeletionLabel}” and its retained provenance. This cannot be undone.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction variant="destructive" onClick={() => { if (permanentDeletionTarget) permanentlyDeleteMutation.mutate(permanentDeletionTarget.id); setPermanentDeletionTarget(null); }}>Delete permanently</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </main>
   );
 }

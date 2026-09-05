@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { OriginalFileStorageError, type OriginalFileStorage, type OriginalFileStorageUpload, type StoredOriginalFile } from "./original-file-storage";
 
@@ -10,6 +11,7 @@ export class DeterministicOriginalFileStorageFake implements OriginalFileStorage
     #nextUploadFailure: OriginalFileStorageError | null = null;
     #nextDeletionFailure: OriginalFileStorageError | null = null;
     #nextAmbiguousUpload: OriginalFileStorageError | null = null;
+    #signedAccesses = new Map<string, { identity: string; expiresAt: number }>();
 
     get uploadedFileCount() { return this.#files.size; }
     #delayMs = 0;
@@ -46,15 +48,33 @@ export class DeterministicOriginalFileStorageFake implements OriginalFileStorage
         return stored ? { ...withoutBytes(stored), reused: false } : null;
     }
 
-    async createSignedAccess(request: { locator: string; expiresAt: Date }) {
+    async createSignedAccess(request: { locator: string; expiresAt: Date; disposition: "inline" | "attachment"; filename: string }) {
         await this.#wait();
         this.#assertAvailable();
         const identity = request.locator.slice("fake:".length);
         if (!this.#files.has(identity)) throw new OriginalFileStorageError("rejected", "Original File does not exist");
+        const signature = randomUUID();
+        const expiresAt = Math.floor(request.expiresAt.getTime() / 1_000);
+        this.#signedAccesses.set(signature, { identity, expiresAt });
         return {
-            url: `https://storage.fake/access/${encodeURIComponent(identity)}?expires_at=${Math.floor(request.expiresAt.getTime() / 1_000)}`,
+            url: `https://storage.fake/access/${encodeURIComponent(identity)}?expires_at=${expiresAt}&signature=${signature}&disposition=${request.disposition}&filename=${encodeURIComponent(request.filename)}`,
             expiresAt: request.expiresAt,
         };
+    }
+
+    canAccess(url: string, at = new Date()) {
+        const parsed = new URL(url);
+        const identity = decodeURIComponent(parsed.pathname.replace("/access/", ""));
+        const expiresAt = Number(parsed.searchParams.get("expires_at"));
+        const signature = parsed.searchParams.get("signature");
+        const signedAccess = signature ? this.#signedAccesses.get(signature) : undefined;
+        return parsed.origin === "https://storage.fake"
+            && parsed.pathname.startsWith("/access/")
+            && this.#files.has(identity)
+            && Number.isSafeInteger(expiresAt)
+            && signedAccess?.identity === identity
+            && signedAccess.expiresAt === expiresAt
+            && at.getTime() < expiresAt * 1_000;
     }
 
     async delete(locator: string): Promise<{ deleted: boolean }> {
@@ -62,6 +82,7 @@ export class DeterministicOriginalFileStorageFake implements OriginalFileStorage
         this.#assertAvailable();
         if (this.#nextDeletionFailure) throw this.#takeDeletionFailure();
         const identity = locator.slice("fake:".length);
+        for (const [signature, access] of this.#signedAccesses) if (access.identity === identity) this.#signedAccesses.delete(signature);
         return { deleted: this.#files.delete(identity) };
     }
 

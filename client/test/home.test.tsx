@@ -10,6 +10,7 @@ Object.assign(globalThis, {
   document: dom.window.document,
   navigator: dom.window.navigator,
   HTMLElement: dom.window.HTMLElement,
+  Element: dom.window.Element,
   Node: dom.window.Node,
   requestAnimationFrame: (callback: FrameRequestCallback) => setTimeout(callback, 0),
   cancelAnimationFrame: (id: number) => clearTimeout(id),
@@ -23,6 +24,7 @@ const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 
 const getKnowledgeItems = mock<() => Promise<KnowledgeItem[]>>();
+const getTrashedKnowledgeItems = mock<() => Promise<KnowledgeItem[]>>();
 const createCapture =
   mock<
     (input: {
@@ -37,16 +39,24 @@ const createOriginalFileCapture =
   >();
 const refreshKnowledgeItem = mock<(knowledgeItemId: number) => Promise<{ processingAttemptId: number; knowledgeItem: KnowledgeItem }>>();
 const retryKnowledgeItem = mock<(knowledgeItemId: number) => Promise<{ processingAttemptId: number; knowledgeItem: KnowledgeItem }>>();
+const trashKnowledgeItem = mock<(knowledgeItemId: number) => Promise<void>>();
+const restoreKnowledgeItem = mock<(knowledgeItemId: number) => Promise<{ knowledgeItem: KnowledgeItem }>>();
+type PermanentlyDeleteKnowledgeItem = (knowledgeItemId: number) => Promise<{ deletionPending: boolean } | undefined>;
+const permanentlyDeleteKnowledgeItem = mock<PermanentlyDeleteKnowledgeItem>();
 const searchKnowledgeItems = mock<(query: string) => Promise<RecallKnowledgeItem[]>>();
 mock.module("@/lib/api", () => ({
   getKnowledgeItems,
+  getTrashedKnowledgeItems,
   createCapture,
   createOriginalFileCapture,
   refreshKnowledgeItem,
   retryKnowledgeItem,
+  trashKnowledgeItem,
+  restoreKnowledgeItem,
+  permanentlyDeleteKnowledgeItem,
   searchKnowledgeItems,
   API_URL: "http://localhost:4000",
-  knowledgeItemKeys: { all: ["knowledge-items"] },
+  knowledgeItemKeys: { all: ["knowledge-items"], trash: ["knowledge-items", "trash"] },
   recallKeys: { all: ["knowledge-items", "recall"], search: (query: string) => ["knowledge-items", "recall", query] },
 }));
 
@@ -55,6 +65,8 @@ const { default: Home } = await import("@/app/page");
 const processingItem: KnowledgeItem = {
   id: 1,
   createdAt: "2026-08-24T10:00:00.000Z",
+  lifecycleState: "active",
+  trashedAt: null,
   source: {
     id: 1,
     submittedUrl: "https://example.com/article",
@@ -90,19 +102,79 @@ function renderHome() {
 
 beforeEach(() => {
   getKnowledgeItems.mockReset();
+  getTrashedKnowledgeItems.mockReset();
   createCapture.mockReset();
   createOriginalFileCapture.mockReset();
   refreshKnowledgeItem.mockReset();
   retryKnowledgeItem.mockReset();
+  trashKnowledgeItem.mockReset();
+  restoreKnowledgeItem.mockReset();
+  permanentlyDeleteKnowledgeItem.mockReset();
   searchKnowledgeItems.mockReset();
 });
 afterEach(cleanup);
 
 describe("Knowledge Item Capture", () => {
+  test("moves an active card to Trash and restores a recognizable file card", async () => {
+    const trashedFile: KnowledgeItem = {
+      ...processingItem,
+      id: 9,
+      lifecycleState: "trashed",
+      trashedAt: "2026-09-01T11:00:00.000Z",
+      source: {
+        id: 9, kind: "pdf", submittedUrl: "", normalizedUrl: "", filename: "proposal.pdf", mediaType: "application/pdf", byteSize: 32,
+        originalFileActions: { open: "/knowledge-items/9/original-file/open", download: "/knowledge-items/9/original-file/download" },
+      },
+      availability: "unsupported",
+      organizationCondition: "complete",
+      latestAttempt: null,
+    };
+    getKnowledgeItems.mockResolvedValue([processingItem]);
+    getTrashedKnowledgeItems.mockResolvedValue([trashedFile]);
+    trashKnowledgeItem.mockResolvedValue();
+    restoreKnowledgeItem.mockResolvedValue({ knowledgeItem: { ...trashedFile, lifecycleState: "active", trashedAt: null } });
+    const user = userEvent.setup({ document: dom.window.document });
+    renderHome();
+
+    await user.click(await screen.findByRole("button", { name: "Move to Trash" }));
+    await waitFor(() => expect(trashKnowledgeItem.mock.calls[0]?.[0]).toBe(processingItem.id));
+    expect(screen.queryByRole("heading", { name: "example.com" })).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "View Trash" }));
+    expect(await screen.findByRole("heading", { name: "proposal.pdf" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Restore" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Download original file: proposal.pdf" })).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Restore" }));
+    await waitFor(() => expect(restoreKnowledgeItem.mock.calls[0]?.[0]).toBe(trashedFile.id));
+  });
+
+  test.serial("requires confirmation before requesting permanent deletion from Trash", async () => {
+    const trashedItem: KnowledgeItem = {
+      ...processingItem,
+      lifecycleState: "trashed",
+      trashedAt: "2026-09-01T11:00:00.000Z",
+      source: { ...processingItem.source, kind: "pdf", filename: "../proposal.pdf" },
+    };
+    getKnowledgeItems.mockResolvedValue([]);
+    getTrashedKnowledgeItems.mockResolvedValue([trashedItem]);
+    permanentlyDeleteKnowledgeItem.mockResolvedValue({ deletionPending: true });
+    const user = userEvent.setup({ document: dom.window.document });
+    renderHome();
+
+    await user.click(await screen.findByRole("button", { name: "View Trash" }));
+    await user.click(await screen.findByRole("button", { name: "Delete permanently" }));
+    expect(await screen.findByRole("alertdialog")).toBeTruthy();
+    expect(screen.getByText(/“proposal\.pdf”/)).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Delete permanently" }));
+    await waitFor(() => expect(permanentlyDeleteKnowledgeItem.mock.calls[0]?.[0]).toBe(trashedItem.id));
+  });
+
   test("captures one Original File with a personal note and presents its provenance without processing actions", async () => {
     const originalFileItem: KnowledgeItem = {
       id: 2,
       createdAt: "2026-09-01T10:00:00.000Z",
+      lifecycleState: "active",
+      trashedAt: null,
       source: {
         id: 2,
         kind: "pdf",
@@ -111,6 +183,10 @@ describe("Knowledge Item Capture", () => {
         filename: "../design notes.pdf",
         mediaType: "application/pdf",
         byteSize: 1_536,
+        originalFileActions: {
+          open: "/knowledge-items/2/original-file/open",
+          download: "/knowledge-items/2/original-file/download",
+        },
       },
       sourcePreview: null,
       captureContexts: [{ kind: "personal-note", summary: "Keep for the proposal." }],
@@ -155,6 +231,12 @@ describe("Knowledge Item Capture", () => {
     expect(screen.queryByRole("button", { name: "Retry processing" })).toBeNull();
     expect(screen.queryByLabelText("Generated Recognition Summary")).toBeNull();
     expect(screen.queryByLabelText("Generated Topic Tags")).toBeNull();
+    const open = screen.getByRole("button", { name: "Open original file: design notes.pdf" });
+    expect(open.getAttribute("href")).toBe("http://localhost:4000/knowledge-items/2/original-file/open");
+    expect(open.getAttribute("target")).toBe("_blank");
+    expect(open.getAttribute("rel")).toBe("noopener noreferrer");
+    const download = screen.getByRole("button", { name: "Download original file: design notes.pdf" });
+    expect(download.getAttribute("href")).toBe("http://localhost:4000/knowledge-items/2/original-file/download");
   });
 
   test("progressively presents Source facts separately from generated enrichment", async () => {
@@ -188,6 +270,53 @@ describe("Knowledge Item Capture", () => {
     expect(screen.getByRole("img", { name: "A durable knowledge card" }).getAttribute("src")).toBe("/source-preview-media/1");
     expect(screen.getByLabelText("Generated Recognition Summary").textContent).toContain("Generated recognition summary.");
     expect(screen.getByLabelText("Generated Topic Tags").textContent).toContain("durable capture");
+  });
+
+  test("offers Download but no unavailable Open action for an unsupported generic Original File", async () => {
+    getKnowledgeItems.mockResolvedValue([{
+      ...processingItem,
+      id: 3,
+      source: {
+        id: 3,
+        kind: "file",
+        submittedUrl: "",
+        normalizedUrl: "",
+        filename: "opaque.bin",
+        mediaType: "application/octet-stream",
+        byteSize: 64,
+        originalFileActions: { download: "/knowledge-items/3/original-file/download" },
+      },
+      availability: "unsupported",
+      organizationCondition: "complete",
+      latestAttempt: null,
+    }]);
+    renderHome();
+
+    expect(await screen.findByRole("button", { name: "Download original file: opaque.bin" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Open original file: opaque.bin" })).toBeNull();
+  });
+
+  test("hides Original File actions when retained storage is unavailable", async () => {
+    getKnowledgeItems.mockResolvedValue([{
+      ...processingItem,
+      id: 4,
+      source: {
+        id: 4,
+        kind: "pdf",
+        submittedUrl: "",
+        normalizedUrl: "",
+        filename: "pending.pdf",
+        mediaType: "application/pdf",
+        byteSize: 64,
+      },
+      availability: "unsupported",
+      organizationCondition: "complete",
+      latestAttempt: null,
+    }]);
+    renderHome();
+
+    await screen.findByRole("heading", { name: "pending.pdf" });
+    expect(screen.queryByRole("button", { name: /original file: pending\.pdf/ })).toBeNull();
   });
 
   test("accepts the minimal URL form and displays a captured item as Processing immediately", async () => {

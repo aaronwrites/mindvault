@@ -18,9 +18,11 @@ import {
     sources,
     webpageSources,
     originalFiles,
+    originalFileOperations,
     knowledgeItemTopicTags,
     topicTags,
 } from "../../db/schema";
+import { originalFileActions } from "../original-files/create-original-file-access";
 
 type Database = NodePgDatabase<typeof schema>;
 
@@ -29,6 +31,9 @@ export type KnowledgeItemAvailability = "processing" | "ready" | "unsupported" |
 export type KnowledgeItemView = {
     id: number;
     createdAt: string;
+    lifecycleState: "active" | "trashed" | "pending-permanent-deletion";
+    trashedAt: string | null;
+    deletion: { status: "pending" | "running" | "failed"; failureReason: string | null } | null;
     source: {
         id: number;
         kind: string;
@@ -37,6 +42,7 @@ export type KnowledgeItemView = {
         filename?: string | null;
         mediaType?: string;
         byteSize?: number;
+        originalFileActions?: { open?: string; download: string };
     };
     sourcePreview: {
         title: string;
@@ -63,13 +69,14 @@ export type KnowledgeItemView = {
     } | null;
 };
 
-export async function listKnowledgeItems(database: Database, embeddingRepresentation: EmbeddingProvider["representation"]): Promise<KnowledgeItemView[]> {
+export async function listKnowledgeItems(database: Database, embeddingRepresentation: EmbeddingProvider["representation"], lifecycleState: "active" | "trashed" = "active"): Promise<KnowledgeItemView[]> {
     const rows = await database
         .select({ knowledgeItem: knowledgeItems, source: sources, webpageSource: webpageSources, originalFile: originalFiles })
         .from(knowledgeItems)
         .innerJoin(sources, eq(knowledgeItems.sourceId, sources.id))
         .leftJoin(webpageSources, eq(webpageSources.sourceId, sources.id))
         .leftJoin(originalFiles, eq(originalFiles.sourceId, sources.id))
+        .where(lifecycleState === "trashed" ? inArray(knowledgeItems.lifecycleState, ["trashed", "pending-permanent-deletion"]) : eq(knowledgeItems.lifecycleState, lifecycleState))
         .orderBy(desc(knowledgeItems.createdAt));
 
     return presentKnowledgeItems(database, rows, embeddingRepresentation);
@@ -82,7 +89,7 @@ export async function getKnowledgeItem(database: Database, id: number, embedding
         .innerJoin(sources, eq(knowledgeItems.sourceId, sources.id))
         .leftJoin(webpageSources, eq(webpageSources.sourceId, sources.id))
         .leftJoin(originalFiles, eq(originalFiles.sourceId, sources.id))
-        .where(eq(knowledgeItems.id, id));
+        .where(and(eq(knowledgeItems.id, id), eq(knowledgeItems.lifecycleState, "active")));
 
     return (await presentKnowledgeItems(database, rows, embeddingRepresentation))[0];
 }
@@ -96,7 +103,7 @@ async function presentKnowledgeItems(
 
     const itemIds = rows.map(row => row.knowledgeItem.id);
     const currentSnapshotIds = rows.flatMap(row => row.source.currentSnapshotId === null ? [] : [row.source.currentSnapshotId]);
-    const [contextRows, attemptRows, summaryRows, topicTagRows, previewRows, previewMediaRows] = await Promise.all([
+    const [contextRows, attemptRows, summaryRows, topicTagRows, previewRows, previewMediaRows, deletionRows] = await Promise.all([
         database
             .select({ knowledgeItemId: captures.knowledgeItemId, kind: captureContexts.kind, text: captureContexts.text })
             .from(captureContexts)
@@ -120,6 +127,8 @@ async function presentKnowledgeItems(
             .where(inArray(sourcePreviews.sourceSnapshotId, currentSnapshotIds)),
         currentSnapshotIds.length === 0 ? [] : database.select({ sourceSnapshotId: sourcePreviewMedia.sourceSnapshotId, alternativeText: sourcePreviewMedia.alternativeText }).from(sourcePreviewMedia)
             .where(inArray(sourcePreviewMedia.sourceSnapshotId, currentSnapshotIds)),
+        database.select({ sourceId: originalFileOperations.originalFileSourceId, status: originalFileOperations.status, failureReason: originalFileOperations.failureReason }).from(originalFileOperations)
+            .where(and(inArray(originalFileOperations.originalFileSourceId, rows.map(row => row.source.id)), eq(originalFileOperations.kind, "delete"))),
     ]);
 
     const contextsByItem = new Map<number, Array<{ kind: string; summary: string }>>();
@@ -141,6 +150,7 @@ async function presentKnowledgeItems(
     const previewsBySnapshot = new Map(previewRows.map(preview => [preview.sourceSnapshotId, preview]));
     const mediaBySnapshot = new Map(previewMediaRows.map(media => [media.sourceSnapshotId, media]));
     const topicTagsByItem = new Map<number, string[]>();
+    const deletionBySource = new Map(deletionRows.map(deletion => [deletion.sourceId, deletion]));
     for (const tag of topicTagRows) {
         const tags = topicTagsByItem.get(tag.knowledgeItemId) ?? [];
         tags.push(tag.canonicalName);
@@ -153,14 +163,23 @@ async function presentKnowledgeItems(
 
     return rows.map(({ knowledgeItem, source, webpageSource, originalFile }) => {
         const latestAttempt = latestAttempts.get(knowledgeItem.id);
+        const accessActions = originalFile && knowledgeItem.lifecycleState !== "pending-permanent-deletion"
+            ? originalFileActions(knowledgeItem.id, originalFile.storageState, originalFile.detectedSourceKind, originalFile.detectedMediaType)
+            : undefined;
         return {
             id: knowledgeItem.id,
             createdAt: toIsoString(knowledgeItem.createdAt),
+            lifecycleState: knowledgeItem.lifecycleState as KnowledgeItemView["lifecycleState"],
+            trashedAt: knowledgeItem.trashedAt ? toIsoString(knowledgeItem.trashedAt) : null,
+            deletion: knowledgeItem.lifecycleState === "pending-permanent-deletion" ? (() => {
+                const deletion = deletionBySource.get(source.id);
+                return deletion ? { status: deletion.status as "pending" | "running" | "failed", failureReason: deletion.failureReason } : { status: "pending" as const, failureReason: null };
+            })() : null,
             source: {
                 id: source.id,
                 kind: source.sourceKind,
                 ...(webpageSource ? { submittedUrl: webpageSource.submittedUrl, normalizedUrl: webpageSource.normalizedUrl } : {}),
-                ...(originalFile ? { filename: filenamesByItem.get(knowledgeItem.id) ?? null, mediaType: originalFile.detectedMediaType, byteSize: originalFile.byteSize } : {}),
+                ...(originalFile ? { filename: filenamesByItem.get(knowledgeItem.id) ?? null, mediaType: originalFile.detectedMediaType, byteSize: originalFile.byteSize, ...(accessActions ? { originalFileActions: accessActions } : {}) } : {}),
             },
             sourcePreview: source.currentSnapshotId === null ? null : previewFor(previewsBySnapshot.get(source.currentSnapshotId), mediaBySnapshot.get(source.currentSnapshotId)),
             captureContexts: contextsByItem.get(knowledgeItem.id) ?? [],

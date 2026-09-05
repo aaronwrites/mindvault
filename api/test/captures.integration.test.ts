@@ -188,6 +188,7 @@ describe("URL Capture", () => {
             processingAttemptId: expect.any(Number),
             availability: "processing",
             organizationCondition: "processing",
+            knowledgeItem: expect.objectContaining({ lifecycleState: "active" }),
         }));
 
         const listResponse = await fetch(`${runningHarness.apiBaseUrl}/knowledge-items`);
@@ -211,6 +212,9 @@ describe("URL Capture", () => {
                 organizationCondition: "processing",
                 recognitionSummary: null,
                 topicTags: [],
+                lifecycleState: "active",
+                trashedAt: null,
+                deletion: null,
                 latestAttempt: {
                     id: capture.processingAttemptId,
                     kind: "initial-capture",

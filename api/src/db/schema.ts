@@ -72,6 +72,7 @@ export const originalFileOperations = pgTable("original_file_operations", {
         (${table.status} = 'running' AND ${table.leaseToken} IS NOT NULL AND ${table.leaseExpiresAt} IS NOT NULL)
         OR (${table.status} <> 'running' AND ${table.leaseToken} IS NULL AND ${table.leaseExpiresAt} IS NULL)
     )`),
+    uniqueIndex("original_file_operations_source_kind_unique").on(table.originalFileSourceId, table.kind),
 ]);
 
 export const knowledgeItems = pgTable("knowledge_items", {

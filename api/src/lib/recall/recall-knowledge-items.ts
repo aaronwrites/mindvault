@@ -1,4 +1,4 @@
-import { eq, inArray, or } from "drizzle-orm";
+import { and, eq, inArray, or } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as schema from "../../db/schema";
 import { captureContexts, captures, knowledgeItems, passages, sourceSnapshots, sources } from "../../db/schema";
@@ -55,7 +55,7 @@ export async function recallKnowledgeItems(database: Database, query: string, em
         .leftJoin(captures, eq(captureContexts.captureId, captures.id))
         .innerJoin(knowledgeItems, or(eq(knowledgeItems.sourceId, sourceSnapshots.sourceId), eq(knowledgeItems.id, captures.knowledgeItemId)))
         .innerJoin(sources, eq(knowledgeItems.sourceId, sources.id))
-        .where(inArray(passages.id, passageIds));
+        .where(and(inArray(passages.id, passageIds), eq(knowledgeItems.lifecycleState, "active")));
 
     const detailsByPassageId = new Map(passageRows.map(row => [row.passageId, row]));
     const hybridMatches = aggregateHybridPassageMatches({

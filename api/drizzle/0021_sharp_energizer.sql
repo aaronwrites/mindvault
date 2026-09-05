@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "original_file_operations_source_kind_unique" ON "original_file_operations" USING btree ("original_file_source_id","kind");

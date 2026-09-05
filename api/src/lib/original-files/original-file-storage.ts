@@ -15,11 +15,18 @@ export type OriginalFileAccess = {
     expiresAt: Date;
 };
 
+export type OriginalFileAccessRequest = {
+    locator: string;
+    expiresAt: Date;
+    disposition: "inline" | "attachment";
+    filename: string;
+};
+
 export interface OriginalFileStorage {
     readonly provider: string;
     upload(upload: OriginalFileStorageUpload): Promise<StoredOriginalFile>;
     inspectUpload(providerIdentity: string): Promise<StoredOriginalFile | null>;
-    createSignedAccess(request: { locator: string; expiresAt: Date }): Promise<OriginalFileAccess>;
+    createSignedAccess(request: OriginalFileAccessRequest): Promise<OriginalFileAccess>;
     delete(locator: string): Promise<{ deleted: boolean }>;
 }
 

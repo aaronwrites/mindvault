@@ -4,6 +4,9 @@ export type KnowledgeItemAvailability =
 export type KnowledgeItem = {
   id: number;
   createdAt: string;
+  lifecycleState: "active" | "trashed" | "pending-permanent-deletion";
+  trashedAt: string | null;
+  deletion?: { status: "pending" | "running" | "failed"; failureReason: string | null } | null;
   source: {
     id: number;
     kind: string;
@@ -12,6 +15,7 @@ export type KnowledgeItem = {
     filename?: string | null;
     mediaType?: string;
     byteSize?: number;
+    originalFileActions?: { open?: string; download: string };
   };
   sourcePreview: {
     title: string;

@@ -36,10 +36,13 @@ describe("Original File storage boundary", () => {
             expect(first).toEqual({ locator: "fake:original-files/sha256-abc", byteSize: 14, reused: false });
             expect(repeated).toEqual({ ...first, reused: true });
             expect(await storage.inspectUpload("original-files/sha256-abc")).toEqual(first);
-            expect(await storage.createSignedAccess({ locator: first.locator, expiresAt: new Date("2030-01-01T00:05:00.000Z") })).toEqual({
-                url: "https://storage.fake/access/original-files%2Fsha256-abc?expires_at=1893456300",
+            const access = await storage.createSignedAccess({ locator: first.locator, expiresAt: new Date("2030-01-01T00:05:00.000Z"), disposition: "attachment", filename: "original.bin" });
+            expect(access).toEqual({
+                url: expect.stringMatching(/^https:\/\/storage\.fake\/access\/original-files%2Fsha256-abc\?expires_at=1893456300&signature=[\w-]+&disposition=attachment&filename=original\.bin$/),
                 expiresAt: new Date("2030-01-01T00:05:00.000Z"),
             });
+            expect(storage.canAccess(access.url, new Date("2029-12-31T00:00:00.000Z"))).toBe(true);
+            expect(storage.canAccess("https://storage.fake/access/original-files%2Fsha256-abc?expires_at=1893456300")).toBe(false);
         } finally {
             await upload.cleanup();
         }
@@ -89,10 +92,10 @@ describe("Cloudinary Original File storage contract", () => {
             expect(stored.reused).toBe(false);
             expect(stored.byteSize).toBe(33);
 
-            const unsigned = await fetch(`https://res.cloudinary.com/${environment.CLOUDINARY_CLOUD_NAME}/raw/authenticated/${environment.CLOUDINARY_ORIGINAL_FILE_PREFIX}/${providerIdentity}.bin`);
+            const unsigned = await fetch(`https://res.cloudinary.com/${environment.CLOUDINARY_CLOUD_NAME}/raw/authenticated/${environment.CLOUDINARY_ORIGINAL_FILE_PREFIX}/${providerIdentity}.txt`);
             expect(unsigned.ok).toBe(false);
 
-            const access = await storage.createSignedAccess({ locator: stored.locator, expiresAt: new Date(Date.now() + 60_000) });
+            const access = await storage.createSignedAccess({ locator: stored.locator, expiresAt: new Date(Date.now() + 60_000), disposition: "attachment", filename: "original.bin" });
             const signed = await fetch(access.url);
             expect(signed.ok).toBe(true);
             expect(Buffer.from(await signed.arrayBuffer())).toEqual(Buffer.from("MindVault Cloudinary contract bytes"));

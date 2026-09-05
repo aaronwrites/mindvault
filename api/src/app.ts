@@ -26,7 +26,7 @@ export function createApp({ database = db, embeddingProvider = createGeminiPassa
 
     const configuredMaximumOriginalFileBytes = maximumOriginalFileBytes ?? positiveInteger(process.env.ORIGINAL_FILE_MAXIMUM_BYTES);
     app.use("/captures", capturesRouter(database, embeddingProvider.representation, () => originalFileStorage ?? cloudinaryOriginalFileStorageFromEnvironment(process.env), configuredMaximumOriginalFileBytes));
-    app.use("/knowledge-items", knowledgeItemsRouter(database, embeddingProvider.representation));
+    app.use("/knowledge-items", knowledgeItemsRouter(database, embeddingProvider.representation, () => originalFileStorage ?? cloudinaryOriginalFileStorageFromEnvironment(process.env)));
     app.use("/search", searchRouter(database, embeddingProvider));
     app.use("/source-preview-media", sourcePreviewMediaRouter(database));
     app.get("/health", (_req, res) => res.json({ status: "ok" }));

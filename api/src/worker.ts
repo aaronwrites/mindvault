@@ -16,6 +16,9 @@ import { createLexicalIndexingStageHandler } from "./lib/passages/index-lexical-
 import { createSemanticIndexingStageHandler } from "./lib/passages/index-semantic-passages";
 import type { SafeFetchOptions } from "./lib/sources/fetch-public-source";
 import * as schema from "./db/schema";
+import { cloudinaryOriginalFileStorageFromEnvironment } from "./lib/original-files/cloudinary-original-file-storage";
+import { OriginalFileStorageError } from "./lib/original-files/original-file-storage";
+import { createOriginalFileOperationsWorker } from "./lib/original-files/process-original-file-operations";
 type Database = NodePgDatabase<typeof schema>;
 
 export type ClaimedProcessingStage = {
@@ -125,7 +128,10 @@ async function claimEligibleStage(
             SELECT stage.id
             FROM processing_stages AS stage
             LEFT JOIN processing_stages AS prerequisite ON prerequisite.id = stage.prerequisite_stage_id
+            INNER JOIN processing_attempts AS attempt ON attempt.id = stage.processing_attempt_id
+            INNER JOIN knowledge_items AS item ON item.id = attempt.knowledge_item_id
             WHERE stage.kind IN (${sql.join(handledKinds.map(kind => sql`${kind}`), sql`, `)})
+              AND item.lifecycle_state = 'active'
               AND stage.available_at <= ${now}
               AND (
                   stage.status = 'pending'
@@ -190,4 +196,10 @@ async function scheduleRetry(
 
 if (import.meta.main) {
     startProcessingWorker(createArticleProcessingWorker({ database: db }));
+    try {
+        startProcessingWorker(createOriginalFileOperationsWorker({ database: db, storage: cloudinaryOriginalFileStorageFromEnvironment(process.env) }));
+    } catch (error) {
+        if (!(error instanceof OriginalFileStorageError) || error.kind !== "configuration") throw error;
+        console.warn("Original File reconciliation is disabled until Cloudinary is configured.");
+    }
 }

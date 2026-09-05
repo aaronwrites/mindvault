@@ -19,6 +19,8 @@ export type PersistedCapture = {
     sourceId: number;
     knowledgeItemId: number;
     processingAttemptId: number | null;
+    reused: boolean;
+    restoredFromTrash: boolean;
 };
 
 export async function persistUrlCapture(
@@ -51,6 +53,11 @@ export async function persistUrlCapture(
             ? (await transaction.insert(knowledgeItems).values({ sourceId: source.id }).returning())[0]
             : (await transaction.select().from(knowledgeItems).where(eq(knowledgeItems.sourceId, source.id)))[0];
         if (!knowledgeItem) throw new Error("Knowledge Item was not created");
+        const restoredFromTrash = knowledgeItem.lifecycleState === "trashed";
+        if (restoredFromTrash) {
+            await transaction.update(knowledgeItems).set({ lifecycleState: "active", trashedAt: null, deletionRequestedAt: null })
+                .where(eq(knowledgeItems.id, knowledgeItem.id));
+        }
 
         const [capture] = await transaction.insert(captures).values({
             sourceId: source.id,
@@ -73,6 +80,8 @@ export async function persistUrlCapture(
             sourceId: source.id,
             knowledgeItemId: knowledgeItem.id,
             processingAttemptId,
+            reused: !createdSource,
+            restoredFromTrash,
         };
     });
 }

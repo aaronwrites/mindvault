@@ -1,3 +1,5 @@
 # Broaden Capture before building the browser extension
 
+The delivery order below is superseded by [ADR-0024](0024-complete-url-to-chat-before-broadening-understanding.md): improve URL Extraction and complete grounded Synthesis before broadening file understanding and organization features. The browser extension remains deferred.
+
 The next product work will make the main application feel source-agnostic before work begins on a browser extension. Delivery proceeds through rich Preview Cards for the existing webpage flow; Original File storage and one universal Capture area; PDF understanding with OCR and page references; image and screenshot understanding; standalone and editable contextual notes; Smart Groups and Organization Corrections; Related Items; grounded Synthesis; and only then a browser extension. Word documents, Markdown files, audio, video, batch Capture, and explicit uploaded-file version replacement are deferred until this core path works reliably. This order proves that MindVault is an intelligent knowledge vault rather than distributing a web-bookmark-only experience through more Capture surfaces.

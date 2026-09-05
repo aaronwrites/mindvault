@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as schema from "../../db/schema";
 import { extractedSources, knowledgeItems, processingAttempts, processingStages } from "../../db/schema";
@@ -35,7 +35,7 @@ export async function createManualRetryProcessingAttempt(database: Database, kno
     return database.transaction(async transaction => {
         const [knowledgeItem] = await transaction.select({ id: knowledgeItems.id })
             .from(knowledgeItems)
-            .where(eq(knowledgeItems.id, knowledgeItemId));
+            .where(and(eq(knowledgeItems.id, knowledgeItemId), eq(knowledgeItems.lifecycleState, "active")));
         if (!knowledgeItem) return "not-found";
 
         const [failedAttempt] = await transaction.select()
@@ -79,7 +79,7 @@ export async function createRefreshProcessingAttempt(database: Database, knowled
     return database.transaction(async transaction => {
         const [knowledgeItem] = await transaction.select({ id: knowledgeItems.id })
             .from(knowledgeItems)
-            .where(eq(knowledgeItems.id, knowledgeItemId));
+            .where(and(eq(knowledgeItems.id, knowledgeItemId), eq(knowledgeItems.lifecycleState, "active")));
         if (!knowledgeItem) return undefined;
         return createProcessingAttempt(transaction, knowledgeItem.id, "refresh");
     });

@@ -10,6 +10,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import type { KnowledgeItem } from "@/lib/types";
+import { API_URL } from "@/lib/api";
 import { OriginalFilePlaceholder, SourcePreviewFacts, SourcePreviewMedia, formatByteSize, originalFileTitle, sourceKindLabel, sourcePreviewTitle } from "@/components/source-preview";
 
 const labels = {
@@ -22,19 +23,32 @@ export function KnowledgeItemCard({
   knowledgeItem,
   onRefresh,
   onRetry,
+  onTrash,
+  onRestore,
+  onPermanentlyDelete,
   isRefreshing = false,
   isRetrying = false,
+  isTrashing = false,
+  isRestoring = false,
+  isPermanentlyDeleting = false,
 }: {
   knowledgeItem: KnowledgeItem;
   onRefresh: (knowledgeItemId: number) => void;
   onRetry: (knowledgeItemId: number) => void;
+  onTrash: (knowledgeItemId: number) => void;
+  onRestore: (knowledgeItemId: number) => void;
+  onPermanentlyDelete: (knowledgeItem: KnowledgeItem) => void;
   isRefreshing?: boolean;
   isRetrying?: boolean;
+  isTrashing?: boolean;
+  isRestoring?: boolean;
+  isPermanentlyDeleting?: boolean;
 }) {
   const { source } = knowledgeItem;
   const preview = knowledgeItem.sourcePreview;
   const isOriginalFile = source.filename !== undefined;
   const retryIsActionable = knowledgeItem.latestAttempt?.status === "failed";
+  const originalFileTitleText = isOriginalFile ? originalFileTitle(source.filename, source.kind) : null;
   return (
     <Card className="h-full">
       {isOriginalFile ? <OriginalFilePlaceholder sourceKind={source.kind} /> : <SourcePreviewMedia preview={preview} />}
@@ -43,8 +57,28 @@ export function KnowledgeItemCard({
           {labels[knowledgeItem.availability]}
         </Badge>
         <CardTitle className="text-lg leading-snug">
-          <h3>{isOriginalFile ? originalFileTitle(source.filename, source.kind) : sourcePreviewTitle(preview, source.submittedUrl!)}</h3>
+          <h3>{originalFileTitleText ?? sourcePreviewTitle(preview, source.submittedUrl!)}</h3>
         </CardTitle>
+        {isOriginalFile && source.originalFileActions && <CardAction className="flex gap-1">
+          {source.originalFileActions.open && <Button
+            variant="ghost"
+            size="icon"
+            aria-label={`Open original file: ${originalFileTitleText}`}
+            render={<a href={`${API_URL}${source.originalFileActions.open}`} target="_blank" rel="noopener noreferrer" />}
+            nativeButton={false}
+          >
+            <ExternalLink />
+          </Button>}
+          <Button
+            variant="ghost"
+            size="sm"
+            aria-label={`Download original file: ${originalFileTitleText}`}
+            render={<a href={`${API_URL}${source.originalFileActions.download}`} target="_blank" rel="noopener noreferrer" />}
+            nativeButton={false}
+          >
+            Download
+          </Button>
+        </CardAction>}
         {!isOriginalFile && <CardAction>
           <Button
             variant="ghost"
@@ -60,6 +94,8 @@ export function KnowledgeItemCard({
         </CardAction>}
       </CardHeader>
       <CardContent className="flex-1 space-y-3">
+        {knowledgeItem.lifecycleState === "trashed" && <p className="text-sm text-muted-foreground" role="status">In Trash{knowledgeItem.trashedAt ? ` since ${new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }).format(new Date(knowledgeItem.trashedAt))}` : ""}. Restore it to return it to your active Knowledge Items.</p>}
+        {knowledgeItem.lifecycleState === "pending-permanent-deletion" && <p className="text-sm text-muted-foreground" role="status">{knowledgeItem.deletion?.status === "failed" ? `Deletion needs attention${knowledgeItem.deletion.failureReason ? `: ${knowledgeItem.deletion.failureReason}` : "."}` : "Deletion pending. This Knowledge Item cannot be restored while MindVault securely removes its retained Original File."}</p>}
         {isOriginalFile ? <section aria-label="Original File details" className="space-y-1 text-sm text-muted-foreground">
           <p className="font-medium">{sourceKindLabel(source.kind)}</p>
           {source.mediaType && <p>{source.mediaType}</p>}
@@ -122,6 +158,10 @@ export function KnowledgeItemCard({
         )}
       </CardContent>
       <CardFooter className="gap-3">
+        {knowledgeItem.lifecycleState === "trashed" ? <>
+          <Button variant="outline" onClick={() => onRestore(knowledgeItem.id)} disabled={isRestoring}>{isRestoring ? "Restoring…" : "Restore"}</Button>
+          <Button variant="destructive" onClick={() => onPermanentlyDelete(knowledgeItem)} disabled={isPermanentlyDeleting}>{isPermanentlyDeleting ? "Deleting…" : "Delete permanently"}</Button>
+        </> : knowledgeItem.lifecycleState === "pending-permanent-deletion" ? knowledgeItem.deletion?.status === "failed" ? <Button variant="outline" onClick={() => onPermanentlyDelete(knowledgeItem)} disabled={isPermanentlyDeleting}>{isPermanentlyDeleting ? "Retrying…" : "Retry deletion"}</Button> : null : <>
         {!isOriginalFile && knowledgeItem.availability === "ready" && !retryIsActionable && (
           <Button
             variant="outline"
@@ -140,6 +180,8 @@ export function KnowledgeItemCard({
             {isRetrying ? "Retrying…" : "Retry processing"}
           </Button>
         )}
+        <Button variant="ghost" onClick={() => onTrash(knowledgeItem.id)} disabled={isTrashing}>{isTrashing ? "Moving to Trash…" : "Move to Trash"}</Button>
+        </>}
       </CardFooter>
       {knowledgeItem.captureContexts.length > 0 && (
         <CardFooter>

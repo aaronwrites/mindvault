@@ -72,9 +72,11 @@ describe("Knowledge Item Recall", () => {
                 body: JSON.stringify({ url: activeHarness.sourceServer.fetchUrl(path), ...input }),
             });
             expect(response.status).toBe(201);
+            const captured = await response.json() as { knowledgeItemId: number };
             await activeHarness.drainWorker();
+            return captured;
         };
-        await capture("/articles/semantic-retention");
+        const retainedItem = await capture("/articles/semantic-retention");
         await capture("/articles/lexical-corpus");
 
         const conceptualResponse = await fetch(`${activeHarness.apiBaseUrl}/search?q=${encodeURIComponent("How can I remember an article after its original site changes?")}`);
@@ -98,7 +100,7 @@ describe("Knowledge Item Recall", () => {
             excerpts: [expect.objectContaining({ text: lexicalPassage })],
         }));
 
-        await capture("/articles/semantic-unrelated", { personalNote: "My reason for saving this is the durable Source Snapshot." });
+        const unrelatedItem = await capture("/articles/semantic-unrelated", { personalNote: "My reason for saving this is the durable Source Snapshot." });
 
         const contextResponse = await fetch(`${activeHarness.apiBaseUrl}/search?q=${encodeURIComponent("durable Source Snapshot")}`);
         expect(contextResponse.status).toBe(200);
@@ -110,6 +112,13 @@ describe("Knowledge Item Recall", () => {
                 origin: "personal-note",
             })],
         }));
+
+        const trashed = await fetch(`${activeHarness.apiBaseUrl}/knowledge-items/${retainedItem.knowledgeItemId}/trash`, { method: "POST" });
+        expect(trashed.status).toBe(204);
+        const trashedRecall = await fetch(`${activeHarness.apiBaseUrl}/search?q=${encodeURIComponent("How can I remember an article after its original site changes?")}`);
+        expect(await trashedRecall.json()).toEqual([
+            expect.objectContaining({ id: unrelatedItem.knowledgeItemId }),
+        ]);
 
         const emptyResponse = await fetch(`${activeHarness.apiBaseUrl}/search?q=${encodeURIComponent("something absent from this corpus")}`);
         expect(emptyResponse.status).toBe(200);

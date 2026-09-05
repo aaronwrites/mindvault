@@ -10,12 +10,12 @@ Built solo — as both a portfolio piece and a university project proposal.
 - **Backend**: Express + TypeScript
 - **ORM**: Drizzle (raw SQL access for pgvector queries, no generated client)
 - **Database**: PostgreSQL 18 (`pgvector/pgvector:pg18` Docker image), pgvector extension for embeddings
-- **Background work**: PostgreSQL-backed Processing Attempt queue with a separate worker (planned next)
-- **Object storage**: Deferred until binary Source adapters require it; no provider selected
+- **Background work**: PostgreSQL-backed Processing Attempt queue with a separate worker
+- **Object storage**: Cloudinary authenticated assets behind a provider-neutral Original File storage boundary
 - **AI**: Gemini API free tier (Flash model) via Google AI Studio
 - **Frontend**: Next.js + shadcn/ui (kept at defaults for now — visual polish deferred until backend is solid)
 - **Validation**: Zod
-- **Future**: thin browser capture client immediately after the durable article milestone
+- **Next**: Improve URL Extraction and complete collection-wide grounded Synthesis, then resume file understanding and broader Source adapters before a thin browser capture client
 
 ## Structure
 
@@ -58,7 +58,7 @@ mindvault/
 
 ## Current status
 
-MindVault durably creates Captures, Sources, Knowledge Items, Capture Context, and Processing Attempts in one transaction. A separate worker extracts Source Snapshots, creates and indexes Passages, then generates Recognition Summaries and Topic Tags. Knowledge Item availability is Processing, Ready, Unsupported, or Needs attention; Organization incomplete is a secondary condition. The durable article milestone is implemented, and the next authoritative milestone is `.scratch/rich-web-preview-cards/spec.md`; `context.md` is the domain glossary and `docs/adr/` records accepted architectural decisions.
+MindVault durably captures and processes public textual webpages into recognizable Preview Cards, Source Snapshots, indexed Passages, Recognition Summaries, and Topic Tags. Original File capture, access, and lifecycle operations are implemented; file understanding remains deferred. Knowledge Item availability is Processing, Ready, Unsupported, or Needs attention; Organization incomplete is a secondary condition. The next authoritative milestone is `.scratch/url-to-chat/spec.md`: improve URL Extraction, accept informative metadata as limited evidence, and complete collection-wide grounded Synthesis before broadening adapters. `context.md` is the domain glossary and `docs/adr/` records accepted architectural decisions.
 
 ## Agent skills
 

@@ -148,6 +148,13 @@
       "when": 1788238372718,
       "tag": "0020_married_hiroim",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1788264581682,
+      "tag": "0021_sharp_energizer",
+      "breakpoints": true
     }
   ]
 }

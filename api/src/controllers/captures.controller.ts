@@ -6,7 +6,7 @@ import { getKnowledgeItem } from "../lib/knowledge-items/read-knowledge-items";
 import { createCaptureSchema } from "../schemas/capture";
 import type { EmbeddingProvider } from "../lib/ai/providers";
 import { classifyOriginalFile, OriginalFileRequestError, receiveOriginalFile } from "../lib/capture/receive-original-file";
-import { persistOriginalFileCapture } from "../lib/capture/persist-original-file-capture";
+import { OriginalFileDeletionPendingError, persistOriginalFileCapture } from "../lib/capture/persist-original-file-capture";
 import { OriginalFileStorageError, type OriginalFileStorage } from "../lib/original-files/original-file-storage";
 
 export function createCapture(database: NodePgDatabase<typeof schema>, embeddingRepresentation: EmbeddingProvider["representation"]) {
@@ -55,8 +55,16 @@ export function createOriginalFileCapture(
                 return res.status(status).json({ error: error.code });
             }
             if (error instanceof OriginalFileStorageError) {
+                if (error.kind === "rejected") {
+                    console.warn("Original File storage rejected the upload:", error.message);
+                    return res.status(422).json({ error: "original-file-storage-rejected", retryable: false });
+                }
                 const errorCode = error.kind === "configuration" ? "original-file-storage-unconfigured" : "original-file-storage-unavailable";
+                if (error.kind !== "configuration") console.warn("Original File storage request failed:", error.message);
                 return res.status(503).json({ error: errorCode, retryable: true });
+            }
+            if (error instanceof OriginalFileDeletionPendingError) {
+                return res.status(409).json({ error: "original-file-deletion-pending", retryable: true });
             }
             console.error("Failed to persist Original File Capture:", error);
             return res.status(500).json({ error: "Unable to persist Original File Capture" });

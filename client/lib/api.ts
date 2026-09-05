@@ -8,7 +8,10 @@ import type {
 export const API_URL =
   process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
-export const knowledgeItemKeys = { all: ["knowledge-items"] as const };
+export const knowledgeItemKeys = {
+  all: ["knowledge-items"] as const,
+  trash: ["knowledge-items", "trash"] as const,
+};
 export const recallKeys = {
   all: ["knowledge-items", "recall"] as const,
   search: (query: string) => ["knowledge-items", "recall", query] as const,
@@ -19,6 +22,9 @@ async function getErrorMessage(response: Response, fallback: string) {
 
   if (body?.retryable === true) {
     return "Original File storage is temporarily unavailable. Try again; your selected file and note are still available.";
+  }
+  if (body?.error === "original-file-storage-rejected") {
+    return "Original File storage rejected this upload. An administrator needs to enable upload permission for the configured Cloudinary API key.";
   }
   if (typeof body?.error === "string") return body.error;
   if (typeof body?.error?.formErrors?.[0] === "string")
@@ -36,6 +42,12 @@ export async function getKnowledgeItems(): Promise<KnowledgeItem[]> {
     );
   }
 
+  return response.json();
+}
+
+export async function getTrashedKnowledgeItems(): Promise<KnowledgeItem[]> {
+  const response = await fetch(`${API_URL}/knowledge-items/trash`);
+  if (!response.ok) throw new Error(await getErrorMessage(response, "Could not load Trash."));
   return response.json();
 }
 
@@ -132,4 +144,25 @@ export async function retryKnowledgeItem(
   }
 
   return response.json();
+}
+
+export async function trashKnowledgeItem(knowledgeItemId: number): Promise<void> {
+  const response = await fetch(`${API_URL}/knowledge-items/${knowledgeItemId}/trash`, { method: "POST" });
+  if (!response.ok) throw new Error(await getErrorMessage(response, "Could not move this Knowledge Item to Trash."));
+}
+
+export async function restoreKnowledgeItem(knowledgeItemId: number): Promise<{ knowledgeItem: KnowledgeItem }> {
+  const response = await fetch(`${API_URL}/knowledge-items/${knowledgeItemId}/restore`, { method: "POST" });
+  if (!response.ok) throw new Error(await getErrorMessage(response, "Could not restore this Knowledge Item."));
+  return response.json();
+}
+
+export async function permanentlyDeleteKnowledgeItem(knowledgeItemId: number): Promise<{ deletionPending: true } | undefined> {
+  const response = await fetch(`${API_URL}/knowledge-items/${knowledgeItemId}/permanent-delete`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ confirmation: "permanently-delete" }),
+  });
+  if (!response.ok) throw new Error(await getErrorMessage(response, "Could not permanently delete this Knowledge Item."));
+  return response.status === 204 ? undefined : response.json();
 }
