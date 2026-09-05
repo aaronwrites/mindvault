@@ -52,6 +52,11 @@ export async function startSourceFixtureServer(): Promise<SourceFixtureServer> {
 <nav>Products Pricing Sign in</nav><div class="cookie-banner">We use cookies. Accept cookies.</div>
 <main><article><h1>Primary article</h1><div class="site-navigation">Sections and account menu</div><div id="related-content">Read these unrelated articles next</div><p>Durable Capture stores a Source before asynchronous processing begins. This fixture explains how Extraction keeps meaningful primary text while discarding repeated page chrome and navigation.</p><p>Processing Attempts make failures visible without losing the user's Capture. A cleaned representation preserves the useful material for later Source Snapshot persistence and Passage retrieval.</p></article></main>
 <footer>Copyright and privacy policy</footer></body></html>`);
+        if (path === "/articles/access-language") return html(200, article("Account setup guide", "This guide explains that a password is required when configuring a Cloudflare-protected account. It distinguishes the application's own authentication settings from an access block, then shows how administrators rotate credentials, verify required permissions, and document the change for later review. A subscription required error in a separate product does not make this public guide paywalled. The article remains publicly available and contains enough meaningful text for durable Source Snapshot persistence and trustworthy retrieval."));
+        if (path === "/articles/readability-layout") return html(200, `<!doctype html><html><head><title>Layout article</title></head><body>
+<div class="site-header">Account navigation pricing</div><div id="content"><h1>Layout article</h1>
+<p>This independently structured article explains how content extractors identify the primary narrative when a webpage does not provide semantic main or article elements. It gives enough prose to separate the actual explanation from its surrounding page chrome and makes the expected durable Source Snapshot clear.</p>
+<p>The second paragraph carries additional details about predictable processing and retrieval so the example exceeds the meaningful-text threshold without relying on repeated navigation or generic footer language.</p></div><div class="site-footer">Privacy cookies</div></body></html>`);
         if (path === "/articles/repeated") return html(200, article("First article", "A deterministic article about durable capture."));
         if (path === "/articles/changed") {
             const isLaterVersion = changedArticleVersion === 2;
@@ -98,6 +103,10 @@ export async function startSourceFixtureServer(): Promise<SourceFixtureServer> {
             return response.end("x".repeat(2 * 1024 * 1024));
         }
         if (path === "/inadequate") return html(200, "<html><body><main>Too short.</main></body></html>");
+        if (path === "/preview-only") return html(200, `<!doctype html><html><head>
+<meta property="og:title" content="Preview retained despite unavailable article"><meta property="og:description" content="Recognizable source-provided facts remain visible while primary article text is unavailable.">
+<meta property="og:site_name" content="MindVault Journal"><title>Preview retained despite unavailable article</title></head>
+<body><main><h1>Sign in required</h1><form><input type="password"></form></main></body></html>`);
         if (path === "/authentication") return html(200, "<html><body><h1>Sign in required</h1><form><input type=password></form></body></html>");
         if (path === "/bot-challenge") return html(200, "<html><body><main><h1>Verify you are human</h1><p>Complete this CAPTCHA to continue to the requested page.</p></main></body></html>");
         if (path === "/paywall") return html(200, "<html><body><main><h1>Subscriber article</h1><p>Subscribe to continue reading this paywall-protected article.</p></main></body></html>");

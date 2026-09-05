@@ -1,0 +1,1 @@
+ALTER TABLE "extracted_sources" ALTER COLUMN "primary_text" DROP NOT NULL;

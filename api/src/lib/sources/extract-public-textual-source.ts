@@ -65,9 +65,10 @@ export function createExtractionStageHandler(database: Database, fetchOptions: S
                     extractedAt: new Date(),
                 },
             });
-            await completeCurrentStage(transaction, stage);
+            if (!extracted.failureReason) await completeCurrentStage(transaction, stage);
             return true;
         });
+        if (extracted.failureReason) throw new Error(extracted.failureReason);
         return completed ? { completed: true } : undefined;
     };
 }

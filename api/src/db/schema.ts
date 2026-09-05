@@ -123,7 +123,7 @@ export const extractedSources = pgTable("extracted_sources", {
     processingAttemptId: integer("processing_attempt_id").notNull().references(() => processingAttempts.id, { onDelete: "cascade" }).unique(),
     sourceId: integer("source_id").notNull().references(() => sources.id),
     title: text("title").notNull(),
-    primaryText: text("primary_text").notNull(),
+    primaryText: text("primary_text"),
     originalUrl: text("original_url").notNull(),
     finalUrl: text("final_url").notNull(),
     canonicalUrl: text("canonical_url"),

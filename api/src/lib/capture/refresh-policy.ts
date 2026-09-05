@@ -1,4 +1,4 @@
-import { and, eq, gt } from "drizzle-orm";
+import { and, eq, gt, isNotNull } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as schema from "../../db/schema";
 import { extractedSources } from "../../db/schema";
@@ -16,6 +16,7 @@ export async function hasRecentSuccessfulExtraction(
         .from(extractedSources)
         .where(and(
             eq(extractedSources.sourceId, sourceId),
+            isNotNull(extractedSources.primaryText),
             gt(extractedSources.extractedAt, new Date(now.getTime() - recentSuccessfulExtractionWindowMs)),
         ))
         .limit(1);

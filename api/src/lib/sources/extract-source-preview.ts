@@ -1,4 +1,6 @@
 import { parse } from "parse5";
+import { Readability } from "@mozilla/readability";
+import { parseHTML } from "linkedom";
 
 type HtmlNode = {
     nodeName?: string;
@@ -22,9 +24,10 @@ export type ExtractedSourcePreview = {
 
 export type ParsedPublicTextualSource = {
     title: string;
-    primaryText: string;
+    primaryText: string | null;
     canonicalUrl: string | null;
     sourcePreview: ExtractedSourcePreview;
+    failureReason: string | null;
 };
 
 export function parsePublicTextualSource(html: string, finalUrl: string): ParsedPublicTextualSource {
@@ -33,17 +36,20 @@ export function parsePublicTextualSource(html: string, finalUrl: string): Parsed
     const meta = metadata(elements);
     const structured = structuredArticleData(elements);
     const extractionTitle = firstUsable(textOf(firstElement(elements, "h1")), textOf(firstElement(elements, "title")));
-    const primaryRoot = firstElement(elements, "article") ?? firstElement(elements, "main") ?? firstElement(elements, "body") ?? document;
-    const primaryText = withoutRepeatedTitle(cleanText(primaryRoot), extractionTitle);
+    const semanticPrimaryRoot = firstElement(elements, "article") ?? firstElement(elements, "main");
+    const primaryRoot = semanticPrimaryRoot ?? firstElement(elements, "body") ?? document;
+    const primaryText = withoutRepeatedTitle(
+        semanticPrimaryRoot ? cleanText(primaryRoot) : readabilityText(html) ?? cleanText(primaryRoot),
+        extractionTitle,
+    );
     const previewTitle = firstUsable(meta.get("og:title"), structured.headline, extractionTitle, readableHostname(finalUrl));
-    const qualityFailure = qualityFailureFor(primaryText, extractionTitle);
-    if (qualityFailure) throw new Error(qualityFailure);
+    const qualityFailure = qualityFailureFor(elements, primaryText, extractionTitle);
 
     const canonicalUrl = absoluteHttpUrl(meta.get("link:canonical"), finalUrl);
     const title = previewTitle!;
     return {
         title: extractionTitle ?? title,
-        primaryText,
+        primaryText: qualityFailure ? null : primaryText,
         canonicalUrl,
         sourcePreview: {
             title,
@@ -56,7 +62,17 @@ export function parsePublicTextualSource(html: string, finalUrl: string): Parsed
             previewImageAlt: firstUsable(meta.get("og:image:alt"), meta.get("twitter:image:alt"), structured.imageAlt),
             faviconUrl: absoluteHttpUrl(meta.get("link:icon"), finalUrl),
         },
+        failureReason: qualityFailure ?? null,
     };
+}
+
+function readabilityText(html: string): string | null {
+    try {
+        const article = new Readability(parseHTML(html).document).parse();
+        return article?.textContent?.replace(/\s+/g, " ").trim() || null;
+    } catch {
+        return null;
+    }
 }
 
 function descendants(root: HtmlNode): HtmlNode[] {
@@ -160,12 +176,14 @@ function validPublicationDate(value: string | null): Date | null {
     return Number.isNaN(date.getTime()) ? null : date;
 }
 
-function qualityFailureFor(primaryText: string, extractionTitle: string | null): string | undefined {
-    const content = `${extractionTitle ?? ""} ${primaryText}`.toLowerCase();
-    if (/sign in|required|log in|password|authentication/.test(content)) return "This Source requires authentication";
-    if (/captcha|verify you are human|bot challenge|cloudflare/.test(content)) return "This Source is protected by a bot challenge";
-    if (/paywall|subscribe to continue|subscription required/.test(content)) return "This Source is behind a paywall";
-    if (/page not found|not found|something went wrong|internal server error/.test(content)) return "This Source appears to be an error page";
+function qualityFailureFor(elements: HtmlNode[], primaryText: string, extractionTitle: string | null): string | undefined {
+    const surfaceText = `${textOf(firstElement(elements, "title")) ?? ""} ${textOf(firstElement(elements, "h1")) ?? ""}`.toLowerCase();
+    const pageText = cleanText(firstElement(elements, "body") ?? { childNodes: elements }).toLowerCase();
+    const hasPasswordForm = elements.some(node => node.tagName === "input" && attributesFor(node).get("type")?.toLowerCase() === "password");
+    if (hasPasswordForm && /\b(sign in|log in|authentication required)\b/.test(surfaceText)) return "This Source requires authentication";
+    if (/\b(verify you are human|bot challenge)\b/.test(surfaceText) && /\b(captcha|challenge)\b/.test(pageText)) return "This Source is protected by a bot challenge";
+    if (/\b(subscriber|subscription|subscribe|paywall)\b/.test(surfaceText) && /\b(subscribe to continue|subscription required)\b/.test(pageText)) return "This Source is behind a paywall";
+    if (/\b(page not found|not found|something went wrong|internal server error)\b/.test(surfaceText)) return "This Source appears to be an error page";
     if (primaryText.length < 120) return "This Source has inadequate meaningful text";
     return undefined;
 }

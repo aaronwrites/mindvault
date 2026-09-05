@@ -398,6 +398,93 @@ describe("Extraction", () => {
         }]);
     });
 
+    test.skipIf(!process.env.TEST_DATABASE_URL)("processes a public article that discusses authentication and bot-protection terms", async () => {
+        harness = await createIntegrationHarness(
+            database => createApp({ database: database.db, embeddingProvider: embeddings }),
+            (database, sourceServer) => createArticleProcessingWorker({ database: database.db, sourceFetchOptions: sourceServer.safeFetchDependencies(), embeddingProvider: embeddings, summaryProvider: summaries, topicTagProvider: topicTags }),
+        );
+        const captureResponse = await fetch(`${harness.apiBaseUrl}/captures`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ url: harness.sourceServer.fetchUrl("/articles/access-language") }),
+        });
+        const capture = await captureResponse.json() as { knowledgeItemId: number };
+
+        await harness.drainWorker();
+
+        const item = await (await fetch(`${harness.apiBaseUrl}/knowledge-items/${capture.knowledgeItemId}`)).json() as {
+            availability: string;
+            sourcePreview: { title: string } | null;
+        };
+        expect(item).toEqual(expect.objectContaining({
+            availability: "ready",
+            sourcePreview: expect.objectContaining({ title: "Account setup guide" }),
+        }));
+    });
+
+    test.skipIf(!process.env.TEST_DATABASE_URL)("extracts primary text from an article layout without semantic content elements", async () => {
+        harness = await createIntegrationHarness(
+            database => createApp({ database: database.db, embeddingProvider: embeddings }),
+            (database, sourceServer) => createArticleProcessingWorker({ database: database.db, sourceFetchOptions: sourceServer.safeFetchDependencies(), embeddingProvider: embeddings, summaryProvider: summaries, topicTagProvider: topicTags }),
+        );
+        const captureResponse = await fetch(`${harness.apiBaseUrl}/captures`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ url: harness.sourceServer.fetchUrl("/articles/readability-layout") }),
+        });
+        const capture = await captureResponse.json() as { knowledgeItemId: number; processingAttemptId: number };
+
+        await harness.drainWorker();
+
+        const extraction = await harness.database.pool.query<{ primary_text: string }>(
+            "SELECT primary_text FROM extracted_sources WHERE processing_attempt_id = $1", [capture.processingAttemptId],
+        );
+        expect(extraction.rows).toEqual([expect.objectContaining({
+            primary_text: expect.stringContaining("content extractors identify the primary narrative"),
+        })]);
+        expect(extraction.rows[0]?.primary_text).not.toContain("Account navigation pricing");
+        expect(extraction.rows[0]?.primary_text).not.toContain("Privacy cookies");
+        const item = await (await fetch(`${harness.apiBaseUrl}/knowledge-items/${capture.knowledgeItemId}`)).json() as { availability: string };
+        expect(item.availability).toBe("ready");
+    });
+
+    test.skipIf(!process.env.TEST_DATABASE_URL)("shows source-provided Preview facts when primary text is unavailable", async () => {
+        harness = await createIntegrationHarness(
+            database => createApp({ database: database.db, embeddingProvider: embeddings }),
+            (database, sourceServer) => createArticleProcessingWorker({
+                database: database.db,
+                sourceFetchOptions: sourceServer.safeFetchDependencies(),
+                embeddingProvider: embeddings,
+                summaryProvider: summaries,
+                topicTagProvider: topicTags,
+                maxAttempts: 1,
+            }),
+        );
+        const captureResponse = await fetch(`${harness.apiBaseUrl}/captures`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ url: harness.sourceServer.fetchUrl("/preview-only") }),
+        });
+        const capture = await captureResponse.json() as { knowledgeItemId: number };
+
+        await harness.drainWorker();
+
+        const item = await (await fetch(`${harness.apiBaseUrl}/knowledge-items/${capture.knowledgeItemId}`)).json() as {
+            availability: string;
+            latestAttempt: { status: string; failureReason: string };
+            sourcePreview: { title: string; description: string | null; websiteName: string | null } | null;
+        };
+        expect(item).toEqual(expect.objectContaining({
+            availability: "needs-attention",
+            latestAttempt: expect.objectContaining({ status: "failed", failureReason: "This Source requires authentication" }),
+            sourcePreview: expect.objectContaining({
+                title: "Preview retained despite unavailable article",
+                description: "Recognizable source-provided facts remain visible while primary article text is unavailable.",
+                websiteName: "MindVault Journal",
+            }),
+        }));
+    });
+
     test.skipIf(!process.env.TEST_DATABASE_URL)("marks a known unsupported Source as Unsupported and skips downstream work", async () => {
         harness = await createIntegrationHarness(
             database => createApp({ database: database.db, embeddingProvider: embeddings }),

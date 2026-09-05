@@ -272,6 +272,36 @@ describe("Knowledge Item Capture", () => {
     expect(screen.getByLabelText("Generated Topic Tags").textContent).toContain("durable capture");
   });
 
+  test("keeps recognizable Source facts visible when webpage processing needs attention", async () => {
+    getKnowledgeItems.mockResolvedValue([{
+      ...processingItem,
+      availability: "needs-attention",
+      sourcePreview: {
+        title: "Preview retained despite unavailable article",
+        description: "Recognizable source-provided facts remain visible while primary article text is unavailable.",
+        websiteName: "MindVault Journal",
+        author: null,
+        publishedAt: null,
+        contentType: null,
+        previewImageUrl: null,
+        previewImageAlt: null,
+        faviconUrl: null,
+      },
+      latestAttempt: {
+        ...processingItem.latestAttempt!,
+        status: "failed",
+        failureReason: "This Source requires authentication",
+      },
+    }]);
+    renderHome();
+
+    expect(await screen.findByRole("heading", { name: "Preview retained despite unavailable article" })).toBeTruthy();
+    expect(screen.getByText("MindVault Journal")).toBeTruthy();
+    expect(screen.getByText("Recognizable source-provided facts remain visible while primary article text is unavailable.")).toBeTruthy();
+    expect(screen.getByText("Needs attention")).toBeTruthy();
+    expect(screen.getByText("Processing needs attention: This Source requires authentication")).toBeTruthy();
+  });
+
   test("offers Download but no unavailable Open action for an unsupported generic Original File", async () => {
     getKnowledgeItems.mockResolvedValue([{
       ...processingItem,

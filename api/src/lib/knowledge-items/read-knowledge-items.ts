@@ -3,9 +3,11 @@ import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as schema from "../../db/schema";
 import { isRequiredRetrievalStage } from "../processing/stages";
 import type { EmbeddingProvider } from "../ai/providers";
+import type { ExtractedSourcePreview } from "../sources/extract-source-preview";
 import {
     captureContexts,
     captures,
+    extractedSources,
     knowledgeItems,
     passageEmbeddings,
     passages,
@@ -103,7 +105,7 @@ async function presentKnowledgeItems(
 
     const itemIds = rows.map(row => row.knowledgeItem.id);
     const currentSnapshotIds = rows.flatMap(row => row.source.currentSnapshotId === null ? [] : [row.source.currentSnapshotId]);
-    const [contextRows, attemptRows, summaryRows, topicTagRows, previewRows, previewMediaRows, deletionRows] = await Promise.all([
+    const [contextRows, attemptRows, summaryRows, topicTagRows, previewRows, previewMediaRows, extractedPreviewRows, deletionRows] = await Promise.all([
         database
             .select({ knowledgeItemId: captures.knowledgeItemId, kind: captureContexts.kind, text: captureContexts.text })
             .from(captureContexts)
@@ -127,6 +129,10 @@ async function presentKnowledgeItems(
             .where(inArray(sourcePreviews.sourceSnapshotId, currentSnapshotIds)),
         currentSnapshotIds.length === 0 ? [] : database.select({ sourceSnapshotId: sourcePreviewMedia.sourceSnapshotId, alternativeText: sourcePreviewMedia.alternativeText }).from(sourcePreviewMedia)
             .where(inArray(sourcePreviewMedia.sourceSnapshotId, currentSnapshotIds)),
+        database.select({ sourceId: extractedSources.sourceId, sourcePreview: extractedSources.sourcePreview })
+            .from(extractedSources)
+            .where(inArray(extractedSources.sourceId, rows.map(row => row.source.id)))
+            .orderBy(desc(extractedSources.extractedAt), desc(extractedSources.id)),
         database.select({ sourceId: originalFileOperations.originalFileSourceId, status: originalFileOperations.status, failureReason: originalFileOperations.failureReason }).from(originalFileOperations)
             .where(and(inArray(originalFileOperations.originalFileSourceId, rows.map(row => row.source.id)), eq(originalFileOperations.kind, "delete"))),
     ]);
@@ -149,6 +155,12 @@ async function presentKnowledgeItems(
     const summariesByItem = new Map(summaryRows.map(summary => [summary.knowledgeItemId, summary]));
     const previewsBySnapshot = new Map(previewRows.map(preview => [preview.sourceSnapshotId, preview]));
     const mediaBySnapshot = new Map(previewMediaRows.map(media => [media.sourceSnapshotId, media]));
+    const extractedPreviewsBySource = new Map<number, ExtractedSourcePreview>();
+    for (const extractedPreview of extractedPreviewRows) {
+        if (!extractedPreviewsBySource.has(extractedPreview.sourceId)) {
+            extractedPreviewsBySource.set(extractedPreview.sourceId, extractedPreview.sourcePreview as ExtractedSourcePreview);
+        }
+    }
     const topicTagsByItem = new Map<number, string[]>();
     const deletionBySource = new Map(deletionRows.map(deletion => [deletion.sourceId, deletion]));
     for (const tag of topicTagRows) {
@@ -181,7 +193,9 @@ async function presentKnowledgeItems(
                 ...(webpageSource ? { submittedUrl: webpageSource.submittedUrl, normalizedUrl: webpageSource.normalizedUrl } : {}),
                 ...(originalFile ? { filename: filenamesByItem.get(knowledgeItem.id) ?? null, mediaType: originalFile.detectedMediaType, byteSize: originalFile.byteSize, ...(accessActions ? { originalFileActions: accessActions } : {}) } : {}),
             },
-            sourcePreview: source.currentSnapshotId === null ? null : previewFor(previewsBySnapshot.get(source.currentSnapshotId), mediaBySnapshot.get(source.currentSnapshotId)),
+            sourcePreview: source.currentSnapshotId === null
+                ? extractedPreviewFor(extractedPreviewsBySource.get(source.id))
+                : previewFor(previewsBySnapshot.get(source.currentSnapshotId), mediaBySnapshot.get(source.currentSnapshotId)),
             captureContexts: contextsByItem.get(knowledgeItem.id) ?? [],
             availability: availabilityByItem.get(knowledgeItem.id) ?? "processing",
             organizationCondition: source.provenanceKind === "original-file" ? "complete" : organizationConditions.get(knowledgeItem.id) ?? "processing",
@@ -196,6 +210,21 @@ async function presentKnowledgeItems(
             } : null,
         };
     });
+}
+
+function extractedPreviewFor(preview: ExtractedSourcePreview | undefined): KnowledgeItemView["sourcePreview"] {
+    if (!preview) return null;
+    return {
+        title: preview.title,
+        description: preview.description,
+        websiteName: preview.websiteName,
+        author: preview.author,
+        publishedAt: preview.publishedAt,
+        contentType: preview.contentType,
+        previewImageUrl: null,
+        previewImageAlt: null,
+        faviconUrl: preview.faviconUrl,
+    };
 }
 
 function previewFor(

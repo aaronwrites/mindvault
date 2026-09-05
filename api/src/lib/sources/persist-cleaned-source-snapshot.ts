@@ -15,15 +15,16 @@ export function createSnapshotPersistenceStageHandler(database: Database, source
         const [extractedSource] = await database.select()
             .from(extractedSources)
             .where(eq(extractedSources.processingAttemptId, stage.processingAttemptId));
-        if (!extractedSource) throw new Error("Source Snapshot persistence could not find successful Extraction output");
+        const primaryText = extractedSource?.primaryText;
+        if (!extractedSource || !primaryText) throw new Error("Source Snapshot persistence could not find successful Extraction output");
 
         const preview = extractedSource.sourcePreview as ExtractedSourcePreview;
-        const contentHash = contentHashFor(extractedSource.primaryText, preview);
+        const contentHash = contentHashFor(primaryText, preview);
         const { snapshotId } = await database.transaction(async transaction => {
             await transaction.insert(sourceSnapshots).values({
                 sourceId: extractedSource.sourceId,
                 title: extractedSource.title,
-                primaryText: extractedSource.primaryText,
+                primaryText,
                 originalUrl: extractedSource.originalUrl,
                 finalUrl: extractedSource.finalUrl,
                 canonicalUrl: extractedSource.canonicalUrl,
