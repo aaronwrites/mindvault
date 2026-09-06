@@ -1,6 +1,6 @@
 import { JSDOM } from "jsdom";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
-import type { CaptureResponse, KnowledgeItem, RecallKnowledgeItem } from "@/lib/types";
+import type { CaptureResponse, SynthesisRequest, KnowledgeItem, RecallKnowledgeItem, SynthesisResult } from "@/lib/types";
 
 const dom = new JSDOM("<!doctype html><html><body></body></html>", {
   url: "http://localhost",
@@ -44,6 +44,7 @@ const restoreKnowledgeItem = mock<(knowledgeItemId: number) => Promise<{ knowled
 type PermanentlyDeleteKnowledgeItem = (knowledgeItemId: number) => Promise<{ deletionPending: boolean } | undefined>;
 const permanentlyDeleteKnowledgeItem = mock<PermanentlyDeleteKnowledgeItem>();
 const searchKnowledgeItems = mock<(query: string) => Promise<RecallKnowledgeItem[]>>();
+const askVault = mock<(request: SynthesisRequest) => Promise<SynthesisResult>>();
 mock.module("@/lib/api", () => ({
   getKnowledgeItems,
   getTrashedKnowledgeItems,
@@ -55,6 +56,7 @@ mock.module("@/lib/api", () => ({
   restoreKnowledgeItem,
   permanentlyDeleteKnowledgeItem,
   searchKnowledgeItems,
+  askVault,
   API_URL: "http://localhost:4000",
   knowledgeItemKeys: { all: ["knowledge-items"], trash: ["knowledge-items", "trash"] },
   recallKeys: { all: ["knowledge-items", "recall"], search: (query: string) => ["knowledge-items", "recall", query] },
@@ -137,8 +139,59 @@ beforeEach(() => {
   restoreKnowledgeItem.mockReset();
   permanentlyDeleteKnowledgeItem.mockReset();
   searchKnowledgeItems.mockReset();
+  askVault.mockReset();
 });
 afterEach(cleanup);
+
+describe("collection-wide Synthesis", () => {
+  test("keeps current-session turns for follow-ups and preserves them when a later answer fails", async () => {
+    getKnowledgeItems.mockResolvedValue([processingItem]);
+    getTrashedKnowledgeItems.mockResolvedValue([]);
+    const initialAnswer: SynthesisResult = {
+      answer: "Logical replication keeps read models current.",
+      insufficientEvidence: false,
+      citations: [{
+        knowledgeItemId: 7,
+        sourceSnapshotId: 12,
+        title: "PostgreSQL replication overview",
+        originalUrl: "https://example.com/postgres",
+        evidenceCoverage: "metadata-only",
+        excerpt: "Source-provided title: How PostgreSQL logical replication keeps read models current",
+      }],
+    };
+    const followUpAnswer: SynthesisResult = {
+      ...initialAnswer,
+      answer: "It does that by applying changes from the publisher.",
+    };
+    askVault.mockResolvedValueOnce(initialAnswer).mockResolvedValueOnce(followUpAnswer);
+    const user = userEvent.setup({ document: dom.window.document });
+    renderHome();
+
+    expect(await screen.findByText("Questions, matching evidence, and current-session context are processed by the configured external AI provider. Original Files are never shared.")).toBeTruthy();
+    await user.type(await screen.findByLabelText("Ask a question about your captured knowledge"), "How do read models stay current?");
+    await user.click(screen.getByRole("button", { name: "Ask your vault" }));
+    await waitFor(() => expect(askVault.mock.calls[0]?.[0]).toEqual({ question: "How do read models stay current?", conversation: [] }));
+    expect(await screen.findByText("Logical replication keeps read models current.")).toBeTruthy();
+    expect(screen.getByText("Based on source-provided metadata only.")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "View PostgreSQL replication overview" }).getAttribute("href")).toBe("#knowledge-item-7");
+
+    const question = screen.getByLabelText("Ask a question about your captured knowledge");
+    await user.type(question, "What does it apply?");
+    await user.click(screen.getByRole("button", { name: "Ask your vault" }));
+    await waitFor(() => expect(askVault.mock.calls[1]?.[0]).toEqual({
+      question: "What does it apply?",
+      conversation: [{ question: "How do read models stay current?", answer: initialAnswer.answer }],
+    }));
+    expect(await screen.findByText("It does that by applying changes from the publisher.")).toBeTruthy();
+
+    askVault.mockRejectedValue(new Error("Answer generation is temporarily unavailable. Please try again."));
+    await user.type(question, "And when does it fail?");
+    await user.click(screen.getByRole("button", { name: "Ask your vault" }));
+    expect(await screen.findByText("Answer generation is temporarily unavailable. Please try again.")).toBeTruthy();
+    expect(screen.getByText("Logical replication keeps read models current.")).toBeTruthy();
+    expect(screen.getByText("It does that by applying changes from the publisher.")).toBeTruthy();
+  });
+});
 
 describe("Knowledge Item Capture", () => {
   test("moves an active card to Trash and restores a recognizable file card", async () => {

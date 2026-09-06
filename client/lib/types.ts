@@ -87,3 +87,26 @@ export type RefreshKnowledgeItemResponse = {
   processingAttemptId: number;
   knowledgeItem: KnowledgeItem;
 };
+
+export type SynthesisResult = {
+  answer: string;
+  citations: Array<{
+    knowledgeItemId: number;
+    sourceSnapshotId: number | null;
+    title: string;
+    originalUrl: string;
+    evidenceCoverage: EvidenceCoverage | null;
+    excerpt: string;
+  }>;
+  insufficientEvidence: boolean;
+};
+
+export type SynthesisConversationTurn = {
+  question: string;
+  answer: string;
+};
+
+export type SynthesisRequest = {
+  question: string;
+  conversation: SynthesisConversationTurn[];
+};

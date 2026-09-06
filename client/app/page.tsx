@@ -7,18 +7,26 @@ import { KnowledgeItemCard } from "@/components/knowledge-item-card";
 import { originalFileTitle, sourcePreviewTitle } from "@/components/source-preview";
 import { RecallResultCard } from "@/components/recall-result-card";
 import { SearchForm } from "@/components/search-form";
+import { SynthesisForm } from "@/components/synthesis-form";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { getKnowledgeItems, getTrashedKnowledgeItems, knowledgeItemKeys, permanentlyDeleteKnowledgeItem, recallKeys, refreshKnowledgeItem, restoreKnowledgeItem, retryKnowledgeItem, searchKnowledgeItems, trashKnowledgeItem } from "@/lib/api";
-import type { KnowledgeItem } from "@/lib/types";
+import { askVault, getKnowledgeItems, getTrashedKnowledgeItems, knowledgeItemKeys, permanentlyDeleteKnowledgeItem, recallKeys, refreshKnowledgeItem, restoreKnowledgeItem, retryKnowledgeItem, searchKnowledgeItems, trashKnowledgeItem } from "@/lib/api";
+import type { KnowledgeItem, SynthesisResult } from "@/lib/types";
+
+type ConversationTurn = {
+  question: string;
+  result: SynthesisResult;
+};
 
 export default function Home() {
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
   const [showTrash, setShowTrash] = useState(false);
   const [permanentDeletionTarget, setPermanentDeletionTarget] = useState<KnowledgeItem | null>(null);
+  const [synthesisQuestion, setSynthesisQuestion] = useState("");
+  const [conversationTurns, setConversationTurns] = useState<ConversationTurn[]>([]);
   const knowledgeItemsQuery = useQuery({
     queryKey: knowledgeItemKeys.all,
     queryFn: getKnowledgeItems,
@@ -92,6 +100,20 @@ export default function Home() {
     queryFn: () => searchKnowledgeItems(searchQuery),
     enabled: Boolean(searchQuery),
   });
+  const synthesisMutation = useMutation({
+    mutationFn: askVault,
+  });
+  function askQuestion(question: string) {
+    synthesisMutation.mutate({
+      question,
+      conversation: conversationTurns.slice(-6).map(turn => ({ question: turn.question, answer: turn.result.answer })),
+    }, {
+      onSuccess: result => {
+        setConversationTurns(turns => [...turns, { question, result }]);
+        setSynthesisQuestion("");
+      },
+    });
+  }
   async function showCapturedItem(knowledgeItem: KnowledgeItem) {
     await queryClient.cancelQueries({ queryKey: knowledgeItemKeys.all });
     queryClient.setQueryData<KnowledgeItem[]>(
@@ -130,6 +152,34 @@ export default function Home() {
         {recallQuery.data && recallQuery.data.length > 0 && (
           <div className="grid gap-4 md:grid-cols-2">{recallQuery.data.map(result => <RecallResultCard key={result.id} result={result} />)}</div>
         )}
+      </section>}
+      {!showTrash && <section aria-labelledby="synthesis-heading" className="space-y-4">
+        <div>
+          <h2 id="synthesis-heading" className="text-2xl font-semibold tracking-tight">Ask your vault</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Answers use only matching captured evidence and cite the Knowledge Items that support them.</p>
+          <p className="mt-1 text-sm text-muted-foreground">Questions, matching evidence, and current-session context are processed by the configured external AI provider. Original Files are never shared.</p>
+        </div>
+        <SynthesisForm onAsk={askQuestion} isAsking={synthesisMutation.isPending} question={synthesisQuestion} onQuestionChange={setSynthesisQuestion} />
+        {synthesisMutation.isPending && <Card role="status"><CardContent className="py-3 text-center text-muted-foreground">Finding relevant captured evidence…</CardContent></Card>}
+        {synthesisMutation.error && <Alert variant="destructive"><AlertDescription>{synthesisMutation.error.message}</AlertDescription></Alert>}
+        {conversationTurns.length > 0 && <section aria-label="Current conversation" className="space-y-4">
+          {conversationTurns.map((turn, index) => <Card key={`${turn.question}-${index}`}>
+            <CardContent className="space-y-4 py-5">
+              <p className="text-sm font-medium">You asked: {turn.question}</p>
+              <p>{turn.result.answer}</p>
+              {turn.result.insufficientEvidence ? <p className="text-sm text-muted-foreground">Capture more relevant knowledge, then ask again.</p> : <section aria-label="Supporting Knowledge Items" className="space-y-3">
+                <p className="text-sm font-medium">Supporting Knowledge Items</p>
+                <ul className="space-y-3">
+                  {turn.result.citations.map(citation => <li key={`${citation.knowledgeItemId}-${citation.sourceSnapshotId ?? "context"}`} className="space-y-1 text-sm">
+                    <a className="font-medium underline underline-offset-4" href={`#knowledge-item-${citation.knowledgeItemId}`}>View {citation.title}</a>
+                    <blockquote className="border-l-2 pl-3 text-muted-foreground">{citation.excerpt}</blockquote>
+                    {citation.evidenceCoverage === "metadata-only" && <p className="text-muted-foreground">Based on source-provided metadata only.</p>}
+                  </li>)}
+                </ul>
+              </section>}
+            </CardContent>
+          </Card>)}
+        </section>}
       </section>}
       <section aria-labelledby="knowledge-items-heading" className="space-y-5">
         <div>
@@ -184,8 +234,8 @@ export default function Home() {
           )}
         <div className="grid gap-4 md:grid-cols-2">
           {(showTrash ? trashedKnowledgeItems : knowledgeItems).map((knowledgeItem) => (
+            <div id={`knowledge-item-${knowledgeItem.id}`} key={knowledgeItem.id}>
             <KnowledgeItemCard
-              key={knowledgeItem.id}
               knowledgeItem={knowledgeItem}
               onRefresh={(knowledgeItemId) => refreshMutation.mutate(knowledgeItemId)}
               onRetry={(knowledgeItemId) => retryMutation.mutate(knowledgeItemId)}
@@ -198,6 +248,7 @@ export default function Home() {
               isRestoring={restoreMutation.isPending && restoreMutation.variables === knowledgeItem.id}
               isPermanentlyDeleting={permanentlyDeleteMutation.isPending && permanentlyDeleteMutation.variables === knowledgeItem.id}
             />
+            </div>
           ))}
         </div>
       </section>

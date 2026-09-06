@@ -2,7 +2,9 @@ import type {
   CaptureResponse,
   KnowledgeItem,
   RecallKnowledgeItem,
+  SynthesisRequest,
   RefreshKnowledgeItemResponse,
+  SynthesisResult,
 } from "@/lib/types";
 
 export const API_URL =
@@ -16,6 +18,23 @@ export const recallKeys = {
   all: ["knowledge-items", "recall"] as const,
   search: (query: string) => ["knowledge-items", "recall", query] as const,
 };
+
+export async function askVault(request: SynthesisRequest): Promise<SynthesisResult> {
+  const response = await fetch(`${API_URL}/synthesis`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  if (!response.ok) {
+    throw new Error(
+      await getErrorMessage(
+        response,
+        "Answer generation is temporarily unavailable. Please try again.",
+      ),
+    );
+  }
+  return response.json();
+}
 
 async function getErrorMessage(response: Response, fallback: string) {
   const body = await response.json().catch(() => null);

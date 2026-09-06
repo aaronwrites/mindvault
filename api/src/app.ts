@@ -8,18 +8,21 @@ import { knowledgeItemsRouter } from "./routes/knowledge-items";
 import { searchRouter } from "./routes/search";
 import { sourcePreviewMediaRouter } from "./routes/source-preview-media";
 import { createGeminiPassageEmbeddingProvider } from "./lib/ai/embeddings";
-import type { EmbeddingProvider } from "./lib/ai/providers";
+import { createGeminiSynthesisGenerationProvider } from "./lib/ai/gemini";
+import type { EmbeddingProvider, SynthesisGenerationProvider } from "./lib/ai/providers";
 import { cloudinaryOriginalFileStorageFromEnvironment } from "./lib/original-files/cloudinary-original-file-storage";
 import type { OriginalFileStorage } from "./lib/original-files/original-file-storage";
+import { synthesisRouter } from "./routes/synthesis";
 
 type AppDependencies = {
     database?: NodePgDatabase<typeof schema>;
     embeddingProvider?: EmbeddingProvider;
+    synthesisProvider?: SynthesisGenerationProvider;
     originalFileStorage?: OriginalFileStorage;
     maximumOriginalFileBytes?: number;
 };
 
-export function createApp({ database = db, embeddingProvider = createGeminiPassageEmbeddingProvider(), originalFileStorage, maximumOriginalFileBytes }: AppDependencies = {}) {
+export function createApp({ database = db, embeddingProvider = createGeminiPassageEmbeddingProvider(), synthesisProvider = createGeminiSynthesisGenerationProvider(), originalFileStorage, maximumOriginalFileBytes }: AppDependencies = {}) {
     const app = express();
     app.use(cors());
     app.use(express.json());
@@ -28,6 +31,7 @@ export function createApp({ database = db, embeddingProvider = createGeminiPassa
     app.use("/captures", capturesRouter(database, embeddingProvider.representation, () => originalFileStorage ?? cloudinaryOriginalFileStorageFromEnvironment(process.env), configuredMaximumOriginalFileBytes));
     app.use("/knowledge-items", knowledgeItemsRouter(database, embeddingProvider.representation, () => originalFileStorage ?? cloudinaryOriginalFileStorageFromEnvironment(process.env)));
     app.use("/search", searchRouter(database, embeddingProvider));
+    app.use("/synthesis", synthesisRouter(database, embeddingProvider, synthesisProvider));
     app.use("/source-preview-media", sourcePreviewMediaRouter(database));
     app.get("/health", (_req, res) => res.json({ status: "ok" }));
 

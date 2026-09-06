@@ -2,6 +2,35 @@ export interface TextGenerationProvider {
     generate(prompt: string): Promise<string>;
 }
 
+export type SynthesisEvidence = {
+    citationId: string;
+    knowledgeItemId: number;
+    sourceSnapshotId: number | null;
+    title: string;
+    text: string;
+    originalUrl: string;
+    evidenceCoverage: "primary-content" | "metadata-only" | null;
+};
+
+export type SynthesisConversationTurn = {
+    question: string;
+    answer: string;
+};
+
+export type SynthesisGenerationInput = {
+    question: string;
+    evidence: SynthesisEvidence[];
+    conversation: SynthesisConversationTurn[];
+};
+
+export interface SynthesisGenerationProvider {
+    generateSynthesis(input: SynthesisGenerationInput): Promise<{
+        answer: string;
+        citationIds: string[];
+        insufficientEvidence: boolean;
+    }>;
+}
+
 export type GeneratedTopicTag = {
     name: string;
     aliases: string[];
