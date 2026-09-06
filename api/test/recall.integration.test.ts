@@ -51,6 +51,47 @@ class RecallCorpusEmbeddingProvider implements EmbeddingProvider {
 }
 
 describe("Knowledge Item Recall", () => {
+    test.skipIf(!process.env.TEST_DATABASE_URL)("returns metadata-only evidence for conceptual and exact-language Recall with its limited coverage", async () => {
+        const embeddings: EmbeddingProvider = {
+            representation: { provider: "test", model: "metadata-recall-v1", dimensions: 768, metadata: { normalization: "unit-length" } },
+            async embed(text: string) {
+                const vector = Array<number>(768).fill(0);
+                vector[/logical replication|read models/i.test(text) ? 0 : 1] = 1;
+                return vector;
+            },
+            async embedQuery(text: string) {
+                return this.embed(text);
+            },
+        };
+        harness = await createIntegrationHarness(
+            database => createApp({ database: database.db, embeddingProvider: embeddings }),
+            (database, sourceServer) => createArticleProcessingWorker({
+                database: database.db, sourceFetchOptions: sourceServer.safeFetchDependencies(), embeddingProvider: embeddings,
+                summaryProvider: new DeterministicGenerationProvider(), topicTagProvider: new DeterministicTopicTagGenerationProvider(),
+            }),
+        );
+        const captureResponse = await fetch(`${harness.apiBaseUrl}/captures`, {
+            method: "POST", headers: { "content-type": "application/json" },
+            body: JSON.stringify({ url: harness.sourceServer.fetchUrl("/metadata/title-only") }),
+        });
+        const capture = await captureResponse.json() as { knowledgeItemId: number };
+        await harness.drainWorker();
+
+        for (const query of ["How do I keep read models current?", "logical replication"]) {
+            const results = await (await fetch(`${harness.apiBaseUrl}/search?q=${encodeURIComponent(query)}`)).json() as Array<{
+                id: number;
+                excerpts: Array<{ text: string; sourceSnapshot: { evidenceCoverage: string } | null }>;
+            }>;
+            expect(results).toEqual([expect.objectContaining({
+                id: capture.knowledgeItemId,
+                excerpts: [expect.objectContaining({
+                    text: "Source-provided title: How PostgreSQL logical replication keeps read models current",
+                    sourceSnapshot: expect.objectContaining({ evidenceCoverage: "metadata-only" }),
+                })],
+            })]);
+        }
+    });
+
     test.skipIf(!process.env.TEST_DATABASE_URL)("returns ranked Knowledge Items with grounded conceptual and exact-language Passage evidence", async () => {
         const embeddings = new RecallCorpusEmbeddingProvider();
         harness = await createIntegrationHarness(

@@ -74,6 +74,7 @@ const processingItem: KnowledgeItem = {
     kind: "web",
   },
   sourcePreview: null,
+  evidenceCoverage: null,
   captureContexts: [
     { kind: "personal-note", summary: "Read this after the design review." },
   ],
@@ -99,6 +100,31 @@ function renderHome() {
     </QueryClientProvider>,
   );
 }
+
+test("discloses when a Ready Knowledge Item is searchable from metadata only", async () => {
+  getKnowledgeItems.mockResolvedValue([{
+    ...processingItem,
+    availability: "ready",
+    organizationCondition: "complete",
+    evidenceCoverage: "metadata-only",
+    sourcePreview: {
+      title: "PostgreSQL replication overview",
+      description: "A source-provided description of logical replication.",
+      websiteName: null,
+      author: null,
+      publishedAt: null,
+      contentType: null,
+      previewImageUrl: null,
+      previewImageAlt: null,
+      faviconUrl: null,
+    },
+    latestAttempt: { ...processingItem.latestAttempt!, status: "completed" },
+  }]);
+  getTrashedKnowledgeItems.mockResolvedValue([]);
+  renderHome();
+
+  expect(await screen.findByText("Searchable from source-provided metadata only; primary page content was unavailable.")).toBeTruthy();
+});
 
 beforeEach(() => {
   getKnowledgeItems.mockReset();
@@ -189,6 +215,7 @@ describe("Knowledge Item Capture", () => {
         },
       },
       sourcePreview: null,
+      evidenceCoverage: null,
       captureContexts: [{ kind: "personal-note", summary: "Keep for the proposal." }],
       availability: "unsupported",
       organizationCondition: "complete",
@@ -708,6 +735,7 @@ describe("Knowledge Item Capture", () => {
               finalUrl: processingItem.source.submittedUrl,
               canonicalUrl: null,
               extractedAt: processingItem.createdAt,
+              evidenceCoverage: "primary-content",
             },
             ranking: { score: 0.04, lexicalRank: 1 },
           },
@@ -755,6 +783,7 @@ describe("Knowledge Item Capture", () => {
               finalUrl: processingItem.source.submittedUrl,
               canonicalUrl: null,
               extractedAt: processingItem.createdAt,
+              evidenceCoverage: "primary-content",
             },
             ranking: { score: 0.04, lexicalRank: 1 },
           },

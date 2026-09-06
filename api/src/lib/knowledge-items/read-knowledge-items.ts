@@ -23,6 +23,7 @@ import {
     originalFileOperations,
     knowledgeItemTopicTags,
     topicTags,
+    type EvidenceCoverage,
 } from "../../db/schema";
 import { originalFileActions } from "../original-files/create-original-file-access";
 
@@ -57,6 +58,7 @@ export type KnowledgeItemView = {
         previewImageAlt: string | null;
         faviconUrl: string | null;
     } | null;
+    evidenceCoverage: EvidenceCoverage | null;
     captureContexts: Array<{ kind: string; summary: string }>;
     availability: KnowledgeItemAvailability;
     organizationCondition: "processing" | "complete" | "incomplete";
@@ -105,7 +107,7 @@ async function presentKnowledgeItems(
 
     const itemIds = rows.map(row => row.knowledgeItem.id);
     const currentSnapshotIds = rows.flatMap(row => row.source.currentSnapshotId === null ? [] : [row.source.currentSnapshotId]);
-    const [contextRows, attemptRows, summaryRows, topicTagRows, previewRows, previewMediaRows, extractedPreviewRows, deletionRows] = await Promise.all([
+    const [contextRows, attemptRows, summaryRows, topicTagRows, previewRows, previewMediaRows, currentSnapshotRows, extractedPreviewRows, deletionRows] = await Promise.all([
         database
             .select({ knowledgeItemId: captures.knowledgeItemId, kind: captureContexts.kind, text: captureContexts.text })
             .from(captureContexts)
@@ -129,6 +131,8 @@ async function presentKnowledgeItems(
             .where(inArray(sourcePreviews.sourceSnapshotId, currentSnapshotIds)),
         currentSnapshotIds.length === 0 ? [] : database.select({ sourceSnapshotId: sourcePreviewMedia.sourceSnapshotId, alternativeText: sourcePreviewMedia.alternativeText }).from(sourcePreviewMedia)
             .where(inArray(sourcePreviewMedia.sourceSnapshotId, currentSnapshotIds)),
+        currentSnapshotIds.length === 0 ? [] : database.select({ id: sourceSnapshots.id, evidenceCoverage: sourceSnapshots.evidenceCoverage }).from(sourceSnapshots)
+            .where(inArray(sourceSnapshots.id, currentSnapshotIds)),
         database.select({ sourceId: extractedSources.sourceId, sourcePreview: extractedSources.sourcePreview })
             .from(extractedSources)
             .where(inArray(extractedSources.sourceId, rows.map(row => row.source.id)))
@@ -155,6 +159,7 @@ async function presentKnowledgeItems(
     const summariesByItem = new Map(summaryRows.map(summary => [summary.knowledgeItemId, summary]));
     const previewsBySnapshot = new Map(previewRows.map(preview => [preview.sourceSnapshotId, preview]));
     const mediaBySnapshot = new Map(previewMediaRows.map(media => [media.sourceSnapshotId, media]));
+    const coverageBySnapshot = new Map(currentSnapshotRows.map(snapshot => [snapshot.id, snapshot.evidenceCoverage]));
     const extractedPreviewsBySource = new Map<number, ExtractedSourcePreview>();
     for (const extractedPreview of extractedPreviewRows) {
         if (!extractedPreviewsBySource.has(extractedPreview.sourceId)) {
@@ -196,6 +201,9 @@ async function presentKnowledgeItems(
             sourcePreview: source.currentSnapshotId === null
                 ? extractedPreviewFor(extractedPreviewsBySource.get(source.id))
                 : previewFor(previewsBySnapshot.get(source.currentSnapshotId), mediaBySnapshot.get(source.currentSnapshotId)),
+            evidenceCoverage: source.currentSnapshotId === null
+                ? null
+                : coverageBySnapshot.get(source.currentSnapshotId) ?? null,
             captureContexts: contextsByItem.get(knowledgeItem.id) ?? [],
             availability: availabilityByItem.get(knowledgeItem.id) ?? "processing",
             organizationCondition: source.provenanceKind === "original-file" ? "complete" : organizationConditions.get(knowledgeItem.id) ?? "processing",

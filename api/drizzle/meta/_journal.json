@@ -162,6 +162,13 @@
       "when": 1788599554575,
       "tag": "0022_exotic_ultimatum",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1788699701092,
+      "tag": "0023_cool_masque",
+      "breakpoints": true
     }
   ]
 }

@@ -1,6 +1,7 @@
 import { parse } from "parse5";
 import { Readability } from "@mozilla/readability";
 import { parseHTML } from "linkedom";
+import type { EvidenceCoverage } from "../../db/schema";
 
 type HtmlNode = {
     nodeName?: string;
@@ -24,7 +25,8 @@ export type ExtractedSourcePreview = {
 
 export type ParsedPublicTextualSource = {
     title: string;
-    primaryText: string | null;
+    evidenceText: string | null;
+    evidenceCoverage: EvidenceCoverage | null;
     canonicalUrl: string | null;
     sourcePreview: ExtractedSourcePreview;
     failureReason: string | null;
@@ -47,23 +49,64 @@ export function parsePublicTextualSource(html: string, finalUrl: string): Parsed
 
     const canonicalUrl = absoluteHttpUrl(meta.get("link:canonical"), finalUrl);
     const title = previewTitle!;
+    const sourcePreview = {
+        title,
+        description: firstUsable(meta.get("og:description"), meta.get("description"), structured.description),
+        websiteName: firstUsable(meta.get("og:site_name"), structured.publisher),
+        author: firstUsable(meta.get("article:author"), meta.get("author"), structured.author),
+        publishedAt: validPublicationDate(firstUsable(meta.get("article:published_time"), meta.get("date"), meta.get("datepublished"), structured.datePublished))?.toISOString() ?? null,
+        contentType: firstUsable(meta.get("og:type"), structured.type),
+        previewImageUrl: absoluteHttpUrl(firstUsable(meta.get("og:image"), meta.get("twitter:image"), structured.image), finalUrl),
+        previewImageAlt: firstUsable(meta.get("og:image:alt"), meta.get("twitter:image:alt"), structured.imageAlt),
+        faviconUrl: absoluteHttpUrl(meta.get("link:icon"), finalUrl),
+    };
+    const metadataEvidence = qualityFailure === "This Source has inadequate meaningful text"
+        ? informativeMetadataEvidence(sourcePreview, finalUrl)
+        : null;
     return {
         title: extractionTitle ?? title,
-        primaryText: qualityFailure ? null : primaryText,
+        evidenceText: qualityFailure ? metadataEvidence : primaryText,
+        evidenceCoverage: qualityFailure ? metadataEvidence ? "metadata-only" : null : "primary-content",
         canonicalUrl,
-        sourcePreview: {
-            title,
-            description: firstUsable(meta.get("og:description"), meta.get("description"), structured.description),
-            websiteName: firstUsable(meta.get("og:site_name"), structured.publisher),
-            author: firstUsable(meta.get("article:author"), meta.get("author"), structured.author),
-            publishedAt: validPublicationDate(firstUsable(meta.get("article:published_time"), meta.get("date"), meta.get("datepublished"), structured.datePublished))?.toISOString() ?? null,
-            contentType: firstUsable(meta.get("og:type"), structured.type),
-            previewImageUrl: absoluteHttpUrl(firstUsable(meta.get("og:image"), meta.get("twitter:image"), structured.image), finalUrl),
-            previewImageAlt: firstUsable(meta.get("og:image:alt"), meta.get("twitter:image:alt"), structured.imageAlt),
-            faviconUrl: absoluteHttpUrl(meta.get("link:icon"), finalUrl),
-        },
-        failureReason: qualityFailure ?? null,
+        sourcePreview,
+        failureReason: metadataEvidence ? null : qualityFailure ?? null,
     };
+}
+
+function informativeMetadataEvidence(preview: ExtractedSourcePreview, finalUrl: string): string | null {
+    if (preview.description && isInformativeMetadata(preview.description, finalUrl)) {
+        return `Source-provided description: ${preview.description}`;
+    }
+    if (isDescriptiveTitle(preview.title)) return `Source-provided title: ${preview.title}`;
+    return null;
+}
+
+function isInformativeMetadata(value: string, finalUrl: string): boolean {
+    return value.length >= 40 && !hasUninformativeMetadataLanguage(value) && !isGenericPlatformPostDescription(value, finalUrl);
+}
+
+function isDescriptiveTitle(value: string): boolean {
+    return value.length >= 30
+        && value.trim().split(/\s+/).length >= 5
+        && !hasUninformativeMetadataLanguage(value);
+}
+
+function hasUninformativeMetadataLanguage(value: string): boolean {
+    return /\b(sign in|log in|create an account|join now|access denied|not found|error|captcha|verify you are human|subscribe)\b/i.test(value);
+}
+
+function isGenericPlatformPostDescription(value: string, finalUrl: string): boolean {
+    const path = safelyParsedPath(finalUrl);
+    const looksLikeSpecificPost = /\/(posts?|status|questions)\//i.test(path);
+    return looksLikeSpecificPost && /\b(see what people are saying|discover professional content|join the conversation|connect with people|share ideas|follow people and topics)\b/i.test(value);
+}
+
+function safelyParsedPath(value: string): string {
+    try {
+        return new URL(value).pathname;
+    } catch {
+        return "";
+    }
 }
 
 function readabilityText(html: string): string | null {

@@ -1,7 +1,7 @@
 import { and, eq, inArray, or } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as schema from "../../db/schema";
-import { captureContexts, captures, knowledgeItems, passages, sourceSnapshots, sources } from "../../db/schema";
+import { captureContexts, captures, knowledgeItems, passages, sourceSnapshots, sources, type EvidenceCoverage } from "../../db/schema";
 import type { EmbeddingProvider } from "../ai/providers";
 import { getKnowledgeItem, type KnowledgeItemView } from "../knowledge-items/read-knowledge-items";
 import { findLexicalPassages } from "../passages/find-lexical-passages";
@@ -27,6 +27,7 @@ export type RecallKnowledgeItemResult = {
             finalUrl: string;
             canonicalUrl: string | null;
             extractedAt: string;
+            evidenceCoverage: EvidenceCoverage;
         } | null;
         ranking: { score: number; semanticRank?: number; lexicalRank?: number };
     }>;
@@ -48,6 +49,7 @@ export async function recallKnowledgeItems(database: Database, query: string, em
             sourceSnapshotId: sourceSnapshots.id, sourceSnapshotTitle: sourceSnapshots.title,
             originalUrl: sourceSnapshots.originalUrl, finalUrl: sourceSnapshots.finalUrl,
             canonicalUrl: sourceSnapshots.canonicalUrl, extractedAt: sourceSnapshots.extractedAt,
+            evidenceCoverage: sourceSnapshots.evidenceCoverage,
         })
         .from(passages)
         .leftJoin(sourceSnapshots, eq(passages.sourceSnapshotId, sourceSnapshots.id))
@@ -84,6 +86,7 @@ export async function recallKnowledgeItems(database: Database, query: string, em
                     sourceSnapshot: details.sourceSnapshotId === null ? null : {
                         id: details.sourceSnapshotId, originalUrl: details.originalUrl!, finalUrl: details.finalUrl!,
                         canonicalUrl: details.canonicalUrl, extractedAt: toIsoString(details.extractedAt!),
+                        evidenceCoverage: details.evidenceCoverage!,
                     },
                     ranking: {
                         score: passage.score,

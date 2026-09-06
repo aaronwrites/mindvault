@@ -5,6 +5,7 @@ export type SourceFixtureServer = {
     baseUrl: string;
     setChangedArticleVersion(version: 1 | 2): void;
     setMetadataOnlyArticleVersion(version: 1 | 2): void;
+    setReducedEvidenceVersion(version: 1 | 2): void;
     setPreviewImageAvailable(available: boolean): void;
     fetchUrl(path: string): string;
     safeFetchDependencies(): SafeFetchDependencies;
@@ -18,6 +19,7 @@ const article = (title: string, body: string, canonical?: string) => `<!doctype 
 export async function startSourceFixtureServer(): Promise<SourceFixtureServer> {
     let changedArticleVersion: 1 | 2 = 1;
     let metadataOnlyArticleVersion: 1 | 2 = 1;
+    let reducedEvidenceVersion: 1 | 2 = 1;
     let previewImageAvailable = true;
     let baseUrl = "";
 
@@ -75,6 +77,27 @@ export async function startSourceFixtureServer(): Promise<SourceFixtureServer> {
 <meta property="og:image" content="/media/preview-${isLaterVersion ? "two" : "one"}.png"><meta property="og:image:alt" content="${isLaterVersion ? "Later metadata image" : "Original metadata image"}">
 <title>Stable article content</title></head><body><main><article><h1>Stable article content</h1><p>This primary text deliberately remains identical while Source Preview metadata changes, proving that recognizable Source facts and retained media carry their own immutable provenance through Refresh.</p></article></main></body></html>`);
         }
+        if (path === "/metadata/description-only") return html(200, `<!doctype html><html><head>
+<title>Practical but short title</title><meta name="description" content="A guide to recovering a PostgreSQL database after an accidental schema migration.">
+</head><body><main><p>Too short.</p></main></body></html>`);
+        if (path === "/metadata/title-only") return html(200, `<!doctype html><html><head>
+<title>How PostgreSQL logical replication keeps read models current</title>
+</head><body><main><p>Too short.</p></main></body></html>`);
+        if (path === "/metadata/homepage") return html(200, `<!doctype html><html><head>
+<title>Signal Garden</title><meta name="description" content="Signal Garden is an independent studio that builds accessible tools for neighborhood climate resilience.">
+</head><body><main><p>Welcome.</p></main></body></html>`);
+        if (path === "/metadata/generic-post") return html(200, `<!doctype html><html><head>
+<title>Sign in to LinkedIn</title><meta name="description" content="Sign in to see this post and discover professional content on LinkedIn.">
+</head><body><main><p>Too short.</p></main></body></html>`);
+        if (path === "/posts/generic-platform") return html(200, `<!doctype html><html><head>
+<title>LinkedIn</title><meta name="description" content="See what people are saying about technology leaders and join the conversation.">
+</head><body><main><p>Too short.</p></main></body></html>`);
+        if (path === "/articles/reduced-evidence") {
+            if (reducedEvidenceVersion === 2) return html(200, `<!doctype html><html><head>
+<title>Database recovery overview</title><meta name="description" content="An overview of PostgreSQL recovery options after an accidental schema migration.">
+</head><body><main><p>Too short.</p></main></body></html>`);
+            return html(200, article("Database recovery overview", "This detailed guide explains how PostgreSQL point-in-time recovery preserves a trustworthy primary record after an accidental schema migration. It includes enough primary content to stay useful when a later refresh can obtain only limited source-provided metadata."));
+        }
         if (path === "/canonical") return html(200, article("Canonical article", "Canonical fixture content establishes that a declared canonical address is strong identity evidence when separate captures begin at different public URLs. Extraction preserves the address originally captured, the fetched final address, and this canonical address for later Source Snapshot provenance.", `${baseUrl}/articles/canonical-target`));
         if (path === "/invalid-canonical") return html(200, article("Invalid canonical article", "This article contains enough meaningful text to be captured even though its canonical declaration is malformed. Extraction must treat invalid canonical markup as absent identity evidence instead of failing a safely fetched and otherwise supported public textual Source.", "http://["));
         if (path === "/articles/canonical-target") return html(200, article("Canonical target", "The canonical fixture's resolved address remains the same external Source even when an earlier Capture began at a different URL. Source identity reconciliation preserves Capture Context and Processing Attempt history while retaining provenance for each Extraction result."));
@@ -130,6 +153,9 @@ export async function startSourceFixtureServer(): Promise<SourceFixtureServer> {
         },
         setMetadataOnlyArticleVersion(version) {
             metadataOnlyArticleVersion = version;
+        },
+        setReducedEvidenceVersion(version) {
+            reducedEvidenceVersion = version;
         },
         setPreviewImageAvailable(available) {
             previewImageAvailable = available;

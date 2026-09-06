@@ -30,10 +30,16 @@ export function createSourceSnapshotActivationStageHandler(database: Database) {
                 ));
             if (lexicalStage?.status !== "completed") throw new Error("Source Snapshot activation is waiting for Lexical indexing");
 
-            const [snapshot] = await transaction.select({ id: sourceSnapshots.id, extractedAt: sourceSnapshots.extractedAt })
+            const [snapshot] = await transaction.select({ id: sourceSnapshots.id, extractedAt: sourceSnapshots.extractedAt, evidenceCoverage: sourceSnapshots.evidenceCoverage })
                 .from(sourceSnapshots)
                 .where(and(eq(sourceSnapshots.id, attempt.sourceSnapshotId), eq(sourceSnapshots.sourceId, attempt.sourceId)));
             if (!snapshot) throw new Error("Source Snapshot activation could not find its Source Snapshot");
+
+            const [currentSnapshot] = await transaction.select({ evidenceCoverage: sourceSnapshots.evidenceCoverage })
+                .from(sources)
+                .innerJoin(sourceSnapshots, eq(sourceSnapshots.id, sources.currentSnapshotId))
+                .where(eq(sources.id, attempt.sourceId));
+            if (currentSnapshot?.evidenceCoverage === "primary-content" && snapshot.evidenceCoverage === "metadata-only") return;
 
             const newerSnapshots = await transaction.select({ id: sourceSnapshots.id })
                 .from(sourceSnapshots)

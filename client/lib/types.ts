@@ -1,5 +1,6 @@
 export type KnowledgeItemAvailability =
   "processing" | "ready" | "unsupported" | "needs-attention";
+export type EvidenceCoverage = "primary-content" | "metadata-only";
 
 export type KnowledgeItem = {
   id: number;
@@ -28,6 +29,7 @@ export type KnowledgeItem = {
     previewImageAlt: string | null;
     faviconUrl: string | null;
   } | null;
+  evidenceCoverage: EvidenceCoverage | null;
   captureContexts: Array<{ kind: string; summary: string }>;
   availability: KnowledgeItemAvailability;
   organizationCondition: "processing" | "complete" | "incomplete";
@@ -58,6 +60,7 @@ export type RecallKnowledgeItem = {
       finalUrl: string;
       canonicalUrl: string | null;
       extractedAt: string;
+      evidenceCoverage: EvidenceCoverage;
     } | null;
     ranking: {
       score: number;

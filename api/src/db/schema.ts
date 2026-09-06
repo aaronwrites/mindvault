@@ -14,6 +14,8 @@ const bytea = customType<{ data: Buffer; driverData: Buffer }>({
 });
 export const captureContextKinds = ["selected-source-text", "personal-note"] as const;
 export type CaptureContextKind = typeof captureContextKinds[number];
+export const evidenceCoverageKinds = ["primary-content", "metadata-only"] as const;
+export type EvidenceCoverage = typeof evidenceCoverageKinds[number];
 
 export const sources = pgTable("sources", {
     id: serial("id").primaryKey(),
@@ -123,20 +125,24 @@ export const extractedSources = pgTable("extracted_sources", {
     processingAttemptId: integer("processing_attempt_id").notNull().references(() => processingAttempts.id, { onDelete: "cascade" }).unique(),
     sourceId: integer("source_id").notNull().references(() => sources.id),
     title: text("title").notNull(),
-    primaryText: text("primary_text"),
+    evidenceText: text("primary_text"),
+    evidenceCoverage: text("evidence_coverage").$type<EvidenceCoverage>(),
     originalUrl: text("original_url").notNull(),
     finalUrl: text("final_url").notNull(),
     canonicalUrl: text("canonical_url"),
     permanentRedirects: jsonb("permanent_redirects").notNull(),
     sourcePreview: jsonb("source_preview").notNull(),
     extractedAt: timestamp("extracted_at").notNull().defaultNow(),
-});
+}, table => [
+    check("extracted_sources_evidence_coverage", sql`${table.evidenceCoverage} IS NULL OR ${table.evidenceCoverage} IN ('primary-content', 'metadata-only')`),
+]);
 
 export const sourceSnapshots = pgTable("source_snapshots", {
     id: serial("id").primaryKey(),
     sourceId: integer("source_id").notNull().references(() => sources.id),
     title: text("title").notNull(),
-    primaryText: text("primary_text").notNull(),
+    evidenceText: text("primary_text").notNull(),
+    evidenceCoverage: text("evidence_coverage").$type<EvidenceCoverage>().notNull().default("primary-content"),
     originalUrl: text("original_url").notNull(),
     finalUrl: text("final_url").notNull(),
     canonicalUrl: text("canonical_url"),
@@ -144,7 +150,10 @@ export const sourceSnapshots = pgTable("source_snapshots", {
     extractedAt: timestamp("extracted_at").notNull(),
     contentHash: text("content_hash").notNull(),
     createdAt: timestamp("created_at").notNull().defaultNow(),
-}, table => [uniqueIndex("source_snapshots_source_content_hash_unique").on(table.sourceId, table.contentHash)]);
+}, table => [
+    uniqueIndex("source_snapshots_source_content_hash_unique").on(table.sourceId, table.contentHash),
+    check("source_snapshots_evidence_coverage", sql`${table.evidenceCoverage} IN ('primary-content', 'metadata-only')`),
+]);
 
 export const sourcePreviews = pgTable("source_previews", {
     sourceSnapshotId: integer("source_snapshot_id").primaryKey().references(() => sourceSnapshots.id, { onDelete: "cascade" }),

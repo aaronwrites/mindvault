@@ -102,6 +102,11 @@ export function KnowledgeItemCard({
           {formatByteSize(source.byteSize) && <p>{formatByteSize(source.byteSize)}</p>}
           <p>Captured {new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }).format(new Date(knowledgeItem.createdAt))}</p>
         </section> : <SourcePreviewFacts preview={preview} submittedUrl={source.submittedUrl!} />}
+        {!isOriginalFile && knowledgeItem.evidenceCoverage === "metadata-only" && (
+          <p className="text-sm text-muted-foreground" role="status">
+            Searchable from source-provided metadata only; primary page content was unavailable.
+          </p>
+        )}
         {!isOriginalFile && knowledgeItem.recognitionSummary && (
           <section aria-label="Generated Recognition Summary" className="space-y-1">
             <p className="text-xs font-medium text-muted-foreground">Generated recognition summary</p>

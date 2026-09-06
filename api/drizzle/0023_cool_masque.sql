@@ -1,0 +1,4 @@
+ALTER TABLE "extracted_sources" ADD COLUMN "evidence_coverage" text;--> statement-breakpoint
+ALTER TABLE "source_snapshots" ADD COLUMN "evidence_coverage" text DEFAULT 'primary-content' NOT NULL;--> statement-breakpoint
+ALTER TABLE "extracted_sources" ADD CONSTRAINT "extracted_sources_evidence_coverage" CHECK ("extracted_sources"."evidence_coverage" IS NULL OR "extracted_sources"."evidence_coverage" IN ('primary-content', 'metadata-only'));--> statement-breakpoint
+ALTER TABLE "source_snapshots" ADD CONSTRAINT "source_snapshots_evidence_coverage" CHECK ("source_snapshots"."evidence_coverage" IN ('primary-content', 'metadata-only'));

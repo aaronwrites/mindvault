@@ -16,7 +16,7 @@ export async function hasRecentSuccessfulExtraction(
         .from(extractedSources)
         .where(and(
             eq(extractedSources.sourceId, sourceId),
-            isNotNull(extractedSources.primaryText),
+            isNotNull(extractedSources.evidenceText),
             gt(extractedSources.extractedAt, new Date(now.getTime() - recentSuccessfulExtractionWindowMs)),
         ))
         .limit(1);

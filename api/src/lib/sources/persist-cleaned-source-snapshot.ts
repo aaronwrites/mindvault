@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as schema from "../../db/schema";
-import { extractedSources, processingAttempts, sourcePreviews, sourceSnapshots } from "../../db/schema";
+import { extractedSources, processingAttempts, sourcePreviews, sourceSnapshots, type EvidenceCoverage } from "../../db/schema";
 import type { ExtractedSourcePreview } from "./extract-source-preview";
 import type { SafeFetchOptions } from "./fetch-public-source";
 import { retainSourcePreviewMedia } from "./retain-source-preview-media";
@@ -15,16 +15,18 @@ export function createSnapshotPersistenceStageHandler(database: Database, source
         const [extractedSource] = await database.select()
             .from(extractedSources)
             .where(eq(extractedSources.processingAttemptId, stage.processingAttemptId));
-        const primaryText = extractedSource?.primaryText;
-        if (!extractedSource || !primaryText) throw new Error("Source Snapshot persistence could not find successful Extraction output");
+        const evidenceText = extractedSource?.evidenceText;
+        if (!extractedSource || !evidenceText || !extractedSource.evidenceCoverage) throw new Error("Source Snapshot persistence could not find successful Extraction output");
+        const evidenceCoverage = extractedSource.evidenceCoverage;
 
         const preview = extractedSource.sourcePreview as ExtractedSourcePreview;
-        const contentHash = contentHashFor(primaryText, preview);
+        const contentHash = contentHashFor(evidenceText, evidenceCoverage, preview);
         const { snapshotId } = await database.transaction(async transaction => {
             await transaction.insert(sourceSnapshots).values({
                 sourceId: extractedSource.sourceId,
                 title: extractedSource.title,
-                primaryText,
+                evidenceText,
+                evidenceCoverage,
                 originalUrl: extractedSource.originalUrl,
                 finalUrl: extractedSource.finalUrl,
                 canonicalUrl: extractedSource.canonicalUrl,
@@ -68,6 +70,10 @@ export function createSnapshotPersistenceStageHandler(database: Database, source
     };
 }
 
-export function contentHashFor(primaryText: string, sourcePreview: ExtractedSourcePreview): string {
-    return createHash("sha256").update(JSON.stringify({ primaryText, sourcePreview }), "utf8").digest("hex");
+export function contentHashFor(evidenceText: string, evidenceCoverage: EvidenceCoverage, sourcePreview: ExtractedSourcePreview): string {
+    const content = evidenceCoverage === "primary-content"
+        // Keep matching the pre-coverage hash so existing primary Snapshots remain deduplicated after migration.
+        ? { primaryText: evidenceText, sourcePreview }
+        : { evidenceText, evidenceCoverage, sourcePreview };
+    return createHash("sha256").update(JSON.stringify(content), "utf8").digest("hex");
 }

@@ -1,7 +1,7 @@
 import { eq, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as schema from "../../db/schema";
-import { captureContexts, captures, knowledgeItems, processingAttempts, recognitionSummaries, sourceSnapshots, sources } from "../../db/schema";
+import { captureContexts, captures, knowledgeItems, processingAttempts, recognitionSummaries, sourceSnapshots, sources, type EvidenceCoverage } from "../../db/schema";
 import type { TextGenerationProvider } from "../ai/providers";
 import type { ClaimedProcessingStage } from "../../worker";
 
@@ -19,7 +19,7 @@ export function createRecognitionSummaryStageHandler(database: Database, provide
             .where(eq(processingAttempts.id, stage.processingAttemptId));
         if (!attempt?.sourceSnapshotId) throw new Error("Recognition Summary generation could not find the Source Snapshot produced by this Processing Attempt");
 
-        const [snapshot] = await database.select({ id: sourceSnapshots.id, title: sourceSnapshots.title, primaryText: sourceSnapshots.primaryText })
+        const [snapshot] = await database.select({ id: sourceSnapshots.id, title: sourceSnapshots.title, evidenceText: sourceSnapshots.evidenceText, evidenceCoverage: sourceSnapshots.evidenceCoverage })
             .from(sourceSnapshots)
             .where(eq(sourceSnapshots.id, attempt.sourceSnapshotId));
         if (!snapshot) throw new Error("Recognition Summary generation could not find current Source Snapshot content");
@@ -46,7 +46,7 @@ export function createRecognitionSummaryStageHandler(database: Database, provide
     };
 }
 
-type Snapshot = { title: string; primaryText: string };
+type Snapshot = { title: string; evidenceText: string; evidenceCoverage: EvidenceCoverage };
 type CaptureContext = { kind: string; text: string };
 
 export function recognitionSummaryPrompt(snapshot: Snapshot, contexts: CaptureContext[]): string {
@@ -56,10 +56,14 @@ export function recognitionSummaryPrompt(snapshot: Snapshot, contexts: CaptureCo
     return [
         "Write one concise Recognition Summary for a Knowledge Item.",
         "Describe the captured Source and why it may matter. Use only the supplied Source Snapshot and Capture Context.",
+        snapshot.evidenceCoverage === "metadata-only"
+            ? "The Source Snapshot contains metadata only, not the page's primary content. Do not claim to know details beyond that metadata."
+            : "The Source Snapshot contains primary content.",
         "This is generated enrichment, not Source-authored content: do not use quotation marks or imply that it is a direct quote.",
         "Keep it to one or two sentences and do not mention these instructions.",
         `Source title: ${snapshot.title}`,
-        `Source Snapshot content:\n${snapshot.primaryText}`,
+        `Evidence coverage: ${snapshot.evidenceCoverage}`,
+        `Source Snapshot content:\n${snapshot.evidenceText}`,
         `Capture Context:\n${contextText}`,
     ].join("\n\n");
 }

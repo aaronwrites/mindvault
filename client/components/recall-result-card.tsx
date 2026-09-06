@@ -39,7 +39,7 @@ export function RecallResultCard({ result }: { result: RecallKnowledgeItem }) {
           {result.excerpts.map((excerpt, index) => (
             <blockquote key={`${excerpt.origin}-${index}`} className="space-y-1 border-l-2 pl-3 text-sm">
               <p>{excerpt.text}</p>
-              <footer className="text-muted-foreground">{originLabels[excerpt.origin]}</footer>
+              <footer className="text-muted-foreground">{originLabels[excerpt.origin]}{excerpt.sourceSnapshot?.evidenceCoverage === "metadata-only" ? " · metadata-only evidence" : ""}</footer>
             </blockquote>
           ))}
         </section>

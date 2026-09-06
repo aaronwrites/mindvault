@@ -204,6 +204,7 @@ describe("URL Capture", () => {
                     kind: "web",
                 },
                 sourcePreview: null,
+                evidenceCoverage: null,
                 captureContexts: [
                     { kind: "selected-source-text", summary: "A memorable source-authored detail." },
                     { kind: "personal-note", summary: "Use this in the retrieval design." },

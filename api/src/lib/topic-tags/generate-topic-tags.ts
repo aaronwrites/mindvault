@@ -1,7 +1,7 @@
 import { eq, inArray } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as schema from "../../db/schema";
-import { captureContexts, captures, knowledgeItemTopicTags, knowledgeItems, processingAttempts, sourceSnapshots, sources, topicTagAliases, topicTags } from "../../db/schema";
+import { captureContexts, captures, knowledgeItemTopicTags, knowledgeItems, processingAttempts, sourceSnapshots, sources, topicTagAliases, topicTags, type EvidenceCoverage } from "../../db/schema";
 import type { GeneratedTopicTag, TopicTagGenerationProvider } from "../ai/providers";
 import type { ClaimedProcessingStage } from "../../worker";
 import { displayTopicTagName, normalizeTopicTagAlias } from "./normalize-topic-tag";
@@ -19,7 +19,7 @@ export function createTopicTagGenerationStageHandler(database: Database, provide
             .where(eq(processingAttempts.id, stage.processingAttemptId));
         if (!attempt?.sourceSnapshotId) throw new Error("Topic Tag generation could not find the Source Snapshot produced by this Processing Attempt");
 
-        const [snapshot] = await database.select({ id: sourceSnapshots.id, title: sourceSnapshots.title, primaryText: sourceSnapshots.primaryText })
+        const [snapshot] = await database.select({ id: sourceSnapshots.id, title: sourceSnapshots.title, evidenceText: sourceSnapshots.evidenceText, evidenceCoverage: sourceSnapshots.evidenceCoverage })
             .from(sourceSnapshots)
             .where(eq(sourceSnapshots.id, attempt.sourceSnapshotId));
         if (!snapshot) throw new Error("Topic Tag generation could not find Source Snapshot content");
@@ -50,13 +50,16 @@ export function createTopicTagGenerationStageHandler(database: Database, provide
     };
 }
 
-type Snapshot = { title: string; primaryText: string };
+type Snapshot = { title: string; evidenceText: string; evidenceCoverage: EvidenceCoverage };
 type CaptureContext = { kind: string; text: string };
 type NormalizedTopicTag = { canonicalName: string; normalizedName: string; aliases: Array<{ alias: string; normalizedAlias: string }> };
 
 export function topicTagGenerationPrompt(snapshot: Snapshot, contexts: CaptureContext[]): string {
     const context = contexts.map(item => `${item.kind === "personal-note" ? "Personal note" : "Selected source text"}: ${item.text}`).join("\n");
-    return `Generate 3-6 reusable Topic Tags from this Source Snapshot and Capture Context. Return JSON only: an array of objects with a canonical display name and known aliases. Use aliases only for genuinely equivalent abbreviations or alternate names; never merge related but distinct concepts.\n\nSource title: ${snapshot.title}\nSource content:\n${snapshot.primaryText}\n\nCapture Context:\n${context || "None"}`;
+    const coverageInstruction = snapshot.evidenceCoverage === "metadata-only"
+        ? "The Source Snapshot is metadata only, not the page's primary content. Generate tags only from that limited evidence."
+        : "The Source Snapshot contains primary content.";
+    return `Generate 3-6 reusable Topic Tags from this Source Snapshot and Capture Context. Return JSON only: an array of objects with a canonical display name and known aliases. Use aliases only for genuinely equivalent abbreviations or alternate names; never merge related but distinct concepts.\n\n${coverageInstruction}\nEvidence coverage: ${snapshot.evidenceCoverage}\nSource title: ${snapshot.title}\nSource content:\n${snapshot.evidenceText}\n\nCapture Context:\n${context || "None"}`;
 }
 
 function normalizeGeneratedTags(tags: GeneratedTopicTag[]): NormalizedTopicTag[] {

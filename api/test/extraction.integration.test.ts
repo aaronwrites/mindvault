@@ -15,6 +15,84 @@ afterEach(async () => {
 });
 
 describe("Extraction", () => {
+    test.skipIf(!process.env.TEST_DATABASE_URL)("indexes informative metadata-only evidence with explicit limited coverage", async () => {
+        harness = await createIntegrationHarness(
+            database => createApp({ database: database.db, embeddingProvider: embeddings }),
+            (database, sourceServer) => createArticleProcessingWorker({ database: database.db, sourceFetchOptions: sourceServer.safeFetchDependencies(), embeddingProvider: embeddings, summaryProvider: summaries, topicTagProvider: topicTags, maxAttempts: 1 }),
+        );
+        const capture = async (path: string) => {
+            const response = await fetch(`${harness!.apiBaseUrl}/captures`, {
+                method: "POST", headers: { "content-type": "application/json" },
+                body: JSON.stringify({ url: harness!.sourceServer.fetchUrl(path) }),
+            });
+            const result = await response.json() as { knowledgeItemId: number };
+            await harness!.drainWorker();
+            return result;
+        };
+
+        const descriptionOnly = await capture("/metadata/description-only");
+        const titleOnly = await capture("/metadata/title-only");
+        const homepage = await capture("/metadata/homepage");
+        const genericPost = await capture("/metadata/generic-post");
+        const genericPlatformPost = await capture("/posts/generic-platform");
+
+        for (const item of [descriptionOnly, titleOnly, homepage]) {
+            expect(await (await fetch(`${harness.apiBaseUrl}/knowledge-items/${item.knowledgeItemId}`)).json()).toEqual(expect.objectContaining({
+                availability: "ready",
+                evidenceCoverage: "metadata-only",
+                recognitionSummary: "deterministic generated text",
+                topicTags: ["Testing"],
+            }));
+        }
+        expect(await (await fetch(`${harness.apiBaseUrl}/knowledge-items/${genericPost.knowledgeItemId}`)).json()).toEqual(expect.objectContaining({
+            availability: "needs-attention",
+            evidenceCoverage: null,
+            latestAttempt: expect.objectContaining({ failureReason: "This Source has inadequate meaningful text" }),
+        }));
+        expect(await (await fetch(`${harness.apiBaseUrl}/knowledge-items/${genericPlatformPost.knowledgeItemId}`)).json()).toEqual(expect.objectContaining({
+            availability: "needs-attention",
+            evidenceCoverage: null,
+            latestAttempt: expect.objectContaining({ failureReason: "This Source has inadequate meaningful text" }),
+        }));
+        const snapshots = await harness.database.pool.query<{ evidence_coverage: string; primary_text: string }>(`
+            SELECT evidence_coverage, primary_text FROM source_snapshots ORDER BY id
+        `);
+        expect(snapshots.rows).toEqual([
+            { evidence_coverage: "metadata-only", primary_text: "Source-provided description: A guide to recovering a PostgreSQL database after an accidental schema migration." },
+            { evidence_coverage: "metadata-only", primary_text: "Source-provided title: How PostgreSQL logical replication keeps read models current" },
+            { evidence_coverage: "metadata-only", primary_text: "Source-provided description: Signal Garden is an independent studio that builds accessible tools for neighborhood climate resilience." },
+        ]);
+    });
+
+    test.skipIf(!process.env.TEST_DATABASE_URL)("retains and indexes reduced-evidence Refreshes without replacing current primary knowledge", async () => {
+        harness = await createIntegrationHarness(
+            database => createApp({ database: database.db, embeddingProvider: embeddings }),
+            (database, sourceServer) => createArticleProcessingWorker({ database: database.db, sourceFetchOptions: sourceServer.safeFetchDependencies(), embeddingProvider: embeddings, summaryProvider: summaries, topicTagProvider: topicTags }),
+        );
+        const captureResponse = await fetch(`${harness.apiBaseUrl}/captures`, {
+            method: "POST", headers: { "content-type": "application/json" },
+            body: JSON.stringify({ url: harness.sourceServer.fetchUrl("/articles/reduced-evidence") }),
+        });
+        const capture = await captureResponse.json() as { knowledgeItemId: number; sourceId: number };
+        await harness.drainWorker();
+
+        harness.sourceServer.setReducedEvidenceVersion(2);
+        expect((await fetch(`${harness.apiBaseUrl}/knowledge-items/${capture.knowledgeItemId}/refresh`, { method: "POST" })).status).toBe(202);
+        await harness.drainWorker();
+
+        const snapshots = await harness.database.pool.query<{ evidence_coverage: string; primary_text: string }>(`
+            SELECT evidence_coverage, primary_text FROM source_snapshots WHERE source_id = $1 ORDER BY id
+        `, [capture.sourceId]);
+        expect(snapshots.rows).toEqual([
+            expect.objectContaining({ evidence_coverage: "primary-content", primary_text: expect.stringContaining("point-in-time recovery") }),
+            { evidence_coverage: "metadata-only", primary_text: "Source-provided description: An overview of PostgreSQL recovery options after an accidental schema migration." },
+        ]);
+        expect(await (await fetch(`${harness.apiBaseUrl}/knowledge-items/${capture.knowledgeItemId}`)).json()).toEqual(expect.objectContaining({
+            availability: "ready",
+            evidenceCoverage: "primary-content",
+        }));
+    });
+
     test.skipIf(!process.env.TEST_DATABASE_URL)("projects complete Source Preview facts consistently after asynchronous processing", async () => {
         harness = await createIntegrationHarness(
             database => createApp({ database: database.db, embeddingProvider: embeddings }),
