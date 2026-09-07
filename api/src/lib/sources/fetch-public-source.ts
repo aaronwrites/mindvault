@@ -169,6 +169,8 @@ export function isPublicIpAddress(address: string): boolean {
     if (mappedIpv4) return isPublicIpv4Address(mappedIpv4);
     const value = ipv6ToBigInt(normalized);
     if (value === undefined) return false;
+    const nat64Ipv4 = ipv4FromWellKnownNat64(value);
+    if (nat64Ipv4) return isPublicIpv4Address(nat64Ipv4);
 
     return inIpv6Range(value, "2000::", 3)
         && !inIpv6Range(value, "::", 128)
@@ -360,4 +362,10 @@ function inIpv6Range(value: bigint, prefix: string, bits: number): boolean {
     if (start === undefined) return false;
     const shift = BigInt(128 - bits);
     return (value >> shift) === (start >> shift);
+}
+
+function ipv4FromWellKnownNat64(value: bigint): string | undefined {
+    if (!inIpv6Range(value, "64:ff9b::", 96)) return undefined;
+    const embedded = Number(value & 0xffff_ffffn);
+    return [24, 16, 8, 0].map(shift => (embedded >>> shift) & 0xff).join(".");
 }

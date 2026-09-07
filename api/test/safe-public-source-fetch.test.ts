@@ -266,6 +266,9 @@ describe("public Source fetch policy", () => {
         expect(isPublicIpAddress("192.52.193.1")).toBe(false);
         expect(isPublicIpAddress("192.175.48.1")).toBe(false);
         expect(isPublicIpAddress("::1")).toBe(false);
+        expect(isPublicIpAddress("64:ff9b::d8c6:4f01")).toBe(true);
+        expect(isPublicIpAddress("64:ff9b::7f00:1")).toBe(false);
+        expect(isPublicIpAddress("64:ff9b::a00:1")).toBe(false);
         expect(isPublicIpAddress("100::1")).toBe(false);
         expect(isPublicIpAddress("2001::1")).toBe(false);
         expect(isPublicIpAddress("3fff::1")).toBe(false);
