@@ -6,6 +6,14 @@ type SourcePreview = KnowledgeItem["sourcePreview"];
 export function SourcePreviewMedia({ preview }: { preview: SourcePreview }) {
   if (preview?.previewImageUrl) {
     // Retained API media is already bounded and validated; Next's optimizer cannot fetch this private API endpoint.
+    if (preview.previewImagePresentation === "icon") {
+      return (
+        <div className="flex aspect-[16/7] items-center justify-center bg-muted">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={preview.previewImageUrl} alt={preview.previewImageAlt ?? "Website icon"} className="size-16 max-h-16 max-w-16 object-contain [image-rendering:auto]" />
+        </div>
+      );
+    }
     // eslint-disable-next-line @next/next/no-img-element
     return <img src={preview.previewImageUrl} alt={preview.previewImageAlt ?? ""} className="aspect-[16/7] w-full object-cover" />;
   }

@@ -33,7 +33,7 @@ export type SafeFetchOptions = SafeFetchDependencies & {
     maxRedirects?: number;
 };
 
-export type SafeFetchResponseProfile = "public-textual-source" | "preview-media";
+export type SafeFetchResponseProfile = "public-html-source" | "public-text-fallback" | "preview-media";
 
 export type SafeFetchFailure =
     | { kind: "unsupported-protocol"; url: string }
@@ -63,13 +63,18 @@ export type SafeFetchResult =
 const defaultTimeoutMs = 10_000;
 const defaultMaxResponseBytes = 1_048_576;
 const defaultMaxRedirects = 5;
-const previewMediaMaxResponseBytes = 524_288;
+// Fetch enough of a large social preview to derive a bounded static thumbnail. The
+// bytes retained in PostgreSQL are subject to a much smaller limit downstream.
+const previewMediaMaxResponseBytes = 8_388_608;
 
 class TransportTimeoutError extends Error {}
 class ResponseTooLargeError extends Error {}
 
 export async function fetchPublicSource(value: string, options: SafeFetchOptions = {}): Promise<SafeFetchResult> {
-    return fetchPublicResource(value, { ...options, responseProfile: "public-textual-source" });
+    const htmlResult = await fetchPublicResource(value, { ...options, responseProfile: "public-html-source" });
+    if (!shouldTryTextFallback(htmlResult)) return htmlResult;
+
+    return fetchPublicResource(value, { ...options, responseProfile: "public-text-fallback" });
 }
 
 export async function fetchPublicPreviewMedia(value: string, options: SafeFetchOptions = {}): Promise<SafeFetchResult> {
@@ -85,7 +90,7 @@ export async function fetchPublicResource(value: string, options: SafeFetchOptio
     }
     if (!isSupportedProtocol(original)) return { ok: false, failure: { kind: "unsupported-protocol", url: original.toString() } };
 
-    const responseProfile = options.responseProfile ?? "public-textual-source";
+    const responseProfile = options.responseProfile ?? "public-html-source";
     const timeoutMs = boundedLimit(options.timeoutMs, defaultTimeoutMs);
     const maxResponseBytes = boundedLimit(options.maxResponseBytes, responseProfile === "preview-media" ? previewMediaMaxResponseBytes : defaultMaxResponseBytes);
     const maxRedirects = boundedLimit(options.maxRedirects, defaultMaxRedirects);
@@ -188,15 +193,25 @@ function isSupportedProtocol(url: URL): boolean {
 
 function isAllowedContentType(contentType: string, responseProfile: SafeFetchResponseProfile): boolean {
     if (responseProfile === "preview-media") return supportedPreviewMediaContentTypes.has(contentType);
-    return contentType.startsWith("text/") || contentType === "application/xhtml+xml" || contentType === "application/xml";
+    if (responseProfile === "public-html-source") return contentType === "text/html" || contentType === "application/xhtml+xml";
+    return supportedTextFallbackContentTypes.has(contentType);
 }
 
-const supportedPreviewMediaContentTypes = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
+const supportedPreviewMediaContentTypes = new Set(["image/png", "image/jpeg", "image/gif", "image/webp", "image/x-icon", "image/vnd.microsoft.icon"]);
+const supportedTextFallbackContentTypes = new Set(["text/plain", "text/markdown", "text/x-markdown", "application/markdown"]);
 
 function acceptHeaderFor(responseProfile: SafeFetchResponseProfile): string {
-    return responseProfile === "preview-media"
-        ? "image/png, image/jpeg, image/gif, image/webp"
-        : "text/html, text/plain, application/xhtml+xml, application/xml";
+    if (responseProfile === "preview-media") return "image/png, image/jpeg, image/gif, image/webp, image/x-icon, image/vnd.microsoft.icon";
+    if (responseProfile === "public-text-fallback") return "text/markdown, text/plain;q=0.9, text/x-markdown;q=0.8, application/markdown;q=0.8";
+    return "text/html, application/xhtml+xml;q=0.9";
+}
+
+function shouldTryTextFallback(result: SafeFetchResult): boolean {
+    if (result.ok) return false;
+    if (result.failure.kind === "http-status") return result.failure.status === 406;
+    return result.failure.kind === "unsupported-content-type"
+        && result.failure.contentType !== null
+        && supportedTextFallbackContentTypes.has(result.failure.contentType);
 }
 
 function hasMatchingImageSignature(contentType: string, body: Uint8Array): boolean {
@@ -212,6 +227,9 @@ function hasMatchingImageSignature(contentType: string, body: Uint8Array): boole
     if (contentType === "image/webp") return beginsWith(82, 73, 70, 70) && body.length >= 12
         && beginsWithAt(body, 8, 87, 69, 66, 80)
         && new DataView(body.buffer, body.byteOffset, body.byteLength).getUint32(4, true) + 8 === body.length;
+    if (contentType === "image/x-icon" || contentType === "image/vnd.microsoft.icon") {
+        return body.length >= 22 && beginsWith(0, 0, 1, 0) && body[4]! > 0;
+    }
     return false;
 }
 

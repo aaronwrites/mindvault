@@ -27,7 +27,7 @@ export function classifySourceSupport(result: SafeFetchResult): SourceSupportCla
 }
 
 function classifyContentType(contentType: string | null): SourceSupportClassification {
-    if (contentType === "text/html" || contentType === "application/xhtml+xml") {
+    if (contentType === "text/html" || contentType === "application/xhtml+xml" || (contentType !== null && isPlainTextContentType(contentType))) {
         return { kind: "supported", sourceKind: "public-textual-web", adapter: "public-textual-web" };
     }
 
@@ -38,6 +38,13 @@ function classifyContentType(contentType: string | null): SourceSupportClassific
     if (!contentType) return { kind: "unsupported", sourceKind: "unknown", reason: "ambiguous-content-type" };
 
     return { kind: "unsupported", sourceKind: sourceKindFor(contentType), reason: "unsupported-content-type" };
+}
+
+function isPlainTextContentType(contentType: string): boolean {
+    return contentType === "text/plain"
+        || contentType === "text/markdown"
+        || contentType === "text/x-markdown"
+        || contentType === "application/markdown";
 }
 
 function sourceKindFor(contentType: string): "image" | "video" | "unknown" {

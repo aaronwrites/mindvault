@@ -169,6 +169,13 @@
       "when": 1788699701092,
       "tag": "0023_cool_masque",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1788707909572,
+      "tag": "0024_wild_catseye",
+      "breakpoints": true
     }
   ]
 }

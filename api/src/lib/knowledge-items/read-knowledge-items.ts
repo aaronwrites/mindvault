@@ -56,6 +56,7 @@ export type KnowledgeItemView = {
         contentType: string | null;
         previewImageUrl: string | null;
         previewImageAlt: string | null;
+        previewImagePresentation: "cover" | "icon" | null;
         faviconUrl: string | null;
     } | null;
     evidenceCoverage: EvidenceCoverage | null;
@@ -129,7 +130,7 @@ async function presentKnowledgeItems(
             .orderBy(topicTags.canonicalName),
         currentSnapshotIds.length === 0 ? [] : database.select().from(sourcePreviews)
             .where(inArray(sourcePreviews.sourceSnapshotId, currentSnapshotIds)),
-        currentSnapshotIds.length === 0 ? [] : database.select({ sourceSnapshotId: sourcePreviewMedia.sourceSnapshotId, alternativeText: sourcePreviewMedia.alternativeText }).from(sourcePreviewMedia)
+        currentSnapshotIds.length === 0 ? [] : database.select({ sourceSnapshotId: sourcePreviewMedia.sourceSnapshotId, alternativeText: sourcePreviewMedia.alternativeText, presentation: sourcePreviewMedia.presentation }).from(sourcePreviewMedia)
             .where(inArray(sourcePreviewMedia.sourceSnapshotId, currentSnapshotIds)),
         currentSnapshotIds.length === 0 ? [] : database.select({ id: sourceSnapshots.id, evidenceCoverage: sourceSnapshots.evidenceCoverage }).from(sourceSnapshots)
             .where(inArray(sourceSnapshots.id, currentSnapshotIds)),
@@ -231,13 +232,14 @@ function extractedPreviewFor(preview: ExtractedSourcePreview | undefined): Knowl
         contentType: preview.contentType,
         previewImageUrl: null,
         previewImageAlt: null,
+        previewImagePresentation: null,
         faviconUrl: preview.faviconUrl,
     };
 }
 
 function previewFor(
     preview: typeof sourcePreviews.$inferSelect | undefined,
-    media: { sourceSnapshotId: number; alternativeText: string | null } | undefined,
+    media: { sourceSnapshotId: number; alternativeText: string | null; presentation: "cover" | "icon" } | undefined,
 ): KnowledgeItemView["sourcePreview"] {
     if (!preview) return null;
     return {
@@ -249,6 +251,7 @@ function previewFor(
         contentType: preview.contentType,
         previewImageUrl: media ? `/source-preview-media/${preview.sourceSnapshotId}` : null,
         previewImageAlt: media?.alternativeText ?? null,
+        previewImagePresentation: media?.presentation ?? null,
         faviconUrl: preview.faviconUrl,
     };
 }

@@ -27,6 +27,7 @@ export type KnowledgeItem = {
     contentType: string | null;
     previewImageUrl: string | null;
     previewImageAlt: string | null;
+    previewImagePresentation?: "cover" | "icon" | null;
     faviconUrl: string | null;
   } | null;
   evidenceCoverage: EvidenceCoverage | null;

@@ -173,10 +173,11 @@ export const sourcePreviewMedia = pgTable("source_preview_media", {
     sourceSnapshotId: integer("source_snapshot_id").primaryKey().references(() => sourceSnapshots.id, { onDelete: "cascade" }),
     sourceUrl: text("source_url").notNull(),
     contentType: text("content_type").notNull(),
+    presentation: text("presentation").$type<"cover" | "icon">().notNull().default("cover"),
     alternativeText: text("alternative_text"),
     bytes: bytea("bytes").notNull(),
     createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+}, table => [check("source_preview_media_presentation", sql`${table.presentation} IN ('cover', 'icon')`)]);
 
 export const recognitionSummaries = pgTable("recognition_summaries", {
     knowledgeItemId: integer("knowledge_item_id").primaryKey().references(() => knowledgeItems.id, { onDelete: "cascade" }),

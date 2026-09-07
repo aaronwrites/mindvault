@@ -352,6 +352,32 @@ describe("Knowledge Item Capture", () => {
     expect(screen.getByLabelText("Generated Topic Tags").textContent).toContain("durable capture");
   });
 
+  test("renders a retained favicon as a contained icon instead of stretching it as a cover", async () => {
+    getKnowledgeItems.mockResolvedValue([{
+      ...processingItem,
+      availability: "ready",
+      sourcePreview: {
+        title: "Page with icon fallback",
+        description: null,
+        websiteName: "Example",
+        author: null,
+        publishedAt: null,
+        contentType: null,
+        previewImageUrl: "/source-preview-media/7",
+        previewImageAlt: "Website icon",
+        previewImagePresentation: "icon",
+        faviconUrl: "https://example.com/favicon.ico",
+      },
+      latestAttempt: { ...processingItem.latestAttempt!, status: "completed" },
+    }]);
+    renderHome();
+
+    const icon = await screen.findByRole("img", { name: "Website icon" });
+    expect(icon.className).toContain("object-contain");
+    expect(icon.className).not.toContain("w-full");
+    expect(icon.parentElement?.className).toContain("items-center");
+  });
+
   test("keeps recognizable Source facts visible when webpage processing needs attention", async () => {
     getKnowledgeItems.mockResolvedValue([{
       ...processingItem,

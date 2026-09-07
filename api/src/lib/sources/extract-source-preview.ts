@@ -21,6 +21,8 @@ export type ExtractedSourcePreview = {
     previewImageUrl: string | null;
     previewImageAlt: string | null;
     faviconUrl: string | null;
+    /** A conventional fallback tried if a declared icon cannot be safely retained. */
+    faviconFallbackUrl?: string | null;
 };
 
 export type ParsedPublicTextualSource = {
@@ -56,9 +58,10 @@ export function parsePublicTextualSource(html: string, finalUrl: string): Parsed
         author: firstUsable(meta.get("article:author"), meta.get("author"), structured.author),
         publishedAt: validPublicationDate(firstUsable(meta.get("article:published_time"), meta.get("date"), meta.get("datepublished"), structured.datePublished))?.toISOString() ?? null,
         contentType: firstUsable(meta.get("og:type"), structured.type),
-        previewImageUrl: absoluteHttpUrl(firstUsable(meta.get("og:image"), meta.get("twitter:image"), structured.image), finalUrl),
+        previewImageUrl: absoluteHttpUrl(firstUsable(meta.get("og:image:secure_url"), meta.get("og:image"), meta.get("twitter:image"), structured.image), finalUrl),
         previewImageAlt: firstUsable(meta.get("og:image:alt"), meta.get("twitter:image:alt"), structured.imageAlt),
-        faviconUrl: absoluteHttpUrl(meta.get("link:icon"), finalUrl),
+        faviconUrl: bestFaviconUrl(elements, finalUrl),
+        faviconFallbackUrl: absoluteHttpUrl("/favicon.ico", finalUrl),
     };
     const metadataEvidence = qualityFailure === "This Source has inadequate meaningful text"
         ? informativeMetadataEvidence(sourcePreview, finalUrl)
@@ -146,10 +149,32 @@ function metadata(nodes: HtmlNode[]): Map<string, string> {
             const rel = (attributes.get("rel") ?? "").toLowerCase().split(/\s+/);
             const href = attributes.get("href");
             if (href && rel.includes("canonical") && !values.has("link:canonical")) values.set("link:canonical", href);
-            if (href && rel.some(value => value === "icon" || value === "shortcut" || value === "apple-touch-icon") && !values.has("link:icon")) values.set("link:icon", href);
         }
     }
     return values;
+}
+
+function bestFaviconUrl(nodes: HtmlNode[], finalUrl: string): string | null {
+    const candidates = nodes.flatMap((node, index) => {
+        if (node.tagName !== "link") return [];
+        const attributes = attributesFor(node);
+        const rel = (attributes.get("rel") ?? "").toLowerCase().split(/\s+/);
+        const href = attributes.get("href");
+        if (!href || !rel.some(value => value === "icon" || value === "shortcut" || value === "apple-touch-icon")) return [];
+        const url = absoluteHttpUrl(href, finalUrl);
+        if (!url) return [];
+        const type = (attributes.get("type") ?? "").toLowerCase();
+        const looksSvg = type === "image/svg+xml" || /\.svg(?:$|[?#])/i.test(url);
+        if (looksSvg) return []; // SVG is intentionally not retained or rendered as untrusted active markup.
+        const sizes = attributes.get("sizes") ?? "";
+        const largestDeclaredSize = [...sizes.matchAll(/(\d+)x(\d+)/gi)]
+            .reduce((largest, match) => Math.max(largest, Number(match[1]) * Number(match[2])), 0);
+        const rasterHint = /^image\/(png|jpeg|gif|webp|x-icon|vnd\.microsoft\.icon)$/.test(type)
+            || /\.(png|jpe?g|gif|webp|ico)(?:$|[?#])/i.test(url);
+        return [{ url, score: largestDeclaredSize * 100 + (rel.includes("apple-touch-icon") ? 10 : 0) + (rasterHint ? 1 : 0) - index / 10_000 }];
+    });
+    candidates.sort((left, right) => right.score - left.score);
+    return candidates[0]?.url ?? absoluteHttpUrl("/favicon.ico", finalUrl);
 }
 
 function attributesFor(node: HtmlNode): Map<string, string> {

@@ -7,6 +7,7 @@ import {
     type SafeFetchTransport,
 } from "../src/lib/sources/fetch-public-source";
 import { classifySourceSupport } from "../src/lib/sources/classify-source-support";
+import { parsePublicTextualSource } from "../src/lib/sources/extract-source-preview";
 
 type StubResponse = {
     status: number;
@@ -36,6 +37,112 @@ function transport(responses: Record<string, StubResponse>): SafeFetchTransport 
 }
 
 describe("public Source fetch policy", () => {
+    test("prefers HTML so content-negotiating documentation sites return rich preview metadata", async () => {
+        const requestedAcceptHeaders: string[] = [];
+        const result = await fetchPublicSource("https://docs.example/overview", {
+            resolveAddresses: publicAddressResolver,
+            transport: {
+                async fetch(target) {
+                    requestedAcceptHeaders.push(target.accept);
+                    const servesHtml = target.accept.startsWith("text/html");
+                    return {
+                        status: 200,
+                        headers: { "content-type": servesHtml ? "text/html; charset=utf-8" : "text/markdown" },
+                        body: new TextEncoder().encode(servesHtml
+                            ? '<html><head><meta property="og:title" content="Documentation overview"><meta property="og:image" content="/preview.png"></head><body><main>Useful documentation content.</main></body></html>'
+                            : "# Documentation overview"),
+                    };
+                },
+            },
+        });
+
+        expect(result).toEqual({
+            ok: true,
+            response: expect.objectContaining({ contentType: "text/html" }),
+            permanentRedirects: [],
+        });
+        expect(requestedAcceptHeaders).toEqual(["text/html, application/xhtml+xml;q=0.9"]);
+        expect(classifySourceSupport(result)).toEqual({
+            kind: "supported",
+            sourceKind: "public-textual-web",
+            adapter: "public-textual-web",
+        });
+        if (!result.ok) throw new Error("Expected negotiated HTML");
+        expect(parsePublicTextualSource(new TextDecoder().decode(result.response.body), result.response.finalUrl).sourcePreview).toEqual(
+            expect.objectContaining({
+                title: "Documentation overview",
+                previewImageUrl: "https://docs.example/preview.png",
+            }),
+        );
+    });
+
+    test("retries with explicit Markdown negotiation when an HTML representation is unavailable", async () => {
+        const requestedAcceptHeaders: string[] = [];
+        const result = await fetchPublicSource("https://example.com/readme", {
+            resolveAddresses: publicAddressResolver,
+            transport: {
+                async fetch(target) {
+                    requestedAcceptHeaders.push(target.accept);
+                    if (target.accept.startsWith("text/html")) {
+                        return { status: 406, headers: {}, body: new Uint8Array() };
+                    }
+                    return {
+                        status: 200,
+                        headers: { "content-type": "text/markdown; charset=utf-8" },
+                        body: new TextEncoder().encode("# Project README\n\nThis Markdown source contains enough useful documentation to be retained as primary evidence when the origin cannot provide an HTML representation. It remains inside the same bounded public-source fetch policy."),
+                    };
+                },
+            },
+        });
+
+        expect(requestedAcceptHeaders).toEqual([
+            "text/html, application/xhtml+xml;q=0.9",
+            "text/markdown, text/plain;q=0.9, text/x-markdown;q=0.8, application/markdown;q=0.8",
+        ]);
+        expect(result).toEqual({
+            ok: true,
+            response: expect.objectContaining({ contentType: "text/markdown" }),
+            permanentRedirects: [],
+        });
+        expect(classifySourceSupport(result)).toEqual({
+            kind: "supported",
+            sourceKind: "public-textual-web",
+            adapter: "public-textual-web",
+        });
+        if (!result.ok) throw new Error("Expected Markdown fallback");
+        expect(parsePublicTextualSource(new TextDecoder().decode(result.response.body), result.response.finalUrl)).toEqual(
+            expect.objectContaining({
+                evidenceCoverage: "primary-content",
+                failureReason: null,
+            }),
+        );
+    });
+
+    test("retries a server-selected plain-text representation through the bounded fallback profile", async () => {
+        const requestedAcceptHeaders: string[] = [];
+        const result = await fetchPublicSource("https://example.com/robots.txt", {
+            resolveAddresses: publicAddressResolver,
+            transport: {
+                async fetch(target) {
+                    requestedAcceptHeaders.push(target.accept);
+                    return {
+                        status: 200,
+                        headers: { "content-type": "text/plain" },
+                        body: new TextEncoder().encode("User-agent: *\nDisallow: /private"),
+                    };
+                },
+            },
+        });
+
+        expect(requestedAcceptHeaders).toHaveLength(2);
+        expect(result).toEqual({
+            ok: true,
+            response: expect.objectContaining({ contentType: "text/plain" }),
+            permanentRedirects: [],
+        });
+        expect(classifySourceSupport(result)?.kind).toBe("supported");
+    });
+
     test("fetches only a bounded, correctly labelled raster preview image", async () => {
         const png = Uint8Array.from(Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL9aQAAAABJRU5ErkJggg==", "base64"));
 
