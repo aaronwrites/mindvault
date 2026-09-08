@@ -3,6 +3,7 @@ import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as schema from "../../db/schema";
 import { captureContexts, captures, knowledgeItems, processingAttempts, recognitionSummaries, sourceSnapshots, sources, type EvidenceCoverage } from "../../db/schema";
 import type { TextGenerationProvider } from "../ai/providers";
+import { limitGenerationInput } from "../ai/limit-generation-input";
 import type { ClaimedProcessingStage } from "../../worker";
 
 type Database = NodePgDatabase<typeof schema>;
@@ -53,7 +54,7 @@ export function recognitionSummaryPrompt(snapshot: Snapshot, contexts: CaptureCo
     const contextText = contexts.length === 0
         ? "No Capture Context was supplied."
         : contexts.map(context => `${context.kind === "personal-note" ? "Personal note" : "Selected source text"}: ${context.text}`).join("\n");
-    return [
+    return limitGenerationInput([
         "Write one concise Recognition Summary for a Knowledge Item.",
         "Describe the captured Source and why it may matter. Use only the supplied Source Snapshot and Capture Context.",
         snapshot.evidenceCoverage === "metadata-only"
@@ -65,5 +66,5 @@ export function recognitionSummaryPrompt(snapshot: Snapshot, contexts: CaptureCo
         `Evidence coverage: ${snapshot.evidenceCoverage}`,
         `Source Snapshot content:\n${snapshot.evidenceText}`,
         `Capture Context:\n${contextText}`,
-    ].join("\n\n");
+    ].join("\n\n"));
 }

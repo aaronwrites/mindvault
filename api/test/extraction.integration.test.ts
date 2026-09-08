@@ -121,6 +121,7 @@ describe("Extraction", () => {
             contentType: "article",
             previewImageUrl: expect.stringMatching(/^\/source-preview-media\/\d+$/),
             previewImageAlt: "A durable knowledge card",
+            previewImagePresentation: "cover",
             faviconUrl: harness.sourceServer.fetchUrl("/favicon.ico"),
         };
         const listedItems = await listResponse.json() as Array<unknown>;

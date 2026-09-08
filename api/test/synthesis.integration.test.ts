@@ -116,6 +116,22 @@ describe("collection-wide Synthesis", () => {
             evidence: [expect.objectContaining({ knowledgeItemId: security.knowledgeItemId })],
         }));
 
+        const callsBeforeUnrelatedQuestion = synthesisProvider.inputs.length;
+        const unrelatedQuestion = await fetch(`${harness.apiBaseUrl}/synthesis`, {
+            method: "POST", headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+                question: "What is the capital of France?",
+                conversation: [{ question: primaryQuestion, answer: "It preserves evidence from the captured page." }],
+            }),
+        });
+        expect(unrelatedQuestion.status).toBe(200);
+        expect(await unrelatedQuestion.json()).toEqual({
+            answer: "I don't have enough captured evidence to answer that question.",
+            citations: [],
+            insufficientEvidence: true,
+        });
+        expect(synthesisProvider.inputs).toHaveLength(callsBeforeUnrelatedQuestion);
+
         const metadataResponse = await fetch(`${harness.apiBaseUrl}/synthesis`, {
             method: "POST", headers: { "content-type": "application/json" },
             body: JSON.stringify({ question: "What keeps read models current through logical replication?" }),
@@ -152,6 +168,19 @@ describe("collection-wide Synthesis", () => {
         });
         expect(invalidCitation.status).toBe(502);
         expect(await invalidCitation.json()).toEqual({ error: "Answer generation is temporarily unavailable. Please try again." });
+        synthesisProvider.citationIdsOverride = undefined;
+
+        synthesisProvider.citationIdsOverride = [];
+        const uncitedAnswer = await fetch(`${harness.apiBaseUrl}/synthesis`, {
+            method: "POST", headers: { "content-type": "application/json" },
+            body: JSON.stringify({ question: "How does a durable Source Snapshot preserve knowledge?" }),
+        });
+        expect(uncitedAnswer.status).toBe(200);
+        expect(await uncitedAnswer.json()).toEqual({
+            answer: "I couldn't find captured evidence that answers that question.",
+            citations: [],
+            insufficientEvidence: true,
+        });
         synthesisProvider.citationIdsOverride = undefined;
 
         const callsBeforeInsufficientEvidence = synthesisProvider.inputs.length;

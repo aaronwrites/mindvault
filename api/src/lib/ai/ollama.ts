@@ -7,6 +7,7 @@ import type {
     TextGenerationProvider,
     TopicTagGenerationProvider,
 } from "./providers";
+import { MAXIMUM_GENERATION_INPUT_BYTES } from "./limit-generation-input";
 
 const DEFAULT_BASE_URL = "http://127.0.0.1:11434";
 const DEFAULT_GENERATION_MODEL = "gemma3:latest";
@@ -14,7 +15,6 @@ const DEFAULT_EMBEDDING_MODEL = "nomic-embed-text:latest";
 const GENERATION_TIMEOUT_MS = 180_000;
 const EMBEDDING_TIMEOUT_MS = 60_000;
 const MODEL_DISCOVERY_TIMEOUT_MS = 10_000;
-const MAXIMUM_GENERATION_INPUT_BYTES = 28_000;
 const PREFIX_POLICY_VERSION = "nomic-search-v1";
 
 type Fetch = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;

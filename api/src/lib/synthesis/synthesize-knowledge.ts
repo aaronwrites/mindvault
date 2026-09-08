@@ -29,7 +29,10 @@ export async function synthesizeKnowledge(
     embeddingProvider: EmbeddingProvider,
     generationProvider: SynthesisGenerationProvider,
 ): Promise<SynthesisResult> {
-    const recalled = await recallKnowledgeItems(database, retrievalQueryFor(question, conversation), embeddingProvider);
+    // Conversation provides context to generation, but it must not steer retrieval on
+    // its own. Otherwise an unrelated new question can retrieve evidence solely
+    // because an earlier turn mentioned it.
+    const recalled = await recallKnowledgeItems(database, question, embeddingProvider);
     const evidence = evidenceFor(recalled);
     if (evidence.length === 0) {
         return {
@@ -50,17 +53,19 @@ export async function synthesizeKnowledge(
         const item = evidenceByCitationId.get(citationId);
         return item ? [item] : [];
     });
-    if (citedEvidence.length === 0) throw new Error("Generation returned no citations from the supplied evidence");
+    if (citedEvidence.length === 0) {
+        return {
+            answer: "I couldn't find captured evidence that answers that question.",
+            citations: [],
+            insufficientEvidence: true,
+        };
+    }
 
     return {
         answer: generated.answer,
         citations: citedEvidence.map(({ citationId: _citationId, text: excerpt, ...citation }) => ({ ...citation, excerpt })),
         insufficientEvidence: false,
     };
-}
-
-function retrievalQueryFor(question: string, conversation: SynthesisConversationTurn[]): string {
-    return [question, ...conversation.map(turn => turn.question)].join("\n");
 }
 
 function evidenceFor(recalled: Awaited<ReturnType<typeof recallKnowledgeItems>>): SynthesisEvidence[] {

@@ -3,6 +3,7 @@ import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as schema from "../../db/schema";
 import { captureContexts, captures, knowledgeItemTopicTags, knowledgeItems, processingAttempts, sourceSnapshots, sources, topicTagAliases, topicTags, type EvidenceCoverage } from "../../db/schema";
 import type { GeneratedTopicTag, TopicTagGenerationProvider } from "../ai/providers";
+import { limitGenerationInput } from "../ai/limit-generation-input";
 import type { ClaimedProcessingStage } from "../../worker";
 import { displayTopicTagName, normalizeTopicTagAlias } from "./normalize-topic-tag";
 
@@ -60,7 +61,7 @@ export function topicTagGenerationPrompt(snapshot: Snapshot, contexts: CaptureCo
     const coverageInstruction = snapshot.evidenceCoverage === "metadata-only"
         ? "The Source Snapshot is metadata only, not the page's primary content. Generate tags only from that limited evidence."
         : "The Source Snapshot contains primary content.";
-    return `Generate 3-6 reusable Topic Tags from this Source Snapshot and Capture Context. Return JSON only: an array of objects with a canonical display name and known aliases. Use aliases only for genuinely equivalent abbreviations or alternate names; never merge related but distinct concepts.\n\n${coverageInstruction}\nEvidence coverage: ${snapshot.evidenceCoverage}\nSource title: ${snapshot.title}\nSource content:\n${snapshot.evidenceText}\n\nCapture Context:\n${context || "None"}`;
+    return limitGenerationInput(`Generate 3-6 reusable Topic Tags from this Source Snapshot and Capture Context. Return JSON only: an array of objects with a canonical display name and known aliases. Use aliases only for genuinely equivalent abbreviations or alternate names; never merge related but distinct concepts.\n\n${coverageInstruction}\nEvidence coverage: ${snapshot.evidenceCoverage}\nSource title: ${snapshot.title}\nSource content:\n${snapshot.evidenceText}\n\nCapture Context:\n${context || "None"}`);
 }
 
 function normalizeGeneratedTags(tags: GeneratedTopicTag[]): NormalizedTopicTag[] {
