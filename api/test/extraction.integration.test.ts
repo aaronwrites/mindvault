@@ -119,7 +119,7 @@ describe("Extraction", () => {
             author: "Ada Lovelace",
             publishedAt: "2026-08-20T00:00:00.000Z",
             contentType: "article",
-            previewImageUrl: expect.stringMatching(/^\/source-preview-media\/\d+$/),
+            previewImageUrl: expect.stringMatching(/^\/source-preview-media\/\d+\?presentation=cover$/),
             previewImageAlt: "A durable knowledge card",
             previewImagePresentation: "cover",
             faviconUrl: harness.sourceServer.fetchUrl("/favicon.ico"),
@@ -255,7 +255,7 @@ describe("Extraction", () => {
             fetch(`${harness.apiBaseUrl}/knowledge-items/${capture.knowledgeItemId}`).then(response => response.json()),
             fetch(`${harness.apiBaseUrl}/search?q=later%20version`).then(response => response.json()),
         ]) as [Array<{ sourcePreview: unknown; recognitionSummary: string | null; topicTags: string[] }>, { sourcePreview: unknown; recognitionSummary: string | null; topicTags: string[] }, Array<{ sourcePreview: unknown; recognitionSummary: string | null; topicTags: string[] }>];
-        const changedPreview = expect.objectContaining({ title: "Changed article: later version", previewImageUrl: expect.stringMatching(/^\/source-preview-media\/\d+$/) });
+        const changedPreview = expect.objectContaining({ title: "Changed article: later version", previewImageUrl: expect.stringMatching(/^\/source-preview-media\/\d+\?presentation=cover$/) });
         expect(list[0]).toEqual(expect.objectContaining({ sourcePreview: changedPreview, recognitionSummary: original.recognitionSummary, topicTags: original.topicTags }));
         expect(detail).toEqual(expect.objectContaining({ sourcePreview: changedPreview, recognitionSummary: original.recognitionSummary, topicTags: original.topicTags }));
         expect(recall[0]).toEqual(expect.objectContaining({ sourcePreview: changedPreview, recognitionSummary: original.recognitionSummary, topicTags: original.topicTags }));
@@ -329,6 +329,43 @@ describe("Extraction", () => {
             organizationCondition: "complete",
             sourcePreview: expect.objectContaining({ previewImageUrl: null }),
         }));
+    });
+
+    test.skipIf(!process.env.TEST_DATABASE_URL)("upgrades an older favicon fallback when the extracted preview image is later retained for the same Snapshot", async () => {
+        harness = await createIntegrationHarness(
+            database => createApp({ database: database.db, embeddingProvider: embeddings }),
+            (database, sourceServer) => createArticleProcessingWorker({ database: database.db, sourceFetchOptions: sourceServer.safeFetchDependencies(), embeddingProvider: embeddings, summaryProvider: summaries, topicTagProvider: topicTags }),
+        );
+        const response = await fetch(`${harness.apiBaseUrl}/captures`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ url: harness.sourceServer.fetchUrl("/articles/preview-facts") }),
+        });
+        const capture = await response.json() as { knowledgeItemId: number; sourceId: number };
+        await harness.drainWorker();
+
+        // Simulate a legacy or prior-attempt fallback on the unchanged Snapshot.
+        await harness.database.pool.query(`
+            UPDATE source_preview_media
+            SET source_url = $1, presentation = 'icon', alternative_text = 'Website icon'
+            WHERE source_snapshot_id = (SELECT current_snapshot_id FROM sources WHERE id = $2)
+        `, [harness.sourceServer.fetchUrl("/favicon.ico"), capture.sourceId]);
+
+        expect((await fetch(`${harness.apiBaseUrl}/knowledge-items/${capture.knowledgeItemId}/refresh`, { method: "POST" })).status).toBe(202);
+        await harness.drainWorker();
+
+        const item = await (await fetch(`${harness.apiBaseUrl}/knowledge-items/${capture.knowledgeItemId}`)).json() as {
+            sourcePreview: { previewImageAlt: string | null; previewImagePresentation: string | null };
+        };
+        expect(item.sourcePreview).toEqual(expect.objectContaining({
+            previewImageAlt: "A durable knowledge card",
+            previewImagePresentation: "cover",
+        }));
+        const media = await harness.database.pool.query<{ source_url: string; presentation: string }>(`
+            SELECT source_url, presentation FROM source_preview_media
+            WHERE source_snapshot_id = (SELECT current_snapshot_id FROM sources WHERE id = $1)
+        `, [capture.sourceId]);
+        expect(media.rows).toEqual([{ source_url: harness.sourceServer.fetchUrl("/media/preview.png"), presentation: "cover" }]);
     });
 
     test.skipIf(!process.env.TEST_DATABASE_URL)("reconciles canonical Sources without losing Capture Context or Processing Attempt history", async () => {

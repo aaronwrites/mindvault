@@ -249,7 +249,10 @@ function previewFor(
         author: preview.author,
         publishedAt: preview.publishedAt ? toIsoString(preview.publishedAt) : null,
         contentType: preview.contentType,
-        previewImageUrl: media ? `/source-preview-media/${preview.sourceSnapshotId}` : null,
+        // Media can be upgraded from an icon fallback to the extracted cover
+        // image without changing the Snapshot id. Include its role in the URL
+        // so an immutable browser cache cannot keep serving the old fallback.
+        previewImageUrl: media ? `/source-preview-media/${preview.sourceSnapshotId}?presentation=${media.presentation}` : null,
         previewImageAlt: media?.alternativeText ?? null,
         previewImagePresentation: media?.presentation ?? null,
         faviconUrl: preview.faviconUrl,

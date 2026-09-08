@@ -1,3 +1,4 @@
+import { and, eq } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import sharp from "sharp";
 import * as schema from "../../db/schema";
@@ -34,14 +35,26 @@ export async function retainSourcePreviewMedia(
         );
         if (!retained) continue;
 
-        await database.insert(sourcePreviewMedia).values({
+        const media = {
             sourceSnapshotId,
             sourceUrl: fetched.response.finalUrl,
             contentType: retained.contentType,
             presentation: candidate.presentation,
             alternativeText: candidate.alternativeText,
             bytes: retained.bytes,
-        }).onConflictDoNothing();
+        };
+
+        // A favicon is a deliberate fallback, not the extracted preview image.
+        // A later attempt can successfully retain the declared image for the
+        // same immutable Snapshot, so allow that higher-precedence candidate to
+        // replace an earlier icon fallback. Never replace a retained cover image.
+        if (candidate.presentation === "cover") {
+            await database.delete(sourcePreviewMedia).where(and(
+                eq(sourcePreviewMedia.sourceSnapshotId, sourceSnapshotId),
+                eq(sourcePreviewMedia.presentation, "icon"),
+            ));
+        }
+        await database.insert(sourcePreviewMedia).values(media).onConflictDoNothing();
         return;
     }
 }
