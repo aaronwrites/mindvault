@@ -216,6 +216,50 @@ describe("Processing worker", () => {
         expect(runs["passage-generation"]).toBe(1);
     });
 
+    test.skipIf(!process.env.TEST_DATABASE_URL)("renews a slow stage lease and prevents overlapping runs in one worker", async () => {
+        const handlerStarted = Promise.withResolvers<void>();
+        const releaseHandler = Promise.withResolvers<void>();
+        let handlerRuns = 0;
+        let worker: ReturnType<typeof createProcessingWorker>;
+        harness = await createIntegrationHarness(database => createApp({ database: database.db }), database => {
+            worker = createProcessingWorker({
+                database: database.db,
+                workerId: "slow-worker",
+                leaseDurationMs: 90,
+                leaseRenewalIntervalMs: 20,
+                handlers: {
+                    extraction: async () => {
+                        handlerRuns += 1;
+                        handlerStarted.resolve();
+                        await releaseHandler.promise;
+                    },
+                },
+            });
+            return worker;
+        });
+        await fetch(`${harness.apiBaseUrl}/captures`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ url: "https://example.com/slow" }),
+        });
+
+        const firstRun = worker!.runEligibleWork();
+        await handlerStarted.promise;
+        expect(await worker!.runEligibleWork()).toBe(0);
+        await Bun.sleep(140);
+
+        const competingWorker = createProcessingWorker({
+            database: harness.database.db,
+            workerId: "competing-worker",
+            leaseDurationMs: 90,
+            handlers: { extraction: async () => { handlerRuns += 1; } },
+        });
+        expect(await competingWorker.runEligibleWork()).toBe(0);
+        releaseHandler.resolve();
+        expect(await firstRun).toBe(1);
+        expect(handlerRuns).toBe(1);
+    });
+
     test.skipIf(!process.env.TEST_DATABASE_URL)("manually retries only failed retrieval work without recreating the Knowledge Item", async () => {
         const runs: Record<string, number> = {};
         const embeddingProvider = new DeterministicEmbeddingProvider();

@@ -3,8 +3,7 @@ import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { sql } from "drizzle-orm";
 import { db } from "./db";
 import type { Clock, EmbeddingProvider, TextGenerationProvider, TopicTagGenerationProvider } from "./lib/ai/providers";
-import { createGeminiPassageEmbeddingProvider } from "./lib/ai/embeddings";
-import { createGeminiTextGenerationProvider, createGeminiTopicTagGenerationProvider } from "./lib/ai/gemini";
+import { createOllamaProviders } from "./lib/ai/ollama";
 import { createRecognitionSummaryStageHandler } from "./lib/recognition-summaries/generate-recognition-summary";
 import { createTopicTagGenerationStageHandler } from "./lib/topic-tags/generate-topic-tags";
 import { isRequiredRetrievalStage, type ProcessingStageKind } from "./lib/processing/stages";
@@ -40,6 +39,7 @@ export type ProcessingWorkerOptions = {
     workerId?: string;
     clock?: Clock;
     leaseDurationMs?: number;
+    leaseRenewalIntervalMs?: number;
     maxAttempts?: number;
     retryBaseDelayMs?: number;
     retryMaxDelayMs?: number;
@@ -49,11 +49,12 @@ export type ProcessingWorkerOptions = {
 export function createArticleProcessingWorker({
     database,
     sourceFetchOptions,
-    embeddingProvider = createGeminiPassageEmbeddingProvider(),
-    summaryProvider = createGeminiTextGenerationProvider(),
-    topicTagProvider = createGeminiTopicTagGenerationProvider(),
+    embeddingProvider,
+    summaryProvider,
+    topicTagProvider,
     ...options
 }: Omit<ProcessingWorkerOptions, "handlers"> & { sourceFetchOptions?: SafeFetchOptions; embeddingProvider?: EmbeddingProvider; summaryProvider?: TextGenerationProvider; topicTagProvider?: TopicTagGenerationProvider }): ProcessingWorker {
+    const defaults = createOllamaProviders();
     return createProcessingWorker({
         database,
         ...options,
@@ -62,10 +63,10 @@ export function createArticleProcessingWorker({
             "snapshot-persistence": createSnapshotPersistenceStageHandler(database, sourceFetchOptions),
             "passage-generation": createPassageGenerationStageHandler(database),
             "lexical-indexing": createLexicalIndexingStageHandler(database),
-            "semantic-indexing": createSemanticIndexingStageHandler(database, embeddingProvider),
+            "semantic-indexing": createSemanticIndexingStageHandler(database, embeddingProvider ?? defaults.embeddingProvider),
             "snapshot-activation": createSourceSnapshotActivationStageHandler(database),
-            "recognition-summary-generation": createRecognitionSummaryStageHandler(database, summaryProvider),
-            "topic-tag-generation": createTopicTagGenerationStageHandler(database, topicTagProvider),
+            "recognition-summary-generation": createRecognitionSummaryStageHandler(database, summaryProvider ?? defaults.summaryProvider),
+            "topic-tag-generation": createTopicTagGenerationStageHandler(database, topicTagProvider ?? defaults.topicTagProvider),
         },
     });
 }
@@ -82,25 +83,37 @@ export function createProcessingWorker({
     workerId = randomUUID(),
     clock = systemClock,
     leaseDurationMs = 60_000,
+    leaseRenewalIntervalMs = Math.max(10, Math.floor(leaseDurationMs / 3)),
     maxAttempts = defaultMaxAttempts,
     retryBaseDelayMs = defaultRetryBaseDelayMs,
     retryMaxDelayMs = defaultRetryMaxDelayMs,
     handlers,
 }: ProcessingWorkerOptions): ProcessingWorker {
+    let running = false;
     return {
         async runEligibleWork(): Promise<number> {
-            const claimedStage = await claimEligibleStage(database, workerId, clock.now(), leaseDurationMs, Object.keys(handlers) as ProcessingStageKind[]);
-            if (!claimedStage) return 0;
-
-            const handler = handlers[claimedStage.kind];
-            if (!handler) return 0;
+            if (running) return 0;
+            running = true;
             try {
-                const outcome = await handler(claimedStage);
-                if (!outcome?.completed) await completeStage(database, claimedStage);
-            } catch (error) {
-                await scheduleRetry(database, claimedStage, clock.now(), maxAttempts, retryBaseDelayMs, retryMaxDelayMs, error instanceof Error ? error.message : "Processing failed unexpectedly");
+                const claimedStage = await claimEligibleStage(database, workerId, clock.now(), leaseDurationMs, Object.keys(handlers) as ProcessingStageKind[]);
+                if (!claimedStage) return 0;
+
+                const handler = handlers[claimedStage.kind];
+                if (!handler) return 0;
+                const lease = startLeaseRenewal(database, claimedStage, clock, leaseDurationMs, leaseRenewalIntervalMs);
+                try {
+                    const outcome = await handler(claimedStage);
+                    await lease.stop();
+                    if (lease.error) throw lease.error;
+                    if (!outcome?.completed) await completeStage(database, claimedStage);
+                } catch (error) {
+                    await lease.stop();
+                    await scheduleRetry(database, claimedStage, clock.now(), maxAttempts, retryBaseDelayMs, retryMaxDelayMs, error instanceof Error ? error.message : "Processing failed unexpectedly");
+                }
+                return 1;
+            } finally {
+                running = false;
             }
-            return 1;
         },
     };
 }
@@ -165,6 +178,44 @@ async function completeStage(database: Database, stage: ClaimedStageRow): Promis
     `);
 }
 
+function startLeaseRenewal(
+    database: Database,
+    stage: ClaimedStageRow,
+    clock: Clock,
+    leaseDurationMs: number,
+    intervalMs: number,
+): { stop(): Promise<void>; readonly error: Error | undefined } {
+    let stopped = false;
+    let renewalError: Error | undefined;
+    let renewal = Promise.resolve();
+    const interval = setInterval(() => {
+        if (stopped || renewalError) return;
+        renewal = renewal.then(async () => {
+            const result = await database.execute(sql`
+                UPDATE processing_stages
+                SET lease_expires_at = ${new Date(clock.now().getTime() + leaseDurationMs)}
+                WHERE id = ${stage.id}
+                  AND status = 'running'
+                  AND lease_token = ${stage.leaseToken}
+                RETURNING id
+            `);
+            if (result.rows.length === 0) throw new Error(`Processing stage ${stage.id} lost its lease while running`);
+        }).catch(error => {
+            renewalError = error instanceof Error ? error : new Error("Processing stage lease renewal failed");
+        });
+    }, intervalMs);
+    return {
+        async stop() {
+            if (!stopped) {
+                stopped = true;
+                clearInterval(interval);
+            }
+            await renewal;
+        },
+        get error() { return renewalError; },
+    };
+}
+
 async function scheduleRetry(
     database: Database,
     stage: ClaimedStageRow,
@@ -195,7 +246,14 @@ async function scheduleRetry(
 }
 
 if (import.meta.main) {
-    startProcessingWorker(createArticleProcessingWorker({ database: db }));
+    const providers = createOllamaProviders();
+    await providers.preflight();
+    startProcessingWorker(createArticleProcessingWorker({
+        database: db,
+        embeddingProvider: providers.embeddingProvider,
+        summaryProvider: providers.summaryProvider,
+        topicTagProvider: providers.topicTagProvider,
+    }));
     try {
         startProcessingWorker(createOriginalFileOperationsWorker({ database: db, storage: cloudinaryOriginalFileStorageFromEnvironment(process.env) }));
     } catch (error) {

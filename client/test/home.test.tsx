@@ -167,7 +167,7 @@ describe("collection-wide Synthesis", () => {
     const user = userEvent.setup({ document: dom.window.document });
     renderHome();
 
-    expect(await screen.findByText("Questions, matching evidence, and current-session context are processed by the configured external AI provider. Original Files are never shared.")).toBeTruthy();
+    expect(await screen.findByText("Questions, matching evidence, and current-session context are processed locally by Ollama. Original Files are not sent to the models.")).toBeTruthy();
     await user.type(await screen.findByLabelText("Ask a question about your captured knowledge"), "How do read models stay current?");
     await user.click(screen.getByRole("button", { name: "Ask your vault" }));
     await waitFor(() => expect(askVault.mock.calls[0]?.[0]).toEqual({ question: "How do read models stay current?", conversation: [] }));

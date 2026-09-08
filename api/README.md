@@ -5,9 +5,22 @@ The API durably Captures public HTTP(S) Sources as Knowledge Items. A separate w
 ## Run
 
 ```bash
+ollama pull gemma3:latest
+ollama pull nomic-embed-text:latest
 bun run db:migrate
 bun run dev
 ```
+
+MindVault uses the local Ollama server at `http://127.0.0.1:11434`. Override it
+with `OLLAMA_BASE_URL`; override the installed tags with
+`OLLAMA_GENERATION_MODEL` and `OLLAMA_EMBEDDING_MODEL`. Startup preflights both
+models and fails with a configuration error when Ollama is unavailable or a tag
+is missing. There is no cloud fallback.
+
+Generation uses a 32,768-token context, temperature 0.2, and a 2,048-token
+output limit. MindVault rejects generation inputs above 28,000 UTF-8 bytes so it
+never silently drops evidence or grounding instructions. Embedding requests also
+disable Ollama's automatic truncation.
 
 `bun run dev` starts both the API and its local Processing worker, so new Captures
 will leave Processing automatically. In a deployed or separately managed setup,
@@ -31,6 +44,23 @@ TEST_DATABASE_URL=postgres://user:password@localhost:5432/postgres bun test
 The integration harness creates a uniquely named database from this connection,
 applies the checked-in forward migrations, and drops it after each test. Never
 point `TEST_DATABASE_URL` at a database containing development data.
+
+## Migrating existing embeddings
+
+Stop the API and every worker before migration. Back up the database first:
+
+```bash
+pg_dump --format=custom --file=mindvault-before-ollama.dump "$DATABASE_URL"
+bun run ai:reembed
+```
+
+`ai:reembed` preflights both Ollama models, then scans every retained Passage in
+ID order, including historical snapshots and Trashed Knowledge Items. It replaces
+only missing or incompatible embeddings and commits each successful Passage
+independently. Re-running the command skips compatible rows, so an interrupted
+run resumes safely. It reports processed, skipped, failed, and remaining counts
+and exits unsuccessfully while any incompatible rows remain. It does not refetch
+Sources or regenerate summaries, tags, Capture Context, or Original Files.
 
 ## Original File storage
 

@@ -7,8 +7,7 @@ import { capturesRouter } from "./routes/captures";
 import { knowledgeItemsRouter } from "./routes/knowledge-items";
 import { searchRouter } from "./routes/search";
 import { sourcePreviewMediaRouter } from "./routes/source-preview-media";
-import { createGeminiPassageEmbeddingProvider } from "./lib/ai/embeddings";
-import { createGeminiSynthesisGenerationProvider } from "./lib/ai/gemini";
+import { createOllamaProviders } from "./lib/ai/ollama";
 import type { EmbeddingProvider, SynthesisGenerationProvider } from "./lib/ai/providers";
 import { cloudinaryOriginalFileStorageFromEnvironment } from "./lib/original-files/cloudinary-original-file-storage";
 import type { OriginalFileStorage } from "./lib/original-files/original-file-storage";
@@ -22,7 +21,9 @@ type AppDependencies = {
     maximumOriginalFileBytes?: number;
 };
 
-export function createApp({ database = db, embeddingProvider = createGeminiPassageEmbeddingProvider(), synthesisProvider = createGeminiSynthesisGenerationProvider(), originalFileStorage, maximumOriginalFileBytes }: AppDependencies = {}) {
+export function createApp(dependencies: AppDependencies = {}) {
+    const defaults = createOllamaProviders();
+    const { database = db, embeddingProvider = defaults.embeddingProvider, synthesisProvider = defaults.synthesisProvider, originalFileStorage, maximumOriginalFileBytes } = dependencies;
     const app = express();
     app.use(cors());
     app.use(express.json());

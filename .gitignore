@@ -8,3 +8,6 @@ TASKS.md
 .agents
 
 .scratch
+
+# Local database safety backups
+.backups/

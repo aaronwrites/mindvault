@@ -12,7 +12,7 @@ Built solo — as both a portfolio piece and a university project proposal.
 - **Database**: PostgreSQL 18 (`pgvector/pgvector:pg18` Docker image), pgvector extension for embeddings
 - **Background work**: PostgreSQL-backed Processing Attempt queue with a separate worker
 - **Object storage**: Cloudinary authenticated assets behind a provider-neutral Original File storage boundary
-- **AI**: Gemini API free tier (Flash model) via Google AI Studio
+- **AI**: Local Ollama using Gemma 3 for generation and Nomic Embed Text for embeddings
 - **Frontend**: Next.js + shadcn/ui (kept at defaults for now — visual polish deferred until backend is solid)
 - **Validation**: Zod
 - **Next**: Improve URL Extraction and complete collection-wide grounded Synthesis, then resume file understanding and broader Source adapters before a thin browser capture client

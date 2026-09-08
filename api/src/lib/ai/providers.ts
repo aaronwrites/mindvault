@@ -54,7 +54,13 @@ export type EmbeddingRepresentation = {
 };
 
 export function validateEmbedding(embedding: number[], representation: EmbeddingRepresentation): void {
-    if (embedding.length !== representation.dimensions || embedding.some(value => !Number.isFinite(value))) {
+    const magnitude = Math.sqrt(embedding.reduce((sum, value) => sum + value * value, 0));
+    if (
+        embedding.length !== representation.dimensions
+        || embedding.some(value => !Number.isFinite(value))
+        || !Number.isFinite(magnitude)
+        || magnitude === 0
+    ) {
         throw new Error(`Embedding provider returned an invalid ${representation.dimensions}-dimension embedding`);
     }
 }

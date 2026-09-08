@@ -157,7 +157,7 @@ export default function Home() {
         <div>
           <h2 id="synthesis-heading" className="text-2xl font-semibold tracking-tight">Ask your vault</h2>
           <p className="mt-1 text-sm text-muted-foreground">Answers use only matching captured evidence and cite the Knowledge Items that support them.</p>
-          <p className="mt-1 text-sm text-muted-foreground">Questions, matching evidence, and current-session context are processed by the configured external AI provider. Original Files are never shared.</p>
+          <p className="mt-1 text-sm text-muted-foreground">Questions, matching evidence, and current-session context are processed locally by Ollama. Original Files are not sent to the models.</p>
         </div>
         <SynthesisForm onAsk={askQuestion} isAsking={synthesisMutation.isPending} question={synthesisQuestion} onQuestionChange={setSynthesisQuestion} />
         {synthesisMutation.isPending && <Card role="status"><CardContent className="py-3 text-center text-muted-foreground">Finding relevant captured evidence…</CardContent></Card>}

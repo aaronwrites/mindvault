@@ -35,13 +35,14 @@ class ControlledSynthesisProvider implements SynthesisGenerationProvider {
     inputs: SynthesisGenerationInput[] = [];
     fail = false;
     insufficientEvidence = false;
+    citationIdsOverride: string[] | undefined;
 
     async generateSynthesis(input: SynthesisGenerationInput) {
         this.inputs.push(input);
         if (this.fail) throw new Error("controlled provider failure");
         return {
             answer: this.insufficientEvidence ? "The retrieved evidence does not answer that question." : `Grounded answer: ${input.evidence[0]?.text}`,
-            citationIds: this.insufficientEvidence ? [] : input.evidence.slice(0, 1).map(evidence => evidence.citationId),
+            citationIds: this.insufficientEvidence ? [] : this.citationIdsOverride ?? input.evidence.slice(0, 1).map(evidence => evidence.citationId),
             insufficientEvidence: this.insufficientEvidence,
         };
     }
@@ -143,6 +144,15 @@ describe("collection-wide Synthesis", () => {
             insufficientEvidence: true,
         });
         synthesisProvider.insufficientEvidence = false;
+
+        synthesisProvider.citationIdsOverride = ["invented-citation"];
+        const invalidCitation = await fetch(`${harness.apiBaseUrl}/synthesis`, {
+            method: "POST", headers: { "content-type": "application/json" },
+            body: JSON.stringify({ question: "How does a durable Source Snapshot preserve knowledge?" }),
+        });
+        expect(invalidCitation.status).toBe(502);
+        expect(await invalidCitation.json()).toEqual({ error: "Answer generation is temporarily unavailable. Please try again." });
+        synthesisProvider.citationIdsOverride = undefined;
 
         const callsBeforeInsufficientEvidence = synthesisProvider.inputs.length;
         const insufficientEvidence = await fetch(`${harness.apiBaseUrl}/synthesis`, {

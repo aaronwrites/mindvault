@@ -44,6 +44,8 @@ export async function synthesizeKnowledge(
         return { answer: generated.answer, citations: [], insufficientEvidence: true };
     }
     const evidenceByCitationId = new Map(evidence.map(item => [item.citationId, item]));
+    const invalidCitationIds = generated.citationIds.filter(citationId => !evidenceByCitationId.has(citationId));
+    if (invalidCitationIds.length > 0) throw new Error("Generation returned citations outside the supplied evidence");
     const citedEvidence = [...new Set(generated.citationIds)].flatMap(citationId => {
         const item = evidenceByCitationId.get(citationId);
         return item ? [item] : [];

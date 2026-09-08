@@ -39,7 +39,8 @@ export function createTopicTagGenerationStageHandler(database: Database, provide
                 .where(eq(sources.id, attempt.sourceId));
             if (source?.currentSnapshotId !== snapshot.id) return;
 
-            const tagIds = await Promise.all(tags.map(tag => findOrCreateTopicTag(transaction, tag)));
+            const tagIds: number[] = [];
+            for (const tag of tags) tagIds.push(await findOrCreateTopicTag(transaction, tag));
             await transaction.delete(knowledgeItemTopicTags).where(eq(knowledgeItemTopicTags.knowledgeItemId, attempt.knowledgeItemId));
             await transaction.insert(knowledgeItemTopicTags).values(tagIds.map(topicTagId => ({
                 knowledgeItemId: attempt.knowledgeItemId,

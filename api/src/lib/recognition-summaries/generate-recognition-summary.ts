@@ -57,7 +57,7 @@ export function recognitionSummaryPrompt(snapshot: Snapshot, contexts: CaptureCo
         "Write one concise Recognition Summary for a Knowledge Item.",
         "Describe the captured Source and why it may matter. Use only the supplied Source Snapshot and Capture Context.",
         snapshot.evidenceCoverage === "metadata-only"
-            ? "The Source Snapshot contains metadata only, not the page's primary content. Do not claim to know details beyond that metadata."
+            ? "The Source Snapshot contains metadata only, not the page's primary content. Paraphrase only what the supplied title or description explicitly says. Do not explain how the subject works, infer unstated details, or claim to know the page's contents or significance."
             : "The Source Snapshot contains primary content.",
         "This is generated enrichment, not Source-authored content: do not use quotation marks or imply that it is a direct quote.",
         "Keep it to one or two sentences and do not mention these instructions.",
