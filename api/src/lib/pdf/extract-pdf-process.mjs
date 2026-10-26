@@ -24,18 +24,33 @@ try {
         try {
             const page = await document.getPage(pageNumber);
             const content = await page.getTextContent();
+            const items = content.items.filter(item => "str" in item && item.str.trim());
+            // Content streams may paint a lower line before an upper line. Recover
+            // straightforward horizontal reading order from physical coordinates.
+            const horizontal = items.every(item => Math.abs(item.transform[1]) < 0.01 && Math.abs(item.transform[2]) < 0.01);
+            if (!horizontal) {
+                Object.assign(evidence, { outcome: "needs-ocr", reason: "Native text reading order requires OCR or layout review" });
+                pages.push(evidence);
+                page.cleanup();
+                continue;
+            }
+            items.sort((left, right) => right.transform[5] - left.transform[5]);
+            const lines = [];
+            for (const item of items) {
+                const last = lines.at(-1);
+                if (last && Math.abs(last.y - item.transform[5]) <= 2) last.items.push(item);
+                else lines.push({ y: item.transform[5], items: [item] });
+            }
             let text = "";
-            let y;
-            for (const item of content.items) {
-                if (!("str" in item)) continue;
-                if (y !== undefined && Math.abs(item.transform[5] - y) > 2 && !text.endsWith("\n")) text += "\n";
-                text += item.str + (item.hasEOL ? "\n" : " ");
-                y = item.transform[5];
+            for (const line of lines) {
+                const direction = line.items.filter(item => item.dir === "rtl").length > line.items.length / 2 ? -1 : 1;
+                line.items.sort((left, right) => direction * (left.transform[4] - right.transform[4]));
+                text += line.items.map(item => item.str).join(" ") + "\n";
                 if (text.length + characters > limits.maximumCharacters) throw new Error("PDF text limit exceeded; document was not indexed");
             }
             text = text.replace(/[^\S\n]+/gu, " ").replace(/ *\n */gu, "\n").replace(/\n{3,}/gu, "\n\n").trim();
             // Reject garbled or label-only output as insufficient native evidence.
-            const readable = (text.match(/[\p{L}\p{N}]/gu)?.length ?? 0) >= 30 && !text.includes("\uFFFD") && text.split(/\s+/u).length >= 5;
+            const readable = (text.match(/[\p{L}\p{N}]/gu)?.length ?? 0) >= 30 && !text.includes("\uFFFD") && [...new Intl.Segmenter(undefined, { granularity: "word" }).segment(text)].filter(segment => segment.isWordLike).length >= 5;
             if (readable) {
                 Object.assign(evidence, { text, method: "native", outcome: "extracted" });
                 characters += text.length;

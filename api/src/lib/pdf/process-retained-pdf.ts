@@ -5,7 +5,7 @@ import * as schema from "../../db/schema";
 import { captures, extractedSources, knowledgeItems, originalFiles, processingAttempts, sources } from "../../db/schema";
 import type { ClaimedProcessingStage } from "../../worker";
 import type { OriginalFileStorage } from "../original-files/original-file-storage";
-import { completeCurrentStage, withCurrentLease } from "../sources/extract-public-textual-source";
+import { completeCurrentStage, withCurrentLease } from "../processing/current-stage-lease";
 import { extractPdf, type PdfProcessingLimits } from "./extract-pdf";
 
 export async function processRetainedPdf(database: NodePgDatabase<typeof schema>, stage: ClaimedProcessingStage, storage: OriginalFileStorage, limits: PdfProcessingLimits) {

@@ -61,7 +61,7 @@ export type KnowledgeItemView = {
         faviconUrl: string | null;
     } | null;
     evidenceCoverage: EvidenceCoverage | null;
-    extractionCoverage: Omit<PdfEvidence, "pages"> & { pages: Array<Omit<PdfEvidence["pages"][number], "text">> } | null;
+    extractionCoverage?: Omit<PdfEvidence, "pages"> & { pages: Array<Omit<PdfEvidence["pages"][number], "text">> } | null;
     captureContexts: Array<{ kind: string; summary: string }>;
     availability: KnowledgeItemAvailability;
     organizationCondition: "processing" | "complete" | "incomplete";
@@ -191,6 +191,7 @@ async function presentKnowledgeItems(
 
     return rows.map(({ knowledgeItem, source, webpageSource, originalFile }) => {
         const latestAttempt = latestAttempts.get(knowledgeItem.id);
+        const pdfEvidence = source.currentSnapshotId ? pdfEvidenceBySnapshot.get(source.currentSnapshotId) : null;
         const accessActions = originalFile && knowledgeItem.lifecycleState !== "pending-permanent-deletion"
             ? originalFileActions(knowledgeItem.id, originalFile.storageState, originalFile.detectedSourceKind, originalFile.detectedMediaType)
             : undefined;
@@ -215,10 +216,7 @@ async function presentKnowledgeItems(
             evidenceCoverage: source.currentSnapshotId === null
                 ? null
                 : coverageBySnapshot.get(source.currentSnapshotId) ?? null,
-            extractionCoverage: (() => {
-                const pdf = source.currentSnapshotId ? pdfEvidenceBySnapshot.get(source.currentSnapshotId) : null;
-                return pdf ? { pageCount: pdf.pageCount, pages: pdf.pages.map(({ text: _text, ...page }) => page) } : null;
-            })(),
+            ...(pdfEvidence ? { extractionCoverage: { pageCount: pdfEvidence.pageCount, pages: pdfEvidence.pages.map(({ text: _text, ...page }) => page) } } : {}),
             captureContexts: contextsByItem.get(knowledgeItem.id) ?? [],
             availability: availabilityByItem.get(knowledgeItem.id) ?? "processing",
             organizationCondition: source.provenanceKind === "original-file" && source.sourceKind !== "pdf" ? "complete" : organizationConditions.get(knowledgeItem.id) ?? "processing",

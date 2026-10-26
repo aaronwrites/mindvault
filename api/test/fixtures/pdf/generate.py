@@ -36,3 +36,10 @@ for name, content, encryption in [
         writer.set_page_label(0, 0, style="/r", start=1)
         writer.set_page_label(1, 1, style="/D", start=1)
         writer.write(path)
+
+# Intentionally paint the second visible line first: stream order is not reading order.
+pdf = canvas.Canvas(str(root / "reading-order.pdf"), invariant=1)
+pdf.drawString(48, 700, "Second: replay archived WAL to recover committed transactions.")
+pdf.drawString(48, 760, "First: restore the base backup before replaying any transaction logs.")
+pdf.showPage()
+pdf.save()

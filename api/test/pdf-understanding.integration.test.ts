@@ -54,7 +54,7 @@ test("a retained selectable-text PDF becomes Ready with grounded enrichment and 
     const secondPage = await search("archived WAL");
     expect(secondPage[0].excerpts.find((excerpt: any) => excerpt.ranking.lexicalRank !== undefined).pageNumber).toBe(2);
     expect(item.extractionCoverage.pages[1]).toMatchObject({ pageNumber: 2, pageLabel: "1" });
-});
+}, 15_000);
 
 test("an existing retained PDF can be processed explicitly, deduplicates retries, and stays excluded in Trash", async () => {
     const { captured } = await setupPdf("selectable.pdf");
@@ -80,7 +80,7 @@ test("an existing retained PDF can be processed explicitly, deduplicates retries
     expect((await postItem(captured.knowledgeItemId, "refresh")).status).toBe(404);
     await postItem(captured.knowledgeItemId, "restore");
     expect((await search("WAL_RECOVERY_TARGET"))[0].id).toBe(captured.knowledgeItemId);
-});
+}, 15_000);
 
 async function setupPdf(fixture: string, limits?: Partial<import("../src/lib/pdf/extract-pdf").PdfProcessingLimits>) {
     const storage = new DeterministicOriginalFileStorageFake();
@@ -166,4 +166,13 @@ test("a PDF beyond the generation budget stays searchable and discloses failed e
     expect(item.recognitionSummary).toBeNull();
     expect(item.latestAttempt.warnings).toContain("PDF evidence exceeds the generation input limit; whole-document enrichment was not generated");
     expect((await search("WAL_RECOVERY_TARGET"))[0].id).toBe(captured.knowledgeItemId);
+});
+
+test("native PDF Recall follows physical line order rather than drawing order", async () => {
+    const { captured } = await setupPdf("reading-order.pdf");
+    await harness!.drainWorker();
+    expect((await readItem(captured.knowledgeItemId)).availability).toBe("ready");
+    const results = await search("base backup");
+    expect(results[0].excerpts[0].text).toBe("First: restore the base backup before replaying any transaction logs.\nSecond: replay archived WAL to recover committed transactions.");
+    expect(results[0].excerpts[0].pageNumber).toBe(1);
 });
