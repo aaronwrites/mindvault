@@ -335,3 +335,17 @@ test("bounded raster work retains native text while disclosing the unread scanne
     expect(results[0].id).toBe(item.id);
     expect(results[0].excerpts[0].sourceSnapshot.extractionCoverage.pages[0].reason).toContain("pixel limit");
 });
+
+test("mixed-page OCR preserves exact native code without duplicate OCR copies", async () => {
+    const { captured } = await setupPdf("scan-native-code.pdf");
+    await harness!.drainWorker();
+    const results = await search("SCAN_RECOVERY_MARKER");
+    expect(results[0].id).toBe(captured.knowledgeItemId);
+    const text = results[0].excerpts.map((excerpt: any) => excerpt.text).join("\n");
+    expect(text).toContain("const value = foo?.bar ?? baz;");
+    expect(text).toContain("SELECT array[1] || array[2];");
+    expect(text).toContain("int* p = &x; if (a != b && p->value) return p;");
+    expect(text.match(/const value/g)).toHaveLength(1);
+    expect(text.match(/SELECT array/g)).toHaveLength(1);
+    expect(text.match(/int\* p/g)).toHaveLength(1);
+}, 20_000);

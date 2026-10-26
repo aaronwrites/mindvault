@@ -62,16 +62,9 @@ try {
                 Object.assign(evidence, hasMarks || text ? { outcome: "needs-ocr", reason: "No trustworthy selectable text; OCR is required" } : { outcome: "blank" });
             }
             if (evidence.outcome === "needs-ocr") {
-                Object.assign(evidence, await ocrPdfPage(document, page, limits, budget));
+                Object.assign(evidence, await ocrPdfPage(document, page, limits, budget, nativeText ? lines.map(line => ({ text: line.items.map(item => item.str).join(" "), items: line.items })) : []));
                 if (nativeText && evidence.outcome !== "extracted") {
                     Object.assign(evidence, { text: nativeText, method: "native", outcome: "extracted", reason: `Native text retained; raster text coverage incomplete: ${evidence.reason ?? "no additional trustworthy OCR text"}` });
-                } else if (nativeText) {
-                    // Preserve other extracted languages and exact native spelling without
-                    // adding a second copy of native lines already present in OCR.
-                    const canonical = value => value.toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
-                    const obtained = canonical(evidence.text);
-                    const missing = nativeText.split("\n").filter(line => !obtained.includes(canonical(line)));
-                    if (missing.length) evidence.text += "\n" + missing.join("\n");
                 }
             }
             if (evidence.outcome === "extracted") {

@@ -81,3 +81,16 @@ pdf.drawImage(ImageReader(scan), 0, 0, width=595, height=842)
 pdf.drawString(30, 30, 'Downloaded from the public technical knowledge archive for educational use.')
 pdf.showPage()
 pdf.save()
+
+pdf = canvas.Canvas(str(root / 'scan-native-code.pdf'), invariant=1)
+pdf.drawImage(ImageReader(scan), 0, 0, width=595, height=842)
+pdf.setFont('Courier', 10)
+for index, line in enumerate([
+    'const value = foo?.bar ?? baz;',
+    'SELECT array[1] || array[2];',
+    'int* p = &x; if (a != b && p->value) return p;',
+    "SELECT 'foo-bar'::text, a->>'key';",
+]):
+    pdf.drawString(30, 260 - index * 25, line)
+pdf.showPage()
+pdf.save()
