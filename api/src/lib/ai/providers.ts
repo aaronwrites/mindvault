@@ -1,3 +1,5 @@
+export const MAXIMUM_RECOGNITION_SUMMARY_CHARACTERS = 320;
+
 export interface TextGenerationProvider {
     generate(prompt: string): Promise<string>;
 }

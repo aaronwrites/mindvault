@@ -16,6 +16,16 @@ function chatResponse(content: string): Response {
 }
 
 describe("Ollama providers", () => {
+    test("requests a bounded structured Recognition Summary and returns its text", async () => {
+        const requests: Array<Record<string, unknown>> = [];
+        let summary = "Explains JavaScript closures and lexical scoping.";
+        const providers = createOllamaProviders({ configuration, fetchImplementation: async (_url, init) => { requests.push(JSON.parse(String(init?.body))); return chatResponse(JSON.stringify({ summary })); } });
+        expect(await providers.summaryProvider.generate("Summarize the captured closures guide.")).toBe(summary);
+        expect(requests[0]?.format).toEqual(expect.objectContaining({ properties: expect.objectContaining({ summary: expect.objectContaining({ maxLength: 320 }) }) }));
+        summary = "x".repeat(321);
+        await expect(providers.summaryProvider.generate("evidence")).rejects.toThrow("failed validation");
+    });
+
     test("resolves conversational references through structured generation and rejects unusable retrieval questions", async () => {
         const requests: string[] = [];
         let content = JSON.stringify({ question: "What does a durable Source Snapshot preserve?" });

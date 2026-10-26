@@ -11,7 +11,7 @@ describe("generation input limits", () => {
 
         expect(new TextEncoder().encode(prompt).byteLength).toBeLessThanOrEqual(MAXIMUM_GENERATION_INPUT_BYTES);
         expect(prompt).toContain("The Source Snapshot contains metadata only");
-        expect(prompt).toEndWith("[Additional Source content was omitted because it exceeds the generation input limit.]");
+        expect(prompt).toContain("[Additional Source content was omitted because it exceeds the generation input limit.]");
     });
 
     test("keeps Topic Tag prompts within Ollama's byte limit when metadata is oversized", () => {

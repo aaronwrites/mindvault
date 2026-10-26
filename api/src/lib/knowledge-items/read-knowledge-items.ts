@@ -75,28 +75,34 @@ export type KnowledgeItemView = {
 };
 
 export async function listKnowledgeItems(database: Database, embeddingRepresentation: EmbeddingProvider["representation"], lifecycleState: "active" | "trashed" = "active"): Promise<KnowledgeItemView[]> {
-    const rows = await database
-        .select({ knowledgeItem: knowledgeItems, source: sources, webpageSource: webpageSources, originalFile: originalFiles })
-        .from(knowledgeItems)
-        .innerJoin(sources, eq(knowledgeItems.sourceId, sources.id))
-        .leftJoin(webpageSources, eq(webpageSources.sourceId, sources.id))
-        .leftJoin(originalFiles, eq(originalFiles.sourceId, sources.id))
-        .where(lifecycleState === "trashed" ? inArray(knowledgeItems.lifecycleState, ["trashed", "pending-permanent-deletion"]) : eq(knowledgeItems.lifecycleState, lifecycleState))
-        .orderBy(desc(knowledgeItems.createdAt));
+    // Enrichment commits must not race the status that tells clients to stop polling.
+    return database.transaction(async database => {
+        const rows = await database
+            .select({ knowledgeItem: knowledgeItems, source: sources, webpageSource: webpageSources, originalFile: originalFiles })
+            .from(knowledgeItems)
+            .innerJoin(sources, eq(knowledgeItems.sourceId, sources.id))
+            .leftJoin(webpageSources, eq(webpageSources.sourceId, sources.id))
+            .leftJoin(originalFiles, eq(originalFiles.sourceId, sources.id))
+            .where(lifecycleState === "trashed" ? inArray(knowledgeItems.lifecycleState, ["trashed", "pending-permanent-deletion"]) : eq(knowledgeItems.lifecycleState, lifecycleState))
+            .orderBy(desc(knowledgeItems.createdAt));
 
-    return presentKnowledgeItems(database, rows, embeddingRepresentation);
+        return presentKnowledgeItems(database, rows, embeddingRepresentation);
+    }, { isolationLevel: "repeatable read", accessMode: "read only" });
 }
 
 export async function getKnowledgeItem(database: Database, id: number, embeddingRepresentation: EmbeddingProvider["representation"]): Promise<KnowledgeItemView | undefined> {
-    const rows = await database
-        .select({ knowledgeItem: knowledgeItems, source: sources, webpageSource: webpageSources, originalFile: originalFiles })
-        .from(knowledgeItems)
-        .innerJoin(sources, eq(knowledgeItems.sourceId, sources.id))
-        .leftJoin(webpageSources, eq(webpageSources.sourceId, sources.id))
-        .leftJoin(originalFiles, eq(originalFiles.sourceId, sources.id))
-        .where(and(eq(knowledgeItems.id, id), eq(knowledgeItems.lifecycleState, "active")));
+    // Enrichment commits must not race the status that tells clients to stop polling.
+    return database.transaction(async database => {
+        const rows = await database
+            .select({ knowledgeItem: knowledgeItems, source: sources, webpageSource: webpageSources, originalFile: originalFiles })
+            .from(knowledgeItems)
+            .innerJoin(sources, eq(knowledgeItems.sourceId, sources.id))
+            .leftJoin(webpageSources, eq(webpageSources.sourceId, sources.id))
+            .leftJoin(originalFiles, eq(originalFiles.sourceId, sources.id))
+            .where(and(eq(knowledgeItems.id, id), eq(knowledgeItems.lifecycleState, "active")));
 
-    return (await presentKnowledgeItems(database, rows, embeddingRepresentation))[0];
+        return (await presentKnowledgeItems(database, rows, embeddingRepresentation))[0];
+    }, { isolationLevel: "repeatable read", accessMode: "read only" });
 }
 
 async function presentKnowledgeItems(
@@ -108,39 +114,39 @@ async function presentKnowledgeItems(
 
     const itemIds = rows.map(row => row.knowledgeItem.id);
     const currentSnapshotIds = rows.flatMap(row => row.source.currentSnapshotId === null ? [] : [row.source.currentSnapshotId]);
-    const [contextRows, attemptRows, summaryRows, topicTagRows, previewRows, previewMediaRows, currentSnapshotRows, extractedPreviewRows, deletionRows] = await Promise.all([
-        database
+    const [contextRows, attemptRows, summaryRows, topicTagRows, previewRows, previewMediaRows, currentSnapshotRows, extractedPreviewRows, deletionRows] = [
+        await database
             .select({ knowledgeItemId: captures.knowledgeItemId, kind: captureContexts.kind, text: captureContexts.text })
             .from(captureContexts)
             .innerJoin(captures, eq(captureContexts.captureId, captures.id))
             .where(inArray(captures.knowledgeItemId, itemIds))
             .orderBy(captureContexts.id),
-        database
+        await database
             .select()
             .from(processingAttempts)
             .where(inArray(processingAttempts.knowledgeItemId, itemIds))
             .orderBy(desc(processingAttempts.createdAt), desc(processingAttempts.id)),
-        database.select({ knowledgeItemId: recognitionSummaries.knowledgeItemId, sourceSnapshotId: recognitionSummaries.sourceSnapshotId, text: recognitionSummaries.text })
+        await database.select({ knowledgeItemId: recognitionSummaries.knowledgeItemId, sourceSnapshotId: recognitionSummaries.sourceSnapshotId, text: recognitionSummaries.text })
             .from(recognitionSummaries)
             .where(inArray(recognitionSummaries.knowledgeItemId, itemIds)),
-        database.select({ knowledgeItemId: knowledgeItemTopicTags.knowledgeItemId, sourceSnapshotId: knowledgeItemTopicTags.sourceSnapshotId, canonicalName: topicTags.canonicalName })
+        await database.select({ knowledgeItemId: knowledgeItemTopicTags.knowledgeItemId, sourceSnapshotId: knowledgeItemTopicTags.sourceSnapshotId, canonicalName: topicTags.canonicalName })
             .from(knowledgeItemTopicTags)
             .innerJoin(topicTags, eq(topicTags.id, knowledgeItemTopicTags.topicTagId))
             .where(inArray(knowledgeItemTopicTags.knowledgeItemId, itemIds))
             .orderBy(topicTags.canonicalName),
-        currentSnapshotIds.length === 0 ? [] : database.select().from(sourcePreviews)
+        currentSnapshotIds.length === 0 ? [] : await database.select().from(sourcePreviews)
             .where(inArray(sourcePreviews.sourceSnapshotId, currentSnapshotIds)),
-        currentSnapshotIds.length === 0 ? [] : database.select({ sourceSnapshotId: sourcePreviewMedia.sourceSnapshotId, alternativeText: sourcePreviewMedia.alternativeText, presentation: sourcePreviewMedia.presentation }).from(sourcePreviewMedia)
+        currentSnapshotIds.length === 0 ? [] : await database.select({ sourceSnapshotId: sourcePreviewMedia.sourceSnapshotId, alternativeText: sourcePreviewMedia.alternativeText, presentation: sourcePreviewMedia.presentation }).from(sourcePreviewMedia)
             .where(inArray(sourcePreviewMedia.sourceSnapshotId, currentSnapshotIds)),
-        currentSnapshotIds.length === 0 ? [] : database.select({ id: sourceSnapshots.id, evidenceCoverage: sourceSnapshots.evidenceCoverage }).from(sourceSnapshots)
+        currentSnapshotIds.length === 0 ? [] : await database.select({ id: sourceSnapshots.id, evidenceCoverage: sourceSnapshots.evidenceCoverage }).from(sourceSnapshots)
             .where(inArray(sourceSnapshots.id, currentSnapshotIds)),
-        database.select({ sourceId: extractedSources.sourceId, sourcePreview: extractedSources.sourcePreview })
+        await database.select({ sourceId: extractedSources.sourceId, sourcePreview: extractedSources.sourcePreview })
             .from(extractedSources)
             .where(inArray(extractedSources.sourceId, rows.map(row => row.source.id)))
             .orderBy(desc(extractedSources.extractedAt), desc(extractedSources.id)),
-        database.select({ sourceId: originalFileOperations.originalFileSourceId, status: originalFileOperations.status, failureReason: originalFileOperations.failureReason }).from(originalFileOperations)
+        await database.select({ sourceId: originalFileOperations.originalFileSourceId, status: originalFileOperations.status, failureReason: originalFileOperations.failureReason }).from(originalFileOperations)
             .where(and(inArray(originalFileOperations.originalFileSourceId, rows.map(row => row.source.id)), eq(originalFileOperations.kind, "delete"))),
-    ]);
+    ];
 
     const contextsByItem = new Map<number, Array<{ kind: string; summary: string }>>();
     for (const context of contextRows) {
@@ -281,7 +287,7 @@ async function organizationConditionsByKnowledgeItem(
         const stageStatus = topicStageByAttempt.get(attempt.id);
         const condition: KnowledgeItemView["organizationCondition"] = stageStatus === "failed"
             ? "incomplete"
-            : stageStatus === "completed" || stageStatus === "skipped"
+            : stageStatus === "skipped"
                 ? "complete"
                 : attempt.status === "failed" && hasFailedTopicTagStageByItem.has(attempt.knowledgeItemId)
                     ? "incomplete"
@@ -312,8 +318,8 @@ async function latestAttemptStatuses(
     }
 
     return new Map(attempts.map(attempt => {
-        const requiredStages = (stagesByAttempt.get(attempt.id) ?? []).filter(stage => isRequiredRetrievalStage(stage.kind));
-        const status = attempt.status === "pending" && requiredStages.length > 0 && requiredStages.every(stage => stage.status === "completed")
+        const attemptStages = stagesByAttempt.get(attempt.id) ?? [];
+        const status = attempt.status === "pending" && attemptStages.length > 0 && attemptStages.every(stage => ["completed", "skipped", "failed"].includes(stage.status))
             ? "completed"
             : attempt.status;
         return [attempt.id, status];

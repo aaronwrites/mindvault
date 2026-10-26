@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { CaptureForm } from "@/components/capture-form";
 import { KnowledgeItemCard } from "@/components/knowledge-item-card";
 import { originalFileTitle, sourcePreviewTitle } from "@/components/source-preview";
@@ -36,14 +36,19 @@ export default function Home() {
           item.availability === "processing" ||
           (item.availability === "ready" && (
             item.organizationCondition !== "complete" ||
-            (item.latestAttempt?.kind === "refresh" &&
-              (item.latestAttempt.status === "pending" || item.latestAttempt.status === "running"))
+            (item.latestAttempt?.status === "pending" || item.latestAttempt?.status === "running")
           )),
       )
         ? 2_000
         : false,
     refetchIntervalInBackground: true,
   });
+  useEffect(() => {
+    // Background enrichment updates library cards and any currently visible Recall results.
+    if (knowledgeItemsQuery.dataUpdatedAt > 0) {
+      void queryClient.invalidateQueries({ queryKey: recallKeys.all });
+    }
+  }, [knowledgeItemsQuery.dataUpdatedAt, queryClient]);
   const knowledgeItems = knowledgeItemsQuery.data ?? [];
   const trashQuery = useQuery({ queryKey: knowledgeItemKeys.trash, queryFn: getTrashedKnowledgeItems, enabled: showTrash, refetchInterval: query => query.state.data?.some(item => item.lifecycleState === "pending-permanent-deletion") ? 2_000 : false });
   const trashedKnowledgeItems = trashQuery.data ?? [];

@@ -149,3 +149,31 @@ client/database clock skew and asynchronous setup delays; distinct Source
 captures ensure both Capture Context origins receive initial indexing in the
 provenance scenario. Two-axis review found no remaining actionable findings.
 The bounded URL-to-chat milestone is complete and PDF understanding is unblocked.
+
+## Summary length and enrichment updates — 2026-10-26
+
+The production MDN JavaScript Closures item had a 9,299-character Recognition
+Summary. A stronger prompt alone still produced a long response from the retained
+article. Recognition Summaries now use a structured Ollama response capped at 320
+characters, with a storage cap for other injected providers. Closing summary
+instructions retain their input budget even when Source text needs truncation.
+The existing item was repaired to a grounded 152-character sentence after backing
+up the old summary locally; its retained evidence and six Topic Tags were kept.
+A temporary API instance verified the repaired production projection as Ready
+with complete organization. No processing worker was started against production
+for this repair.
+
+Attempt presentation now waits for all enrichment stages to terminate before
+reporting completion. Item reads use one repeatable-read snapshot so tag artifacts
+and processing status cannot come from different commits. The client polls
+initial Captures and retries while enrichment is active and refreshes visible
+Recall results when library data updates, allowing late tags and summaries to
+appear without a manual refresh.
+
+Verification: API **114 passed, 2 opt-in checks skipped**, client **27 passed**,
+lint and both typechecks passed. The separate live API/PostgreSQL/worker/Ollama
+check passed (27 assertions). Its primary summary stayed concise and grounded,
+its metadata summary remained limited to the supplied replication title, and
+cited follow-up and insufficient-evidence behavior were preserved. Provider,
+API/worker and UI regressions reproduce the oversized-summary and premature
+completion failures. Two-axis review found no remaining actionable findings.

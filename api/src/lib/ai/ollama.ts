@@ -7,6 +7,7 @@ import type {
     TextGenerationProvider,
     TopicTagGenerationProvider,
 } from "./providers";
+import { MAXIMUM_RECOGNITION_SUMMARY_CHARACTERS } from "./providers";
 import { boundConversation } from "../synthesis/bound-conversation";
 import { MAXIMUM_GENERATION_INPUT_BYTES } from "./limit-generation-input";
 
@@ -137,7 +138,12 @@ export function createOllamaProviders({
             embed: text => embed(text, "search_document:"),
             embedQuery: text => embed(text, "search_query:"),
         },
-        summaryProvider: { generate: prompt => chat(prompt) },
+        summaryProvider: {
+            async generate(prompt) {
+                const content = await chat(prompt, recognitionSummaryJsonSchema);
+                return parseStructuredResponse(content, recognitionSummaryResponseSchema, "Recognition Summary").summary;
+            },
+        },
         topicTagProvider: {
             async generateTopicTags(prompt) {
                 const content = await chat(prompt, topicTagsJsonSchema);
@@ -239,6 +245,14 @@ function synthesisPrompt(input: SynthesisGenerationInput): string {
         JSON.stringify({ ...input, conversation: boundConversation(input.conversation) }),
     ].join("\n\n");
 }
+
+const recognitionSummaryResponseSchema = z.object({ summary: z.string().trim().min(1).max(MAXIMUM_RECOGNITION_SUMMARY_CHARACTERS) });
+const recognitionSummaryJsonSchema = {
+    type: "object",
+    properties: { summary: { type: "string", minLength: 1, maxLength: MAXIMUM_RECOGNITION_SUMMARY_CHARACTERS } },
+    required: ["summary"],
+    additionalProperties: false,
+};
 
 const generatedTopicTagsSchema = z.array(z.object({ name: z.string().trim().min(1), aliases: z.array(z.string()) })).min(3).max(6);
 const synthesisResponseSchema = z.object({

@@ -30,6 +30,74 @@ class FailingSummaryProvider implements TextGenerationProvider {
 }
 
 describe("Recognition Summaries", () => {
+    test.skipIf(!process.env.TEST_DATABASE_URL)("bounds an oversized generated summary without shortening retained Source evidence", async () => {
+        const embeddings = new DeterministicEmbeddingProvider();
+        harness = await createIntegrationHarness(
+            database => createApp({ database: database.db, embeddingProvider: embeddings }),
+            (database, sourceServer) => createArticleProcessingWorker({
+                database: database.db, sourceFetchOptions: sourceServer.safeFetchDependencies(), embeddingProvider: embeddings,
+                summaryProvider: { generate: async () => "Durable Capture preserves knowledge. " + "More detail about processing and retrieval. ".repeat(250) },
+                topicTagProvider: new DeterministicTopicTagGenerationProvider(),
+            }),
+        );
+        const capture = await fetch(`${harness.apiBaseUrl}/captures`, {
+            method: "POST", headers: { "content-type": "application/json" },
+            body: JSON.stringify({ url: harness.sourceServer.fetchUrl("/articles/primary-text") }),
+        }).then(response => response.json()) as { knowledgeItemId: number };
+        await harness.drainWorker();
+        const item = await fetch(`${harness.apiBaseUrl}/knowledge-items/${capture.knowledgeItemId}`).then(response => response.json()) as { recognitionSummary: string };
+        expect(item.recognitionSummary.length).toBeLessThanOrEqual(320);
+        expect(item.recognitionSummary).toStartWith("Durable Capture preserves knowledge.");
+        const matches = await fetch(`${harness.apiBaseUrl}/search?q=${encodeURIComponent("Processing Attempts")}`).then(response => response.json()) as Array<{ recognitionSummary: string; excerpts: Array<{ text: string }> }>;
+        expect(matches[0]?.recognitionSummary).toBe(item.recognitionSummary);
+        expect(matches[0]?.excerpts.some(excerpt => excerpt.text.includes("A cleaned representation preserves the useful material"))).toBe(true);
+    });
+
+    test.skipIf(!process.env.TEST_DATABASE_URL)("keeps a Ready attempt active until summary and Topic Tags are visible", async () => {
+        const embeddings = new DeterministicEmbeddingProvider();
+        let summaryStarted!: () => void;
+        let releaseSummary!: (text: string) => void;
+        const summaryEntered = new Promise<void>(resolve => { summaryStarted = resolve; });
+        const summaryOutput = new Promise<string>(resolve => { releaseSummary = resolve; });
+        let tagsStarted!: () => void;
+        let releaseTags!: () => void;
+        const tagsEntered = new Promise<void>(resolve => { tagsStarted = resolve; });
+        const tagsOutput = new Promise<void>(resolve => { releaseTags = resolve; });
+        harness = await createIntegrationHarness(
+            database => createApp({ database: database.db, embeddingProvider: embeddings }),
+            (database, sourceServer) => createArticleProcessingWorker({
+                database: database.db, sourceFetchOptions: sourceServer.safeFetchDependencies(), embeddingProvider: embeddings,
+                summaryProvider: { generate: async () => { summaryStarted(); return summaryOutput; } },
+                topicTagProvider: { generateTopicTags: async () => { tagsStarted(); await tagsOutput; return [{ name: "Durable Capture", aliases: [] }]; } },
+            }),
+        );
+        const captured = await fetch(`${harness.apiBaseUrl}/captures`, {
+            method: "POST", headers: { "content-type": "application/json" },
+            body: JSON.stringify({ url: harness.sourceServer.fetchUrl("/articles/primary-text") }),
+        }).then(response => response.json()) as { knowledgeItemId: number };
+        const processing = harness.drainWorker();
+        try {
+            await summaryEntered;
+            const readItem = () => fetch(`${harness!.apiBaseUrl}/knowledge-items/${captured.knowledgeItemId}`).then(response => response.json()) as Promise<{ availability: string; latestAttempt: { status: string }; recognitionSummary: string | null; topicTags: string[] }>;
+            const awaitingSummary = await readItem();
+            expect(awaitingSummary.availability).toBe("ready");
+            expect(awaitingSummary.latestAttempt.status).not.toBe("completed");
+            releaseSummary("A concise recognition summary.");
+            await tagsEntered;
+            const awaitingTags = await readItem();
+            expect(awaitingTags.recognitionSummary).toBe("A concise recognition summary.");
+            expect(awaitingTags.topicTags).toEqual([]);
+            expect(awaitingTags.latestAttempt.status).not.toBe("completed");
+            releaseTags();
+            await processing;
+            expect(await readItem()).toEqual(expect.objectContaining({ latestAttempt: expect.objectContaining({ status: "completed" }), topicTags: ["Durable Capture"] }));
+        } finally {
+            releaseSummary("A concise recognition summary.");
+            releaseTags();
+            await processing;
+        }
+    });
+
     test.skipIf(!process.env.TEST_DATABASE_URL)("generates a current summary from Source Snapshot content and Capture Context that list, detail, and Recall return", async () => {
         const embeddings = new DeterministicEmbeddingProvider();
         const summaries = new RecordingSummaryProvider();

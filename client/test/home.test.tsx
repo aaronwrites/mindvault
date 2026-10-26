@@ -679,6 +679,27 @@ describe("Knowledge Item Capture", () => {
     await waitFor(() => expect(refreshKnowledgeItem.mock.calls[0]?.[0]).toBe(readyItem.id));
   });
 
+  test("keeps polling a Ready initial Capture until its Recognition Summary finishes", async () => {
+    const awaitingSummary: KnowledgeItem = { ...processingItem, availability: "ready", organizationCondition: "complete", topicTags: ["Closures"], latestAttempt: { ...processingItem.latestAttempt!, status: "pending" } };
+    getKnowledgeItems.mockResolvedValueOnce([awaitingSummary]).mockResolvedValue([{ ...awaitingSummary, recognitionSummary: "Explains JavaScript closures and lexical scope.", latestAttempt: { ...awaitingSummary.latestAttempt!, status: "completed" } }]);
+    renderHome();
+    expect(await screen.findByText("Closures")).toBeTruthy();
+    expect(await screen.findByText("Explains JavaScript closures and lexical scope.", {}, { timeout: 3_500 })).toBeTruthy();
+  });
+
+  test("updates Recall tags when background organization finishes without a manual refresh", async () => {
+    const organizing: KnowledgeItem = { ...processingItem, availability: "ready", organizationCondition: "processing", latestAttempt: { ...processingItem.latestAttempt!, status: "pending" } };
+    getKnowledgeItems.mockResolvedValueOnce([organizing]).mockResolvedValue([{ ...organizing, organizationCondition: "complete", topicTags: ["Closures"], latestAttempt: { ...organizing.latestAttempt!, status: "completed" } }]);
+    const result: RecallKnowledgeItem = { id: 1, title: "Closures", source: processingItem.source, sourcePreview: null, recognitionSummary: null, topicTags: [], excerpts: [], ranking: { score: 1, matchedPassageCount: 1 } };
+    searchKnowledgeItems.mockResolvedValueOnce([result]).mockResolvedValue([{ ...result, topicTags: ["Closures"] }]);
+    const user = userEvent.setup({ document: dom.window.document });
+    renderHome();
+    await user.type(await screen.findByLabelText("Search your Knowledge Items"), "closures");
+    await user.click(screen.getByRole("button", { name: /^Search$/ }));
+    expect(await screen.findByText("Grounded match")).toBeTruthy();
+    await waitFor(() => expect(screen.getAllByLabelText("Generated Topic Tags").length).toBe(2), { timeout: 3_500 });
+  });
+
   test("keeps polling a Ready card while Refresh is pending, then presents its changed Preview", async () => {
     const refreshingItem: KnowledgeItem = {
       ...processingItem,
