@@ -97,3 +97,55 @@ visibility conversation. A separate unrelated capital-of-France question stayed
 unchanged. This checks interpretation only; fresh retrieval, cited answers,
 follow-ups, tags, and lifecycle regressions still need database-backed execution.
 The installed model digests match the 2026-09-08 record above.
+
+## Database-backed closeout assessment — 2026-10-26
+
+PostgreSQL became reachable, and the configured `mindvault` role can create
+isolated test databases. The actual HTTP API, PostgreSQL worker and local Ollama
+providers completed the expanded eight-Source collection check in 50.9 seconds
+(1 test passed, 27 assertions). This supersedes the connectivity blocker above.
+The same Gemma 3 and Nomic Embed Text digests were used.
+
+Primary and metadata-only Captures without notes became Ready with completed
+organization. The primary summary describes extraction, retained Capture data,
+visible Processing Attempts and Passage retrieval, all supported by the captured
+text. Its five tags name those concepts. The metadata Recognition Summary reads
+“A page about how PostgreSQL logical replication keeps read models current.”
+Its tags are PostgreSQL, PostgreSQL Logical Replication and Read Models. None
+adds the previously invented read-replica synchronization claim.
+
+Exact Recall found the primary Processing Attempts evidence; conceptual Recall
+ranked it first and also included relevant retained-knowledge evidence. The
+expanded corpus still returned lower-ranked unrelated metadata, security and
+command-line excerpts, as anticipated by the distance comparison above. Keep
+this recorded as a relevance limitation rather than tune a global cutoff on a
+small corpus. The observed answers cited supporting evidence, not those unrelated
+matches.
+
+The primary answer correctly identifies Processing Attempts and retained Capture
+information, though its phrasing repeats itself and exposes internal citation
+IDs. The metadata answer is limited to “PostgreSQL logical replication keeps read
+models current,” with metadata-only citation coverage. The vague follow-up
+“What does it preserve?” retrieved a fresh retained-knowledge Passage and answered
+that MindVault preserves article text in a durable Source Snapshot when a website
+changes or disappears, supported by its supplied excerpt. All returned citation
+IDs resolved to supplied evidence. The rainfall question returned insufficient
+evidence without citations. Authentication-gated Capture remained Needs attention
+with its specific authentication reason and no fabricated Source evidence.
+
+This live run establishes the bounded closeout's real-model grounding assessment;
+it does not establish universal retrieval precision or model factuality. The
+historical five-URL evaluation remains the website-coverage record under the
+accepted stop rule. Broader website support and retrieval optimization remain
+follow-up work. Full deterministic API/lifecycle checks and their final result
+are recorded separately in the ticket closeout notes.
+
+Final deterministic verification: full API suite **111 passed, 2 opt-in checks
+skipped, 0 failed**; the live Ollama check above ran separately. Client **25
+passed**, lint and TypeScript checks passed, and API TypeScript checking passed.
+Original File access, lifecycle cleanup, Trash/Restore, web processing and
+migration regressions are included. Test clock setup was corrected to avoid
+client/database clock skew and asynchronous setup delays; distinct Source
+captures ensure both Capture Context origins receive initial indexing in the
+provenance scenario. Two-axis review found no remaining actionable findings.
+The bounded URL-to-chat milestone is complete and PDF understanding is unblocked.

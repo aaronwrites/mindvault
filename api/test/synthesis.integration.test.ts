@@ -67,7 +67,7 @@ describe("collection-wide Synthesis", () => {
         ] as const) {
             const response = await fetch(`${harness.apiBaseUrl}/captures`, {
                 method: "POST", headers: { "content-type": "application/json" },
-                body: JSON.stringify({ url: harness.sourceServer.fetchUrl("/articles/semantic-retention"), [field]: text }),
+                body: JSON.stringify({ url: harness.sourceServer.fetchUrl(origin === "personal-note" ? "/articles/independent-one" : "/articles/independent-two"), [field]: text }),
             });
             expect(response.status).toBe(201);
             await harness.drainWorker();

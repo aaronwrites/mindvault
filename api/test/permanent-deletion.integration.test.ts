@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { createApp } from "../src/app";
-import { DeterministicEmbeddingProvider } from "./support/deterministic-runtime";
+import { DeterministicEmbeddingProvider, ManualClock } from "./support/deterministic-runtime";
 import { createIntegrationHarness, type IntegrationHarness } from "./support/integration-harness";
 import { DeterministicOriginalFileStorageFake } from "../src/lib/original-files/deterministic-original-file-storage-fake";
 import { createOriginalFileOperationsWorker } from "../src/lib/original-files/process-original-file-operations";
@@ -43,17 +43,19 @@ describe("permanent Knowledge Item deletion", () => {
     });
 
     test.skipIf(!process.env.TEST_DATABASE_URL)("reconciles a provider asset left by an ambiguous upload before any Capture became durable", async () => {
+        const clock = new ManualClock(new Date());
         const storage = new DeterministicOriginalFileStorageFake();
         storage.ambiguouslyUploadNext("connection dropped after retention");
         harness = await createIntegrationHarness(
             database => createApp({ database: database.db, embeddingProvider: new DeterministicEmbeddingProvider(), originalFileStorage: storage }),
-            database => createOriginalFileOperationsWorker({ database: database.db, storage }),
+            database => createOriginalFileOperationsWorker({ database: database.db, storage, clock }),
         );
 
         const failedCapture = await captureFile("proposal.pdf", "%PDF- retained bytes");
         expect(failedCapture).toEqual(expect.objectContaining({ error: "original-file-storage-unavailable" }));
         expect(storage.uploadedFileCount).toBe(1);
 
+        clock.advance(Date.now() - clock.now().getTime() + 1_000);
         await harness.drainWorker();
 
         expect(storage.uploadedFileCount).toBe(0);

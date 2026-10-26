@@ -706,7 +706,7 @@ describe("Extraction", () => {
         });
         const capture = await captureResponse.json() as { knowledgeItemId: number };
 
-        clock.advance(1_000);
+        clock.advance(Date.now() - clock.now().getTime() + 1_000);
         await harness.drainWorker();
         clock.advance(1_000);
         await harness.drainWorker();
