@@ -15,7 +15,7 @@ Built solo — as both a portfolio piece and a university project proposal.
 - **AI**: Local Ollama using Gemma 3 for generation and Nomic Embed Text for embeddings
 - **Frontend**: Next.js + shadcn/ui (kept at defaults for now — visual polish deferred until backend is solid)
 - **Validation**: Zod
-- **Next**: Improve URL Extraction and complete collection-wide grounded Synthesis, then resume file understanding and broader Source adapters before a thin browser capture client
+- **Next**: Complete PDF OCR, page-grounded Recall and Synthesis, and PDF quality acceptance, then broaden Source adapters before a thin browser capture client
 
 ## Structure
 
@@ -58,7 +58,7 @@ mindvault/
 
 ## Current status
 
-MindVault durably captures and processes public textual webpages into recognizable Preview Cards, Source Snapshots, indexed Passages, Recognition Summaries, and Topic Tags. Original File capture, access, and lifecycle operations are implemented; file understanding remains deferred. Knowledge Item availability is Processing, Ready, Unsupported, or Needs attention; Organization incomplete is a secondary condition. The next authoritative milestone is `.scratch/url-to-chat/spec.md`: improve URL Extraction, accept informative metadata as limited evidence, and complete collection-wide grounded Synthesis before broadening adapters. `context.md` is the domain glossary and `docs/adr/` records accepted architectural decisions.
+MindVault durably captures and processes public textual webpages and retained selectable-text PDFs into recognizable Preview Cards, Source Snapshots, indexed Passages, Recognition Summaries, and Topic Tags. PDF evidence preserves physical page provenance and native Extraction gaps; OCR and complete PDF citation/Synthesis support remain pending. Original File capture, access, and lifecycle operations are implemented; other file understanding remains deferred. Knowledge Item availability is Processing, Ready, Unsupported, or Needs attention; Organization incomplete is a secondary condition. The next authoritative milestone is `.scratch/pdf-understanding/spec.md`: complete OCR, page-grounded Recall and Synthesis, and quality acceptance before broadening adapters. URL-to-chat closeout is verified. `context.md` is the domain glossary and `docs/adr/` records accepted architectural decisions.
 
 ## Agent skills
 
