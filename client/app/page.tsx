@@ -7,6 +7,8 @@ import { KnowledgeItemCard } from "@/components/knowledge-item-card";
 import { originalFileTitle, sourcePreviewTitle } from "@/components/source-preview";
 import { RecallResultCard } from "@/components/recall-result-card";
 import { SearchForm } from "@/components/search-form";
+import { PdfPageReference } from "@/components/pdf-page-reference";
+import { PdfExtractionCoverage } from "@/components/pdf-extraction-coverage";
 import { SynthesisForm } from "@/components/synthesis-form";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -175,9 +177,11 @@ export default function Home() {
               {turn.result.insufficientEvidence ? <p className="text-sm text-muted-foreground">Capture more relevant knowledge, then ask again.</p> : <section aria-label="Supporting Knowledge Items" className="space-y-3">
                 <p className="text-sm font-medium">Supporting Knowledge Items</p>
                 <ul className="space-y-3">
-                  {turn.result.citations.map(citation => <li key={`${citation.knowledgeItemId}-${citation.sourceSnapshotId ?? "context"}`} className="space-y-1 text-sm">
+                  {turn.result.citations.map((citation, index) => <li key={`${citation.knowledgeItemId}-${citation.sourceSnapshotId ?? "context"}-${index}`} className="space-y-1 text-sm">
                     <a className="font-medium underline underline-offset-4" href={`#knowledge-item-${citation.knowledgeItemId}`}>View {citation.title}</a>
                     <blockquote className="border-l-2 pl-3 text-muted-foreground">{citation.excerpt}</blockquote>
+                    <PdfPageReference pageNumber={citation.pageNumber} pageLabel={citation.pageLabel} openOriginalFile={citation.openOriginalFile} />
+                    <PdfExtractionCoverage coverage={citation.extractionCoverage} />
                     {citation.origin === "personal-note" && <p className="text-muted-foreground">Based on your Personal Note.</p>}
                     {citation.origin === "selected-source-text" && <p className="text-muted-foreground">Based on selected Source text.</p>}
                     {citation.evidenceCoverage === "metadata-only" && <p className="text-muted-foreground">Based on source-provided metadata only.</p>}

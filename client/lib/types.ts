@@ -57,6 +57,8 @@ export type RecallKnowledgeItem = {
   excerpts: Array<{
     text: string;
     pageNumber?: number | null;
+    pageLabel?: string | null;
+    openOriginalFile?: string;
     origin: "source-snapshot" | "selected-source-text" | "personal-note";
     sourceSnapshot: {
       id: number;
@@ -100,7 +102,11 @@ export type SynthesisResult = {
     knowledgeItemId: number;
     sourceSnapshotId: number | null;
     title: string;
-    originalUrl: string;
+    originalUrl: string | null;
+    pageNumber?: number | null;
+    pageLabel?: string | null;
+    openOriginalFile?: string;
+    extractionCoverage?: KnowledgeItem["extractionCoverage"];
     evidenceCoverage: EvidenceCoverage | null;
     excerpt: string;
   }>;

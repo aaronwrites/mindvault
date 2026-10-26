@@ -112,7 +112,11 @@ export function accessOriginalFileController(database: NodePgDatabase<typeof sch
         const id = Number(req.params.id);
         if (!Number.isSafeInteger(id) || id < 1) return res.status(404).json({ error: "Original File unavailable" });
 
-        const result = await createOriginalFileAccess(database, storage, id, action);
+        const page = req.query.page === undefined ? undefined : Number(req.query.page);
+        if (page !== undefined && (action !== "open" || typeof req.query.page !== "string" || !Number.isSafeInteger(page) || page < 1)) {
+            return res.status(400).json({ error: "Invalid physical PDF page" });
+        }
+        const result = await createOriginalFileAccess(database, storage, id, action, page);
         if (result.outcome === "ready") return res.redirect(302, result.access.url);
         if (result.outcome === "provider-unavailable") return res.status(503).json({ error: "original-file-access-unavailable", retryable: true });
         return res.status(404).json({ error: result.outcome === "open-not-available" ? "Original File cannot be opened safely" : "Original File unavailable" });

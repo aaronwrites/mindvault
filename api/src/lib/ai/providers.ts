@@ -1,3 +1,5 @@
+import type { PdfExtractionCoverage } from "../pdf/pdf-extraction-disclosure";
+
 export const MAXIMUM_RECOGNITION_SUMMARY_CHARACTERS = 320;
 
 export interface TextGenerationProvider {
@@ -11,7 +13,11 @@ export type SynthesisEvidence = {
     sourceSnapshotId: number | null;
     title: string;
     text: string;
-    originalUrl: string;
+    originalUrl: string | null;
+    pageNumber?: number | null;
+    pageLabel?: string | null;
+    extractionCoverage?: PdfExtractionCoverage;
+    openOriginalFile?: string;
     evidenceCoverage: "primary-content" | "metadata-only" | null;
 };
 

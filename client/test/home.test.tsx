@@ -1029,7 +1029,7 @@ test("Recall discloses the cited PDF snapshot's extraction gaps", async () => {
   const result: RecallKnowledgeItem = {
     id: 31, title: "Printed recovery", source: { ...processingItem.source, filename: "scan.pdf" },
     sourcePreview: null, recognitionSummary: null, topicTags: [],
-    excerpts: [{ text: "Restore the base backup.", pageNumber: 2, origin: "source-snapshot",
+    excerpts: [{ text: "Restore the base backup.", pageNumber: 2, pageLabel: "1", openOriginalFile: "/knowledge-items/31/original-file/open?page=2", origin: "source-snapshot",
       sourceSnapshot: { id: 4, originalUrl: null, finalUrl: null, canonicalUrl: null,
         extractedAt: processingItem.createdAt, evidenceCoverage: "primary-content",
         extractionCoverage: { pageCount: 3, pages: [
@@ -1042,4 +1042,34 @@ test("Recall discloses the cited PDF snapshot's extraction gaps", async () => {
   render(<RecallResultCard result={result} />);
   expect(screen.getByText(/Incomplete extraction: page 2/)).toBeTruthy();
   expect(screen.getByText(/visual relationships have not been interpreted/)).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Open PDF at page 2" }).getAttribute("href")).toBe("http://localhost:4000/knowledge-items/31/original-file/open?page=2");
+  expect(screen.getByText(/printed label: 1/)).toBeTruthy();
+  expect(screen.getByText(/If your viewer/)).toBeTruthy();
+});
+
+
+test("Synthesis shows distinct PDF page citations and keeps evidence visible after a failed follow-up", async () => {
+  getKnowledgeItems.mockResolvedValue([]);
+  getTrashedKnowledgeItems.mockResolvedValue([]);
+  askVault.mockResolvedValueOnce({ answer: "Restore the backup and replay archived WAL.", insufficientEvidence: false,
+    citations: [1, 2].map(pageNumber => ({ knowledgeItemId: 31, sourceSnapshotId: 4, title: "recovery.pdf",
+      origin: "source-snapshot", originalUrl: null, evidenceCoverage: "primary-content", pageNumber,
+      pageLabel: pageNumber === 2 ? "1" : null, openOriginalFile: `/knowledge-items/31/original-file/open?page=${pageNumber}`,
+      excerpt: pageNumber === 1 ? "Restore the base backup." : "Replay archived WAL.",
+      extractionCoverage: { pageCount: 3, pages: [{ pageNumber: 3, outcome: "unprocessed", reason: "OCR work limit reached" }] },
+    })) });
+  const user = userEvent.setup({ document: dom.window.document });
+  renderHome();
+  const question = await screen.findByLabelText("Ask a question about your captured knowledge");
+  await user.type(question, "How do I recover?");
+  await user.click(screen.getByRole("button", { name: "Ask your vault" }));
+  expect(await screen.findByText("Replay archived WAL.")).toBeTruthy();
+  for (const page of [1, 2]) expect(screen.getByRole("button", { name: `Open PDF at page ${page}` }).getAttribute("href")).toBe(`http://localhost:4000/knowledge-items/31/original-file/open?page=${page}`);
+  expect(screen.getAllByText(/Incomplete extraction: page 3/)).toHaveLength(2);
+  askVault.mockRejectedValueOnce(new Error("Generation input exceeds the supported limit. Shorten your question."));
+  await user.type(question, "Explain the diagram");
+  await user.click(screen.getByRole("button", { name: "Ask your vault" }));
+  expect(await screen.findByText(/Generation input exceeds/)).toBeTruthy();
+  expect(screen.getByText("Replay archived WAL.")).toBeTruthy();
+  expect((question as HTMLTextAreaElement).value).toBe("Explain the diagram");
 });

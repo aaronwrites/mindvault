@@ -22,6 +22,8 @@ export type RecallKnowledgeItemResult = {
     excerpts: Array<{
         text: string;
         pageNumber: number | null;
+        pageLabel: string | null;
+        openOriginalFile?: string;
         origin: "source-snapshot" | "selected-source-text" | "personal-note";
         sourceSnapshot: {
             id: number;
@@ -87,6 +89,8 @@ export async function recallKnowledgeItems(database: Database, query: string, em
                 return [{
                     text: passage.text,
                     pageNumber: details.pageNumber,
+                    pageLabel: details.pdfEvidence?.pages.find(page => page.pageNumber === details.pageNumber)?.pageLabel ?? null,
+                    ...(details.pageNumber && view.source.originalFileActions?.open ? { openOriginalFile: `${view.source.originalFileActions.open}?page=${details.pageNumber}` } : {}),
                     origin: passage.origin,
                     sourceSnapshot: details.sourceSnapshotId === null ? null : {
                         id: details.sourceSnapshotId, originalUrl: details.originalUrl, finalUrl: details.finalUrl,

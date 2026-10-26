@@ -12,15 +12,7 @@ const maximumExcerptCharacters = 1_500;
 
 export type SynthesisResult = {
     answer: string;
-    citations: Array<{
-        origin: SynthesisEvidence["origin"];
-        knowledgeItemId: number;
-        sourceSnapshotId: number | null;
-        title: string;
-        originalUrl: string;
-        evidenceCoverage: SynthesisEvidence["evidenceCoverage"];
-        excerpt: string;
-    }>;
+    citations: Array<Omit<SynthesisEvidence, "citationId" | "text"> & { excerpt: string }>;
     insufficientEvidence: boolean;
 };
 
@@ -87,9 +79,13 @@ function evidenceFor(recalled: Awaited<ReturnType<typeof recallKnowledgeItems>>)
                 origin: excerpt.origin,
                 knowledgeItemId: result.id,
                 sourceSnapshotId: excerpt.sourceSnapshot?.id ?? null,
-                title: result.title ?? result.sourcePreview?.title ?? result.source.submittedUrl ?? "Captured Knowledge Item",
+                title: result.title ?? result.sourcePreview?.title ?? result.source.filename ?? result.source.submittedUrl ?? "Captured Knowledge Item",
                 text,
-                originalUrl: excerpt.sourceSnapshot?.originalUrl ?? result.source.submittedUrl ?? "",
+                originalUrl: excerpt.sourceSnapshot?.originalUrl ?? result.source.submittedUrl ?? null,
+                pageNumber: excerpt.pageNumber,
+                pageLabel: excerpt.pageLabel,
+                extractionCoverage: excerpt.sourceSnapshot?.extractionCoverage,
+                openOriginalFile: excerpt.openOriginalFile,
                 evidenceCoverage: excerpt.sourceSnapshot?.evidenceCoverage ?? null,
             });
         }

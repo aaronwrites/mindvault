@@ -1,3 +1,4 @@
+import { PdfPageReference } from "@/components/pdf-page-reference";
 import { PdfExtractionCoverage } from "@/components/pdf-extraction-coverage";
 import { API_URL } from "@/lib/api";
 import { ExternalLink } from "lucide-react";
@@ -41,8 +42,9 @@ export function RecallResultCard({ result }: { result: RecallKnowledgeItem }) {
           {result.excerpts.map((excerpt, index) => (
             <blockquote key={`${excerpt.origin}-${index}`} className="space-y-1 border-l-2 pl-3 text-sm">
               <p>{excerpt.text}</p>
+              <PdfPageReference pageNumber={excerpt.pageNumber} pageLabel={excerpt.pageLabel} openOriginalFile={excerpt.openOriginalFile} />
               <PdfExtractionCoverage coverage={excerpt.sourceSnapshot?.extractionCoverage} />
-              <footer className="text-muted-foreground">{originLabels[excerpt.origin]}{excerpt.pageNumber ? ` · Page ${excerpt.pageNumber}` : ""}{excerpt.sourceSnapshot?.evidenceCoverage === "metadata-only" ? " · metadata-only evidence" : ""}</footer>
+              <footer className="text-muted-foreground">{originLabels[excerpt.origin]}{excerpt.sourceSnapshot?.evidenceCoverage === "metadata-only" ? " · metadata-only evidence" : ""}</footer>
             </blockquote>
           ))}
         </section>

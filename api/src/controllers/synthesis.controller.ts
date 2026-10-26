@@ -1,3 +1,4 @@
+import { OllamaProviderError } from "../lib/ai/ollama";
 import type { Request, Response } from "express";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as schema from "../db/schema";
@@ -17,6 +18,9 @@ export function synthesizeKnowledgeController(
         try {
             return res.json(await synthesizeKnowledge(database, parsed.data.question, parsed.data.conversation, embeddingProvider, generationProvider));
         } catch (error) {
+            if (error instanceof OllamaProviderError && error.kind === "input") {
+                return res.status(422).json({ error: "Synthesis exceeds the model input limit. Ask a narrower question or start a new conversation." });
+            }
             console.error("Knowledge Synthesis failed:", error);
             return res.status(502).json({ error: "Answer generation is temporarily unavailable. Please try again." });
         }
