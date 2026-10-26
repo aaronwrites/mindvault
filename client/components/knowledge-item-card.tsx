@@ -1,3 +1,4 @@
+import { PdfExtractionCoverage } from "@/components/pdf-extraction-coverage";
 import { ExternalLink } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -108,13 +109,7 @@ export function KnowledgeItemCard({
             Searchable from source-provided metadata only; primary page content was unavailable.
           </p>
         )}
-        {knowledgeItem.extractionCoverage && (
-          <p className="text-sm text-muted-foreground" role="status">
-            Text extracted from {knowledgeItem.extractionCoverage.pages.filter(page => page.outcome === "extracted").length} of {knowledgeItem.extractionCoverage.pageCount} PDF pages.
-            {knowledgeItem.extractionCoverage.pages.some(page => !["extracted", "blank"].includes(page.outcome)) && ` Incomplete extraction: ${knowledgeItem.extractionCoverage.pages.filter(page => !["extracted", "blank"].includes(page.outcome)).map(page => `page ${page.pageNumber} (${page.reason ?? page.outcome})`).join("; ")}.`}
-            {" "}Diagrams, charts, and visual relationships have not been interpreted.
-          </p>
-        )}
+        <PdfExtractionCoverage coverage={knowledgeItem.extractionCoverage} />
         {canProcess && knowledgeItem.recognitionSummary && (
           <section aria-label="Generated Recognition Summary" className="space-y-1">
             <p className="text-xs font-medium text-muted-foreground">Generated recognition summary</p>

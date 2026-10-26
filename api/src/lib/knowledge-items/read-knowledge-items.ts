@@ -1,3 +1,4 @@
+import { pdfExtractionCoverage, type PdfExtractionCoverage } from "../pdf/pdf-extraction-disclosure";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as schema from "../../db/schema";
@@ -24,7 +25,6 @@ import {
     knowledgeItemTopicTags,
     topicTags,
     type EvidenceCoverage,
-    type PdfEvidence,
 } from "../../db/schema";
 import { originalFileActions } from "../original-files/create-original-file-access";
 
@@ -61,7 +61,7 @@ export type KnowledgeItemView = {
         faviconUrl: string | null;
     } | null;
     evidenceCoverage: EvidenceCoverage | null;
-    extractionCoverage?: Omit<PdfEvidence, "pages"> & { pages: Array<Omit<PdfEvidence["pages"][number], "text">> } | null;
+    extractionCoverage?: PdfExtractionCoverage | null;
     captureContexts: Array<{ kind: string; summary: string }>;
     availability: KnowledgeItemAvailability;
     organizationCondition: "processing" | "complete" | "incomplete";
@@ -216,7 +216,7 @@ async function presentKnowledgeItems(
             evidenceCoverage: source.currentSnapshotId === null
                 ? null
                 : coverageBySnapshot.get(source.currentSnapshotId) ?? null,
-            ...(pdfEvidence ? { extractionCoverage: { pageCount: pdfEvidence.pageCount, pages: pdfEvidence.pages.map(({ text: _text, ...page }) => page) } } : {}),
+            ...(pdfEvidence ? { extractionCoverage: pdfExtractionCoverage(pdfEvidence) } : {}),
             captureContexts: contextsByItem.get(knowledgeItem.id) ?? [],
             availability: availabilityByItem.get(knowledgeItem.id) ?? "processing",
             organizationCondition: source.provenanceKind === "original-file" && source.sourceKind !== "pdf" ? "complete" : organizationConditions.get(knowledgeItem.id) ?? "processing",

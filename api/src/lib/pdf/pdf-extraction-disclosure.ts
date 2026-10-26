@@ -6,3 +6,9 @@ export function pdfExtractionDisclosure(pdf: PdfEvidence | null | undefined): st
     const gaps = pdf.pages.filter(page => !["extracted", "blank"].includes(page.outcome)).map(page => `${page.pageNumber} (${page.reason ?? page.outcome})`);
     return `PDF textual Extraction Coverage: ${pdf.pageCount} physical pages; text obtained from pages ${obtained.join(", ")}. ${gaps.length ? `Incomplete extraction; unread pages: ${gaps.join(", ")}. Acknowledge incomplete coverage.` : ""} Use only obtained text. Diagrams, charts, and visual relationships have not been interpreted; extracted labels cannot establish them.`;
 }
+
+export type PdfExtractionCoverage = Omit<PdfEvidence, "pages"> & { pages: Array<Omit<PdfEvidence["pages"][number], "text">> };
+
+export function pdfExtractionCoverage(pdf: PdfEvidence): PdfExtractionCoverage {
+    return { pageCount: pdf.pageCount, pages: pdf.pages.map(({ text: _text, ...page }) => page) };
+}

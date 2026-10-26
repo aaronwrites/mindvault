@@ -1,8 +1,11 @@
 // Isolated parser: receives retained bytes on stdin, emits one JSON result.
-// No Source URLs, passwords, scripting, rendering, or remote font loading.
+// No Source URLs, passwords, scripting, or remote font loading.
+import { fileURLToPath } from "node:url";
+import { ocrPdfPage } from "./ocr-pdf-page.mjs";
 import { getDocument, OPS } from "pdfjs-dist/legacy/build/pdf.mjs";
 
 const limits = JSON.parse(process.argv[2]);
+const budget = { pages: 0, pixels: 0, deadline: Date.now() + limits.timeoutMs };
 try {
     const chunks = [];
     let bytes = 0;
@@ -11,7 +14,7 @@ try {
         if (bytes > limits.maximumBytes) throw new Error("PDF processing byte limit exceeded; no pages were processed");
         chunks.push(chunk);
     }
-    const task = getDocument({ data: new Uint8Array(Buffer.concat(chunks)), isEvalSupported: false, useWorkerFetch: false, useSystemFonts: false, disableFontFace: true, stopAtErrors: true, maxImageSize: 16_000_000, verbosity: 0 });
+    const task = getDocument({ data: new Uint8Array(Buffer.concat(chunks)), isEvalSupported: false, useWorkerFetch: false, useSystemFonts: false, disableFontFace: true, stopAtErrors: true, standardFontDataUrl: fileURLToPath(new URL("./standard_fonts/", import.meta.resolve("pdfjs-dist/package.json"))), maxImageSize: -1, canvasMaxAreaInBytes: limits.maximumRenderPixels * 4, verbosity: 0 });
     const document = await task.promise;
     if (document.numPages > limits.maximumPages) throw new Error(`PDF page limit exceeded (${document.numPages} pages; limit ${limits.maximumPages}); no pages were processed`);
     const permissions = await document.getPermissions();
@@ -21,19 +24,14 @@ try {
     let characters = 0;
     for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber++) {
         const evidence = { pageNumber, pageLabel: labels?.[pageNumber - 1] ?? null, method: "none", outcome: "failed", text: "", reason: null };
+        let page;
         try {
-            const page = await document.getPage(pageNumber);
+            page = await document.getPage(pageNumber);
             const content = await page.getTextContent();
             const items = content.items.filter(item => "str" in item && item.str.trim());
             // Content streams may paint a lower line before an upper line. Recover
             // straightforward horizontal reading order from physical coordinates.
             const horizontal = items.every(item => Math.abs(item.transform[1]) < 0.01 && Math.abs(item.transform[2]) < 0.01);
-            if (!horizontal) {
-                Object.assign(evidence, { outcome: "needs-ocr", reason: "Native text reading order requires OCR or layout review" });
-                pages.push(evidence);
-                page.cleanup();
-                continue;
-            }
             items.sort((left, right) => right.transform[5] - left.transform[5]);
             const lines = [];
             for (const item of items) {
@@ -51,7 +49,7 @@ try {
             text = text.replace(/[^\S\n]+/gu, " ").replace(/ *\n */gu, "\n").replace(/\n{3,}/gu, "\n\n").trim();
             // Reject garbled or label-only output as insufficient native evidence.
             const readable = (text.match(/[\p{L}\p{N}]/gu)?.length ?? 0) >= 30 && !text.includes("\uFFFD") && [...new Intl.Segmenter(undefined, { granularity: "word" }).segment(text)].filter(segment => segment.isWordLike).length >= 5;
-            if (readable) {
+            if (readable && horizontal) {
                 Object.assign(evidence, { text, method: "native", outcome: "extracted" });
                 characters += text.length;
             } else {
@@ -61,14 +59,22 @@ try {
                     && !(op === OPS.transform && JSON.stringify(operations.argsArray[index]) === "[1,0,0,1,0,0]"));
                 Object.assign(evidence, hasMarks || text ? { outcome: "needs-ocr", reason: "No trustworthy selectable text; OCR is required" } : { outcome: "blank" });
             }
-            page.cleanup();
+            if (evidence.outcome === "needs-ocr") {
+                Object.assign(evidence, await ocrPdfPage(document, page, limits, budget));
+                if (evidence.outcome === "extracted") {
+                    characters += evidence.text.length;
+                    if (characters > limits.maximumCharacters) throw new Error("PDF text limit exceeded; document was not indexed");
+                }
+            }
         } catch (error) {
-            if (error.message.includes("limit exceeded")) throw error;
-            evidence.reason = `Page ${pageNumber} could not be read`;
+            if (error.message.includes("limit exceeded") || error.message.startsWith("Local OCR")) throw error;
+            Object.assign(evidence, { outcome: "failed", text: "", reason: `Page ${pageNumber} could not be read; retry processing` });
+        } finally {
+            page?.cleanup();
         }
         pages.push(evidence);
     }
-    if (!pages.some(page => page.outcome === "extracted")) throw new Error("PDF contains no trustworthy selectable text; OCR may be required");
+    if (!pages.some(page => page.outcome === "extracted")) throw new Error(`PDF contains no trustworthy selectable text or printed English OCR evidence. ${[...new Set(pages.map(page => page.reason).filter(Boolean))].join("; ")}`);
     process.stdout.write(JSON.stringify({ pageCount: document.numPages, pages }));
     await task.destroy();
 } catch (error) {

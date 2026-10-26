@@ -20,8 +20,8 @@ export type EvidenceCoverage = typeof evidenceCoverageKinds[number];
 export type PdfPageEvidence = {
     pageNumber: number;
     pageLabel: string | null;
-    method: "native" | "none";
-    outcome: "extracted" | "blank" | "needs-ocr" | "failed";
+    method: "native" | "ocr" | "none";
+    outcome: "extracted" | "blank" | "needs-ocr" | "failed" | "unreadable" | "unprocessed";
     text: string;
     reason: string | null;
 };

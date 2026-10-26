@@ -1,3 +1,4 @@
+import { pdfExtractionCoverage, type PdfExtractionCoverage } from "../pdf/pdf-extraction-disclosure";
 import { and, eq, inArray, or } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as schema from "../../db/schema";
@@ -29,6 +30,7 @@ export type RecallKnowledgeItemResult = {
             canonicalUrl: string | null;
             extractedAt: string;
             evidenceCoverage: EvidenceCoverage;
+            extractionCoverage?: PdfExtractionCoverage;
         } | null;
         ranking: { score: number; semanticRank?: number; lexicalRank?: number };
     }>;
@@ -51,6 +53,7 @@ export async function recallKnowledgeItems(database: Database, query: string, em
             originalUrl: sourceSnapshots.originalUrl, finalUrl: sourceSnapshots.finalUrl,
             canonicalUrl: sourceSnapshots.canonicalUrl, extractedAt: sourceSnapshots.extractedAt,
             evidenceCoverage: sourceSnapshots.evidenceCoverage,
+            pdfEvidence: sourceSnapshots.pdfEvidence,
         })
         .from(passages)
         .leftJoin(sourceSnapshots, eq(passages.sourceSnapshotId, sourceSnapshots.id))
@@ -89,6 +92,7 @@ export async function recallKnowledgeItems(database: Database, query: string, em
                         id: details.sourceSnapshotId, originalUrl: details.originalUrl, finalUrl: details.finalUrl,
                         canonicalUrl: details.canonicalUrl, extractedAt: toIsoString(details.extractedAt!),
                         evidenceCoverage: details.evidenceCoverage!,
+                        ...(details.pdfEvidence ? { extractionCoverage: pdfExtractionCoverage(details.pdfEvidence) } : {}),
                     },
                     ranking: {
                         score: passage.score,

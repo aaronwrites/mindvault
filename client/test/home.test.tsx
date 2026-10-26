@@ -1023,3 +1023,23 @@ test("processes an already retained PDF and exposes its generated enrichment", a
   expect(screen.getByText("Summary generation exceeded its input limit.")).toBeTruthy();
   expect(screen.getByRole("button", { name: "Open original file: recovery.pdf" })).toBeTruthy();
 });
+
+test("Recall discloses the cited PDF snapshot's extraction gaps", async () => {
+  const { RecallResultCard } = await import("@/components/recall-result-card");
+  const result: RecallKnowledgeItem = {
+    id: 31, title: "Printed recovery", source: { ...processingItem.source, filename: "scan.pdf" },
+    sourcePreview: null, recognitionSummary: null, topicTags: [],
+    excerpts: [{ text: "Restore the base backup.", pageNumber: 2, origin: "source-snapshot",
+      sourceSnapshot: { id: 4, originalUrl: null, finalUrl: null, canonicalUrl: null,
+        extractedAt: processingItem.createdAt, evidenceCoverage: "primary-content",
+        extractionCoverage: { pageCount: 3, pages: [
+          { pageNumber: 1, outcome: "blank", reason: null },
+          { pageNumber: 2, outcome: "extracted", reason: null },
+          { pageNumber: 3, outcome: "unprocessed", reason: "Document rendering/OCR work limit reached" },
+        ] } }, ranking: { score: 1 } }],
+    ranking: { score: 1, matchedPassageCount: 1 },
+  };
+  render(<RecallResultCard result={result} />);
+  expect(screen.getByText(/Incomplete extraction: page 3/)).toBeTruthy();
+  expect(screen.getByText(/visual relationships have not been interpreted/)).toBeTruthy();
+});

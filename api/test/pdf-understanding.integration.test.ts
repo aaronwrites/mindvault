@@ -87,16 +87,18 @@ async function setupPdf(fixture: string, limits?: Partial<import("../src/lib/pdf
     const embeddings = new DeterministicEmbeddingProvider();
     const { pdfProcessingLimits } = await import("../src/lib/pdf/extract-pdf");
     const pdfLimits = { ...pdfProcessingLimits({}), ...limits };
+    const prompts: string[] = [];
     harness = await createIntegrationHarness(
         database => createApp({ database: database.db, originalFileStorage: storage, embeddingProvider: embeddings }),
         database => createArticleProcessingWorker({ database: database.db, originalFileStorage: () => storage, pdfLimits, embeddingProvider: embeddings,
-            summaryProvider: new DeterministicGenerationProvider("A recovery guide."), topicTagProvider: new DeterministicTopicTagGenerationProvider(), maxAttempts: 1 }),
+            summaryProvider: { async generate(prompt) { prompts.push(prompt); return "A recovery guide."; } },
+            topicTagProvider: { async generateTopicTags(prompt) { prompts.push(prompt); return [{ name: "Testing", aliases: [] }]; } }, maxAttempts: 1 }),
     );
     const form = new FormData();
     form.set("file", new Blob([await Bun.file(new URL(`fixtures/pdf/${fixture}`, import.meta.url)).arrayBuffer()]), fixture);
     const response = await fetch(`${harness.apiBaseUrl}/captures/file`, { method: "POST", body: form });
     expect(response.status).toBe(201);
-    return { captured: await response.json() as any, storage, pdfLimits };
+    return { captured: await response.json() as any, storage, pdfLimits, prompts };
 }
 async function readItem(id: number) { return (await fetch(`${harness!.apiBaseUrl}/knowledge-items/${id}`)).json() as Promise<any>; }
 async function postItem(id: number, action: string) { return fetch(`${harness!.apiBaseUrl}/knowledge-items/${id}/${action}`, { method: "POST" }); }
@@ -152,7 +154,7 @@ test("native evidence preserves distinct gaps and blank pages", async () => {
     expect(item.availability).toBe("ready");
     expect(item.extractionCoverage).toMatchObject({ pageCount: 3, pages: [
         { pageNumber: 1, method: "native", outcome: "extracted" },
-        { pageNumber: 2, method: "none", outcome: "needs-ocr" },
+        { pageNumber: 2, method: "ocr", outcome: "unreadable" },
         { pageNumber: 3, method: "none", outcome: "blank" },
     ] });
 });
@@ -176,3 +178,113 @@ test("native PDF Recall follows physical line order rather than drawing order", 
     expect(results[0].excerpts[0].text).toBe("First: restore the base backup before replaying any transaction logs.\nSecond: replay archived WAL to recover committed transactions.");
     expect(results[0].excerpts[0].pageNumber).toBe(1);
 });
+
+test("printed English scans become Ready with OCR evidence and code Recall", async () => {
+    const { captured } = await setupPdf("printed-scan.pdf");
+    await harness!.drainWorker();
+    const item = await readItem(captured.knowledgeItemId);
+    expect(item.availability).toBe("ready");
+    expect(item.extractionCoverage.pages).toMatchObject([{ pageNumber: 1, method: "ocr", outcome: "extracted" }]);
+    const results = await search("SCAN_RECOVERY_MARKER");
+    expect(results[0].id).toBe(item.id);
+    expect(results[0].excerpts[0].pageNumber).toBe(1);
+    expect(results[0].excerpts[0].text).toContain("SELECT pg_switch_wal();");
+    await postItem(captured.knowledgeItemId, "refresh");
+    await harness!.drainWorker();
+    const repeated = await search("SCAN_RECOVERY_MARKER");
+    expect(repeated[0].excerpts).toEqual(results[0].excerpts);
+    expect(repeated[0].ranking.matchedPassageCount).toBe(1);
+}, 20_000);
+
+
+test("mixed PDFs prefer native evidence and disclose unreadable pages to enrichment and Recall", async () => {
+    const { captured, prompts } = await setupPdf("mixed.pdf");
+    await harness!.drainWorker();
+    const item = await readItem(captured.knowledgeItemId);
+    expect(item.availability).toBe("ready");
+    expect(item.extractionCoverage.pages).toMatchObject([
+        { pageNumber: 1, method: "native", outcome: "extracted" },
+        { pageNumber: 2, method: "ocr", outcome: "extracted" },
+        { pageNumber: 3, method: "ocr", outcome: "unreadable" },
+        { pageNumber: 4, method: "none", outcome: "blank" },
+    ]);
+    expect(prompts.length).toBe(2);
+    for (const prompt of prompts) {
+        expect(prompt).toContain("Incomplete extraction; unread pages: 3");
+        expect(prompt).toContain("visual relationships have not been interpreted");
+    }
+    const results = await search("SCAN_RECOVERY_MARKER");
+    expect(results[0].excerpts[0].pageNumber).toBe(2);
+    expect(results[0].excerpts[0].sourceSnapshot.extractionCoverage.pages[2].outcome).toBe("unreadable");
+    expect(results[0].ranking.matchedPassageCount).toBe(1);
+}, 20_000);
+
+for (const [limits, outcome, reason] of [
+    [{ maximumOcrPages: 1 }, "unprocessed", "work limit"],
+    [{ maximumRenderPixels: 100 }, "unprocessed", "pixel limit"],
+    [{ maximumTotalRenderPixels: 100 }, "unprocessed", "work limit"],
+    [{ ocrTimeoutMs: 1 }, "failed", "time/output limit"],
+    [{ ocrTimeoutMs: 30_000 }, "unprocessed", "time budget"],
+] as const) {
+    test(`bounded OCR preserves native evidence and discloses ${reason}`, async () => {
+        const { captured } = await setupPdf("mixed.pdf", limits);
+        await harness!.drainWorker();
+        const item = await readItem(captured.knowledgeItemId);
+        expect(item.availability).toBe("ready");
+        const page = item.extractionCoverage.pages[reason === "work limit" && "maximumOcrPages" in limits ? 2 : 1];
+        expect(page.outcome).toBe(outcome);
+        expect(page.reason).toContain(reason);
+        expect((await search("WAL_RECOVERY_TARGET"))[0].id).toBe(item.id);
+    }, 20_000);
+}
+
+test("OCR coverage improves on Refresh and reduced later work preserves useful evidence", async () => {
+    const { captured, pdfLimits } = await setupPdf("mixed.pdf", { maximumRenderPixels: 100 });
+    await harness!.drainWorker();
+    expect((await readItem(captured.knowledgeItemId)).extractionCoverage.pages[1].outcome).toBe("unprocessed");
+    pdfLimits.maximumRenderPixels = 8_000_000;
+    await postItem(captured.knowledgeItemId, "refresh");
+    await harness!.drainWorker();
+    const first = await search("SCAN_RECOVERY_MARKER");
+    expect(first[0].id).toBe(captured.knowledgeItemId);
+    expect(first[0].excerpts[0].sourceSnapshot.extractionCoverage.pages[1].method).toBe("ocr");
+    pdfLimits.maximumRenderPixels = 100;
+    await postItem(captured.knowledgeItemId, "refresh");
+    await harness!.drainWorker();
+    expect((await readItem(captured.knowledgeItemId)).extractionCoverage.pages[1].outcome).toBe("extracted");
+    expect((await search("SCAN_RECOVERY_MARKER"))[0].excerpts).toEqual(first[0].excerpts);
+}, 20_000);
+
+for (const fixture of ["scan-blank.pdf", "no-evidence.pdf"]) {
+    test(`${fixture} stays retained without invented OCR evidence`, async () => {
+        const { captured, storage } = await setupPdf(fixture);
+        await harness!.drainWorker();
+        const item = await readItem(captured.knowledgeItemId);
+        expect(item.availability).toBe("needs-attention");
+        expect(item.latestAttempt.failureReason).toContain("no trustworthy selectable text or printed English OCR evidence");
+        expect(item.source.originalFileActions.open).toBeString();
+        expect(storage.uploadedFileCount).toBe(1);
+        expect(await search("recovery")).toEqual([]);
+    });
+}
+
+test("white scanned pages and empty PDF pages are both blank rather than unreadable", async () => {
+    const { captured } = await setupPdf("blank-pages.pdf");
+    await harness!.drainWorker();
+    expect((await readItem(captured.knowledgeItemId)).extractionCoverage.pages).toMatchObject([
+        { pageNumber: 1, outcome: "extracted" }, { pageNumber: 2, outcome: "blank" }, { pageNumber: 3, outcome: "blank" },
+    ]);
+});
+
+test("a missing local OCR runtime remains actionable and can be retried without reupload", async () => {
+    const { captured, pdfLimits, storage } = await setupPdf("printed-scan.pdf", { ocrExecutable: "/nonexistent/mindvault-tesseract" });
+    await harness!.drainWorker();
+    const item = await readItem(captured.knowledgeItemId);
+    expect(item.availability).toBe("needs-attention");
+    expect(item.latestAttempt.failureReason).toContain("install Tesseract");
+    pdfLimits.ocrExecutable = "tesseract";
+    await postItem(captured.knowledgeItemId, "retry");
+    await harness!.drainWorker();
+    expect((await readItem(captured.knowledgeItemId)).availability).toBe("ready");
+    expect(storage.uploadedFileCount).toBe(1);
+}, 20_000);
