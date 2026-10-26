@@ -74,3 +74,10 @@ for name, kinds in [('printed-scan', ['scan']), ('mixed', ['native', 'scan', 'ga
             pdf.drawString(48, 760, 'Diagram')
         pdf.showPage()
     pdf.save()
+
+# A useful native footer must not hide the scanned body on the same page.
+pdf = canvas.Canvas(str(root / 'scan-with-footer.pdf'), invariant=1)
+pdf.drawImage(ImageReader(scan), 0, 0, width=595, height=842)
+pdf.drawString(30, 30, 'Downloaded from the public technical knowledge archive for educational use.')
+pdf.showPage()
+pdf.save()

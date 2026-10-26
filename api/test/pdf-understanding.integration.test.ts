@@ -288,3 +288,50 @@ test("a missing local OCR runtime remains actionable and can be retried without 
     expect((await readItem(captured.knowledgeItemId)).availability).toBe("ready");
     expect(storage.uploadedFileCount).toBe(1);
 }, 20_000);
+
+test("a native footer cannot hide the scanned body on the same PDF page", async () => {
+    const { captured } = await setupPdf("scan-with-footer.pdf");
+    await harness!.drainWorker();
+    const results = await search("SCAN_RECOVERY_MARKER");
+    expect(results[0]?.id).toBe(captured.knowledgeItemId);
+    expect(results[0].excerpts[0].text).toContain("SELECT pg_switch_wal();");
+    expect(results[0].excerpts[0].text.match(/Downloaded from/g)).toHaveLength(1);
+}, 20_000);
+
+test("a temporary local OCR process failure recovers automatically on a mixed PDF", async () => {
+    const { mkdtemp, writeFile, rm } = await import("node:fs/promises");
+    const { tmpdir } = await import("node:os");
+    const directory = await mkdtemp(`${tmpdir()}/mindvault-ocr-retry-`);
+    const executable = `${directory}/ocr.mjs`;
+    const state = `${directory}/attempted`;
+    await writeFile(executable, `#!/usr/bin/env node
+import { existsSync, writeFileSync, readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+if (!existsSync(${JSON.stringify(state)})) { writeFileSync(${JSON.stringify(state)}, 'attempted'); process.exit(1); }
+const result = spawnSync(${JSON.stringify(Bun.which("tesseract"))}, process.argv.slice(2), { input: readFileSync(0), encoding: 'utf8' });
+process.stdout.write(result.stdout ?? '');
+process.stderr.write(result.stderr ?? '');
+process.exit(result.status ?? 1);
+`, { mode: 0o700 });
+    try {
+        const { captured } = await setupPdf("mixed.pdf", { ocrExecutable: executable });
+        await harness!.drainWorker();
+        const item = await readItem(captured.knowledgeItemId);
+        expect(item.availability).toBe("ready");
+        expect(item.extractionCoverage.pages[1]).toMatchObject({ method: "ocr", outcome: "extracted" });
+        expect((await search("SCAN_RECOVERY_MARKER"))[0].id).toBe(item.id);
+    } finally { await rm(directory, { recursive: true, force: true }); }
+}, 20_000);
+
+test("bounded raster work retains native text while disclosing the unread scanned body", async () => {
+    const { captured, prompts } = await setupPdf("scan-with-footer.pdf", { maximumRenderPixels: 100 });
+    await harness!.drainWorker();
+    const item = await readItem(captured.knowledgeItemId);
+    expect(item.availability).toBe("ready");
+    expect(item.extractionCoverage.pages[0]).toMatchObject({ method: "native", outcome: "extracted" });
+    expect(item.extractionCoverage.pages[0].reason).toContain("raster text coverage incomplete");
+    for (const prompt of prompts) expect(prompt).toContain("Incomplete extraction; unread pages: 1");
+    const results = await search("educational use");
+    expect(results[0].id).toBe(item.id);
+    expect(results[0].excerpts[0].sourceSnapshot.extractionCoverage.pages[0].reason).toContain("pixel limit");
+});

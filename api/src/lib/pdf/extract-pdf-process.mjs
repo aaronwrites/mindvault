@@ -1,6 +1,7 @@
 // Isolated parser: receives retained bytes on stdin, emits one JSON result.
 // No Source URLs, passwords, scripting, or remote font loading.
 import { fileURLToPath } from "node:url";
+import { hasSubstantialRaster } from "./pdf-raster-content.mjs";
 import { ocrPdfPage } from "./ocr-pdf-page.mjs";
 import { getDocument, OPS } from "pdfjs-dist/legacy/build/pdf.mjs";
 
@@ -49,11 +50,12 @@ try {
             text = text.replace(/[^\S\n]+/gu, " ").replace(/ *\n */gu, "\n").replace(/\n{3,}/gu, "\n\n").trim();
             // Reject garbled or label-only output as insufficient native evidence.
             const readable = (text.match(/[\p{L}\p{N}]/gu)?.length ?? 0) >= 30 && !text.includes("\uFFFD") && [...new Intl.Segmenter(undefined, { granularity: "word" }).segment(text)].filter(segment => segment.isWordLike).length >= 5;
-            if (readable && horizontal) {
+            const operations = await page.getOperatorList();
+            const nativeText = readable && horizontal ? text : "";
+            const rasterContent = nativeText && hasSubstantialRaster(page, operations);
+            if (nativeText && !rasterContent) {
                 Object.assign(evidence, { text, method: "native", outcome: "extracted" });
-                characters += text.length;
             } else {
-                const operations = await page.getOperatorList();
                 const emptyTextSetup = new Set([OPS.beginText, OPS.endText, OPS.setFont, OPS.setTextMatrix, OPS.setCharSpacing, OPS.setWordSpacing, OPS.setHScale, OPS.setLeading, OPS.setTextRenderingMode, OPS.setTextRise, OPS.dependency]);
                 const hasMarks = operations.fnArray.some((op, index) => !emptyTextSetup.has(op)
                     && !(op === OPS.transform && JSON.stringify(operations.argsArray[index]) === "[1,0,0,1,0,0]"));
@@ -61,10 +63,20 @@ try {
             }
             if (evidence.outcome === "needs-ocr") {
                 Object.assign(evidence, await ocrPdfPage(document, page, limits, budget));
-                if (evidence.outcome === "extracted") {
-                    characters += evidence.text.length;
-                    if (characters > limits.maximumCharacters) throw new Error("PDF text limit exceeded; document was not indexed");
+                if (nativeText && evidence.outcome !== "extracted") {
+                    Object.assign(evidence, { text: nativeText, method: "native", outcome: "extracted", reason: `Native text retained; raster text coverage incomplete: ${evidence.reason ?? "no additional trustworthy OCR text"}` });
+                } else if (nativeText) {
+                    // Preserve other extracted languages and exact native spelling without
+                    // adding a second copy of native lines already present in OCR.
+                    const canonical = value => value.toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
+                    const obtained = canonical(evidence.text);
+                    const missing = nativeText.split("\n").filter(line => !obtained.includes(canonical(line)));
+                    if (missing.length) evidence.text += "\n" + missing.join("\n");
                 }
+            }
+            if (evidence.outcome === "extracted") {
+                characters += evidence.text.length;
+                if (characters > limits.maximumCharacters) throw new Error("PDF text limit exceeded; document was not indexed");
             }
         } catch (error) {
             if (error.message.includes("limit exceeded") || error.message.startsWith("Local OCR")) throw error;

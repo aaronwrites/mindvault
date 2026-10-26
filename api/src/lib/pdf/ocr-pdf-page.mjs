@@ -28,17 +28,23 @@ export async function ocrPdfPage(document, page, limits, budget) {
         // Only an effectively white raster is blank. Empty OCR on a marked page is unreadable.
         if (marks === 0) return { outcome: "blank", reason: null };
         let tsv;
-        try {
-            tsv = execFileSync(limits.ocrExecutable, ["stdin", "stdout", "-l", "eng", "--psm", "3", "--dpi", String(limits.renderDpi), "tsv"], {
-                input: surface.canvas.toBuffer("image/png"), encoding: "utf8", timeout: limits.ocrTimeoutMs,
-                killSignal: "SIGKILL", maxBuffer: Math.min(32_000_000, limits.maximumCharacters * 20 + 100_000),
-                env: { PATH: process.env.PATH, OMP_THREAD_LIMIT: "1" },
-            });
-        } catch (error) {
-            if (error.code === "ENOENT") throw new Error("Local OCR runtime unavailable; install Tesseract with English data or configure PDF_TESSERACT_EXECUTABLE");
-            if (error.stderr?.includes("Failed loading language")) throw new Error("Local OCR English data unavailable; install Tesseract eng.traineddata");
-            return { outcome: "failed", method: "ocr", reason: "Local OCR failed or exceeded its time/output limit; retry processing" };
+        // Retry only the incomplete OCR work, reusing this page's rendered bytes.
+        const image = surface.canvas.toBuffer("image/png");
+        for (let attempt = 0; attempt < 2; attempt++) {
+            if (Date.now() + limits.ocrTimeoutMs + 250 >= budget.deadline) break;
+            try {
+                tsv = execFileSync(limits.ocrExecutable, ["stdin", "stdout", "-l", "eng", "--psm", "3", "--dpi", String(limits.renderDpi), "tsv"], {
+                    input: image, encoding: "utf8", timeout: limits.ocrTimeoutMs,
+                    killSignal: "SIGKILL", maxBuffer: Math.min(32_000_000, limits.maximumCharacters * 20 + 100_000),
+                    env: { PATH: process.env.PATH, OMP_THREAD_LIMIT: "1" },
+                });
+                break;
+            } catch (error) {
+                if (error.code === "ENOENT") throw new Error("Local OCR runtime unavailable; install Tesseract with English data or configure PDF_TESSERACT_EXECUTABLE");
+                if (error.stderr?.includes("Failed loading language")) throw new Error("Local OCR English data unavailable; install Tesseract eng.traineddata");
+            }
         }
+        if (tsv === undefined) return { outcome: "failed", method: "ocr", reason: "Local OCR failed or exceeded its time/output limit after bounded automatic retry; retry processing" };
         const words = tsv.split("\n").slice(1).map(line => line.split("\t"))
             .filter(fields => fields[0] === "5" && fields[11]?.trim())
             .map(fields => ({ line: fields.slice(1, 5).join(":"), confidence: Number(fields[10]), text: fields[11].trim() }));

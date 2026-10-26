@@ -1034,12 +1034,12 @@ test("Recall discloses the cited PDF snapshot's extraction gaps", async () => {
         extractedAt: processingItem.createdAt, evidenceCoverage: "primary-content",
         extractionCoverage: { pageCount: 3, pages: [
           { pageNumber: 1, outcome: "blank", reason: null },
-          { pageNumber: 2, outcome: "extracted", reason: null },
+          { pageNumber: 2, outcome: "extracted", reason: "Native text retained; raster text coverage incomplete" },
           { pageNumber: 3, outcome: "unprocessed", reason: "Document rendering/OCR work limit reached" },
         ] } }, ranking: { score: 1 } }],
     ranking: { score: 1, matchedPassageCount: 1 },
   };
   render(<RecallResultCard result={result} />);
-  expect(screen.getByText(/Incomplete extraction: page 3/)).toBeTruthy();
+  expect(screen.getByText(/Incomplete extraction: page 2/)).toBeTruthy();
   expect(screen.getByText(/visual relationships have not been interpreted/)).toBeTruthy();
 });
