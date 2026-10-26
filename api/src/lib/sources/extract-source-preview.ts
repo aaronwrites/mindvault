@@ -80,7 +80,7 @@ function informativeMetadataEvidence(preview: ExtractedSourcePreview, finalUrl: 
     if (preview.description && isInformativeMetadata(preview.description, finalUrl)) {
         return `Source-provided description: ${preview.description}`;
     }
-    if (isDescriptiveTitle(preview.title)) return `Source-provided title: ${preview.title}`;
+    if (isDescriptiveTitle(preview.title, finalUrl)) return `Source-provided title: ${preview.title}`;
     return null;
 }
 
@@ -88,14 +88,16 @@ function isInformativeMetadata(value: string, finalUrl: string): boolean {
     return value.length >= 40 && !hasUninformativeMetadataLanguage(value) && !isGenericPlatformPostDescription(value, finalUrl);
 }
 
-function isDescriptiveTitle(value: string): boolean {
+function isDescriptiveTitle(value: string, finalUrl: string): boolean {
     return value.length >= 30
         && value.trim().split(/\s+/).length >= 5
-        && !hasUninformativeMetadataLanguage(value);
+        && !hasUninformativeMetadataLanguage(value)
+        && !isGenericPlatformPostDescription(value, finalUrl);
 }
 
 function hasUninformativeMetadataLanguage(value: string): boolean {
-    return /\b(sign in|log in|create an account|join now|access denied|not found|error|captcha|verify you are human|subscribe)\b/i.test(value);
+    return /\b(sign in|log in|create an account|join now|access denied|not found|captcha|verify you are human|subscribe)\b/i.test(value)
+        || /^(?:internal server )?error(?:\s+[45]\d\d\b|\s*[:–—-]|$)/i.test(value.trim());
 }
 
 function isGenericPlatformPostDescription(value: string, finalUrl: string): boolean {

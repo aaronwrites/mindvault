@@ -148,11 +148,12 @@ describe("collection-wide Synthesis", () => {
     getKnowledgeItems.mockResolvedValue([processingItem]);
     getTrashedKnowledgeItems.mockResolvedValue([]);
     const initialAnswer: SynthesisResult = {
-      answer: "Logical replication keeps read models current.",
+      answer: "Logical replication keeps read models current." + " Supporting detail.".repeat(300),
       insufficientEvidence: false,
       citations: [{
         knowledgeItemId: 7,
         sourceSnapshotId: 12,
+        origin: "source-snapshot",
         title: "PostgreSQL replication overview",
         originalUrl: "https://example.com/postgres",
         evidenceCoverage: "metadata-only",
@@ -162,6 +163,7 @@ describe("collection-wide Synthesis", () => {
     const followUpAnswer: SynthesisResult = {
       ...initialAnswer,
       answer: "It does that by applying changes from the publisher.",
+      citations: [{ ...initialAnswer.citations[0]!, origin: "personal-note", sourceSnapshotId: null, evidenceCoverage: null }],
     };
     askVault.mockResolvedValueOnce(initialAnswer).mockResolvedValueOnce(followUpAnswer);
     const user = userEvent.setup({ document: dom.window.document });
@@ -171,7 +173,7 @@ describe("collection-wide Synthesis", () => {
     await user.type(await screen.findByLabelText("Ask a question about your captured knowledge"), "How do read models stay current?");
     await user.click(screen.getByRole("button", { name: "Ask your vault" }));
     await waitFor(() => expect(askVault.mock.calls[0]?.[0]).toEqual({ question: "How do read models stay current?", conversation: [] }));
-    expect(await screen.findByText("Logical replication keeps read models current.")).toBeTruthy();
+    expect(await screen.findByText(initialAnswer.answer)).toBeTruthy();
     expect(screen.getByText("Based on source-provided metadata only.")).toBeTruthy();
     expect(screen.getByRole("link", { name: "View PostgreSQL replication overview" }).getAttribute("href")).toBe("#knowledge-item-7");
 
@@ -180,15 +182,16 @@ describe("collection-wide Synthesis", () => {
     await user.click(screen.getByRole("button", { name: "Ask your vault" }));
     await waitFor(() => expect(askVault.mock.calls[1]?.[0]).toEqual({
       question: "What does it apply?",
-      conversation: [{ question: "How do read models stay current?", answer: initialAnswer.answer }],
+      conversation: [{ question: "How do read models stay current?", answer: initialAnswer.answer.slice(0, 4000) }],
     }));
     expect(await screen.findByText("It does that by applying changes from the publisher.")).toBeTruthy();
+    expect(screen.getByText("Based on your Personal Note.")).toBeTruthy();
 
     askVault.mockRejectedValue(new Error("Answer generation is temporarily unavailable. Please try again."));
     await user.type(question, "And when does it fail?");
     await user.click(screen.getByRole("button", { name: "Ask your vault" }));
     expect(await screen.findByText("Answer generation is temporarily unavailable. Please try again.")).toBeTruthy();
-    expect(screen.getByText("Logical replication keeps read models current.")).toBeTruthy();
+    expect(screen.getByText(initialAnswer.answer)).toBeTruthy();
     expect(screen.getByText("It does that by applying changes from the publisher.")).toBeTruthy();
   });
 });

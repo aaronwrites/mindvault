@@ -1,6 +1,7 @@
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as schema from "../../db/schema";
 import type { EmbeddingProvider, SynthesisConversationTurn, SynthesisEvidence, SynthesisGenerationProvider } from "../ai/providers";
+import { boundConversation, boundSynthesisInput } from "./bound-conversation";
 import { recallKnowledgeItems } from "../recall/recall-knowledge-items";
 
 type Database = NodePgDatabase<typeof schema>;
@@ -12,6 +13,7 @@ const maximumExcerptCharacters = 1_500;
 export type SynthesisResult = {
     answer: string;
     citations: Array<{
+        origin: SynthesisEvidence["origin"];
         knowledgeItemId: number;
         sourceSnapshotId: number | null;
         title: string;
@@ -29,11 +31,14 @@ export async function synthesizeKnowledge(
     embeddingProvider: EmbeddingProvider,
     generationProvider: SynthesisGenerationProvider,
 ): Promise<SynthesisResult> {
-    // Conversation provides context to generation, but it must not steer retrieval on
-    // its own. Otherwise an unrelated new question can retrieve evidence solely
-    // because an earlier turn mentioned it.
-    const recalled = await recallKnowledgeItems(database, question, embeddingProvider);
-    const evidence = evidenceFor(recalled);
+    conversation = boundConversation(conversation);
+    // Resolve conversational references before retrieving fresh active evidence.
+    // The resolved question is a search input, never source evidence.
+    const retrievalQuestion = conversation.length > 0
+        ? await generationProvider.resolveQuestion({ question, conversation }) : question;
+    const recalled = await recallKnowledgeItems(database, retrievalQuestion, embeddingProvider);
+    const input = boundSynthesisInput({ question, evidence: evidenceFor(recalled), conversation });
+    const evidence = input.evidence;
     if (evidence.length === 0) {
         return {
             answer: "I don't have enough captured evidence to answer that question.",
@@ -42,7 +47,7 @@ export async function synthesizeKnowledge(
         };
     }
 
-    const generated = await generationProvider.generateSynthesis({ question, evidence, conversation });
+    const generated = await generationProvider.generateSynthesis(input);
     if (generated.insufficientEvidence) {
         return { answer: generated.answer, citations: [], insufficientEvidence: true };
     }
@@ -79,6 +84,7 @@ function evidenceFor(recalled: Awaited<ReturnType<typeof recallKnowledgeItems>>)
             characterCount += text.length;
             evidence.push({
                 citationId: `knowledge-item-${result.id}-excerpt-${excerptIndex + 1}`,
+                origin: excerpt.origin,
                 knowledgeItemId: result.id,
                 sourceSnapshotId: excerpt.sourceSnapshot?.id ?? null,
                 title: result.title ?? result.sourcePreview?.title ?? result.source.submittedUrl ?? "Captured Knowledge Item",

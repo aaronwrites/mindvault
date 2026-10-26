@@ -4,6 +4,7 @@ export interface TextGenerationProvider {
 
 export type SynthesisEvidence = {
     citationId: string;
+    origin: "source-snapshot" | "selected-source-text" | "personal-note";
     knowledgeItemId: number;
     sourceSnapshotId: number | null;
     title: string;
@@ -24,6 +25,7 @@ export type SynthesisGenerationInput = {
 };
 
 export interface SynthesisGenerationProvider {
+    resolveQuestion(input: { question: string; conversation: SynthesisConversationTurn[] }): Promise<string>;
     generateSynthesis(input: SynthesisGenerationInput): Promise<{
         answer: string;
         citationIds: string[];

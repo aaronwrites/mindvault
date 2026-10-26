@@ -80,6 +80,10 @@ export async function startSourceFixtureServer(): Promise<SourceFixtureServer> {
         if (path === "/metadata/description-only") return html(200, `<!doctype html><html><head>
 <title>Practical but short title</title><meta name="description" content="A guide to recovering a PostgreSQL database after an accidental schema migration.">
 </head><body><main><p>Too short.</p></main></body></html>`);
+        if (path === "/metadata/http-error") return html(200, article("Error 403 Forbidden - You cannot view this page", "Too short."));
+        if (path === "/metadata/access-prompt") return html(200, article("You must sign in to continue reading this article", "Too short."));
+        if (path === "/metadata/technical-error") return html(200, article("Handling authentication error responses in Express applications", "Too short."));
+        if (path === "/posts/generic-title") return html(200, article("Connect with people and share ideas on LinkedIn", "Too short."));
         if (path === "/metadata/title-only") return html(200, `<!doctype html><html><head>
 <title>How PostgreSQL logical replication keeps read models current</title>
 </head><body><main><p>Too short.</p></main></body></html>`);

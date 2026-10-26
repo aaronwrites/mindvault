@@ -16,6 +16,19 @@ function chatResponse(content: string): Response {
 }
 
 describe("Ollama providers", () => {
+    test("resolves conversational references through structured generation and rejects unusable retrieval questions", async () => {
+        const requests: string[] = [];
+        let content = JSON.stringify({ question: "What does a durable Source Snapshot preserve?" });
+        const providers = createOllamaProviders({ configuration, fetchImplementation: async (_url, init) => { requests.push(String(init?.body)); return chatResponse(content); } });
+        const input = { question: "What does it preserve?", conversation: [{ question: "What is a Source Snapshot?", answer: "A retained representation of evidence." }] };
+        expect(await providers.synthesisProvider.resolveQuestion(input)).toBe("What does a durable Source Snapshot preserve?");
+        await providers.synthesisProvider.resolveQuestion({ question: input.question, conversation: Array.from({ length: 6 }, () => ({ question: "🧠".repeat(1_000), answer: "🧠".repeat(2_000) })) });
+        const request = JSON.parse(requests.at(-1)!) as { messages: Array<{ content: string }> };
+        expect(Buffer.byteLength(request.messages[0]!.content)).toBeLessThanOrEqual(28_000);
+        content = JSON.stringify({ question: "" });
+        await expect(providers.synthesisProvider.resolveQuestion(input)).rejects.toThrow("failed validation");
+    });
+
     test("uses schema-constrained non-streaming chat with bounded generation options", async () => {
         const requests: Array<{ url: string; body: Record<string, unknown> }> = [];
         const providers = createOllamaProviders({

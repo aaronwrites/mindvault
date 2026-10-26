@@ -49,6 +49,10 @@ describe("live local Ollama acceptance", () => {
 
         const primary = await capture("primaryCapture", "/articles/primary-text");
         const metadata = await capture("metadataCapture", "/metadata/title-only");
+        const comparisonCollection = [];
+        for (const path of ["/articles/access-language", "/articles/lexical-corpus", "/articles/semantic-unrelated", "/metadata/homepage", "/metadata/description-only", "/articles/semantic-retention"]) {
+            comparisonCollection.push({ path, ...await capture(path, path) });
+        }
         const inaccessible = await capture("inaccessibleCapture", "/authentication");
 
         const primaryItem = await fetch(`${harness.apiBaseUrl}/knowledge-items/${primary.knowledgeItemId}`).then(response => response.json()) as {
@@ -82,7 +86,7 @@ describe("live local Ollama acceptance", () => {
         const primaryAnswer = await ask("primaryAnswer", { question: "How does MindVault keep processing failures visible?" }) as { answer: string; citations: unknown[]; insufficientEvidence: boolean };
         const metadataAnswer = await ask("metadataAnswer", { question: "What technology keeps read models current?" }) as { citations: Array<{ evidenceCoverage: string }> };
         const followUp = await ask("followUp", {
-            question: "What does it preserve for later retrieval?",
+            question: "What does it preserve?",
             conversation: [{ question: "How does MindVault keep processing failures visible?", answer: primaryAnswer.answer }],
         }) as { citations: unknown[] };
         const unanswerable = await ask("unanswerable", { question: "What was the rainfall in Mumbai yesterday?" }) as { insufficientEvidence: boolean; citations: unknown[] };
@@ -102,7 +106,7 @@ describe("live local Ollama acceptance", () => {
             models: providers.modelDigests,
             timingsMs: timings,
             semanticDistanceCutoff: { configured: 0.4, candidates: semanticDistances },
-            outputs: { primaryItem, metadataItem, inaccessibleItem, exactRecall, conceptualRecall, primaryAnswer, metadataAnswer, followUp, unanswerable },
+            outputs: { comparisonCollection, primaryItem, metadataItem, inaccessibleItem, exactRecall, conceptualRecall, primaryAnswer, metadataAnswer, followUp, unanswerable },
             assessmentNeeded: "Review grounding and retrieval relevance, including the semantic-distance cutoff, before accepting local model quality.",
         }, null, 2));
     }, 20 * 60_000);

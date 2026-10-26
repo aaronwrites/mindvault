@@ -92,6 +92,7 @@ export type RefreshKnowledgeItemResponse = {
 export type SynthesisResult = {
   answer: string;
   citations: Array<{
+    origin: "source-snapshot" | "selected-source-text" | "personal-note";
     knowledgeItemId: number;
     sourceSnapshotId: number | null;
     title: string;

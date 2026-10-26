@@ -106,7 +106,7 @@ export default function Home() {
   function askQuestion(question: string) {
     synthesisMutation.mutate({
       question,
-      conversation: conversationTurns.slice(-6).map(turn => ({ question: turn.question, answer: turn.result.answer })),
+      conversation: conversationTurns.slice(-6).map(turn => ({ question: turn.question, answer: turn.result.answer.slice(0, 4_000) })),
     }, {
       onSuccess: result => {
         setConversationTurns(turns => [...turns, { question, result }]);
@@ -173,6 +173,8 @@ export default function Home() {
                   {turn.result.citations.map(citation => <li key={`${citation.knowledgeItemId}-${citation.sourceSnapshotId ?? "context"}`} className="space-y-1 text-sm">
                     <a className="font-medium underline underline-offset-4" href={`#knowledge-item-${citation.knowledgeItemId}`}>View {citation.title}</a>
                     <blockquote className="border-l-2 pl-3 text-muted-foreground">{citation.excerpt}</blockquote>
+                    {citation.origin === "personal-note" && <p className="text-muted-foreground">Based on your Personal Note.</p>}
+                    {citation.origin === "selected-source-text" && <p className="text-muted-foreground">Based on selected Source text.</p>}
                     {citation.evidenceCoverage === "metadata-only" && <p className="text-muted-foreground">Based on source-provided metadata only.</p>}
                   </li>)}
                 </ul>

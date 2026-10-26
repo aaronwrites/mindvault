@@ -22,7 +22,7 @@ class SynthesisCorpusEmbeddingProvider implements EmbeddingProvider {
 
     async embed(text: string): Promise<number[]> {
         const vector = Array<number>(768).fill(0);
-        vector[/security|password|cloudflare/i.test(text) ? 2 : /logical replication|read models/i.test(text) ? 1 : /capital of France/i.test(text) ? 7 : 0] = 1;
+        vector[/^What does it preserve\?$/i.test(text) ? 7 : /security|password|cloudflare/i.test(text) ? 2 : /logical replication|read models/i.test(text) ? 1 : /capital of France/i.test(text) ? 7 : 0] = 1;
         return vector;
     }
 
@@ -37,6 +37,11 @@ class ControlledSynthesisProvider implements SynthesisGenerationProvider {
     insufficientEvidence = false;
     citationIdsOverride: string[] | undefined;
 
+    async resolveQuestion({ question, conversation }: { question: string; conversation: Array<{ question: string; answer: string }> }) {
+        return question === "What does it preserve?" && conversation.length > 0
+            ? "What does a durable Source Snapshot preserve?" : question;
+    }
+
     async generateSynthesis(input: SynthesisGenerationInput) {
         this.inputs.push(input);
         if (this.fail) throw new Error("controlled provider failure");
@@ -49,6 +54,32 @@ class ControlledSynthesisProvider implements SynthesisGenerationProvider {
 }
 
 describe("collection-wide Synthesis", () => {
+    test.skipIf(!process.env.TEST_DATABASE_URL)("keeps personal notes and selected Source text distinguishable in provider evidence and citations", async () => {
+        const embeddings = new SynthesisCorpusEmbeddingProvider();
+        const synthesisProvider = new ControlledSynthesisProvider();
+        harness = await createIntegrationHarness(
+            database => createApp({ database: database.db, embeddingProvider: embeddings, synthesisProvider }),
+            (database, sourceServer) => createArticleProcessingWorker({ database: database.db, sourceFetchOptions: sourceServer.safeFetchDependencies(), embeddingProvider: embeddings, summaryProvider: new DeterministicGenerationProvider(), topicTagProvider: new DeterministicTopicTagGenerationProvider() }),
+        );
+        for (const [field, origin, text] of [
+            ["personalNote", "personal-note", "security password reminder from my own account"],
+            ["selectedText", "selected-source-text", "logical replication supports read models according to this selection"],
+        ] as const) {
+            const response = await fetch(`${harness.apiBaseUrl}/captures`, {
+                method: "POST", headers: { "content-type": "application/json" },
+                body: JSON.stringify({ url: harness.sourceServer.fetchUrl("/articles/semantic-retention"), [field]: text }),
+            });
+            expect(response.status).toBe(201);
+            await harness.drainWorker();
+            const answer = await fetch(`${harness.apiBaseUrl}/synthesis`, {
+                method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ question: text }),
+            });
+            expect(answer.status).toBe(200);
+            expect(await answer.json()).toEqual(expect.objectContaining({ citations: [expect.objectContaining({ origin, excerpt: text, sourceSnapshotId: null })] }));
+            expect(synthesisProvider.inputs.at(-1)?.evidence).toEqual([expect.objectContaining({ origin, text })]);
+        }
+    });
+
     test.skipIf(!process.env.TEST_DATABASE_URL)("answers from retrieved primary and metadata-only evidence, with resolvable citations and honest failures", async () => {
         const embeddings = new SynthesisCorpusEmbeddingProvider();
         const synthesisProvider = new ControlledSynthesisProvider();
@@ -95,6 +126,7 @@ describe("collection-wide Synthesis", () => {
         }));
         expect(synthesisProvider.inputs[0]?.evidence).toEqual([expect.objectContaining({
             evidenceCoverage: "primary-content",
+            origin: "source-snapshot",
             originalUrl: harness.sourceServer.fetchUrl("/articles/semantic-retention"),
         })]);
 
@@ -203,6 +235,27 @@ describe("collection-wide Synthesis", () => {
         });
         expect(generationFailure.status).toBe(502);
         expect(await generationFailure.json()).toEqual({ error: "Answer generation is temporarily unavailable. Please try again." });
+
+        synthesisProvider.fail = false;
+        const contextualResponse = await fetch(`${harness.apiBaseUrl}/synthesis`, {
+            method: "POST", headers: { "content-type": "application/json" },
+            body: JSON.stringify({ question: "What does it preserve?", conversation: [{ question: primaryQuestion, answer: "A durable Source Snapshot." }] }),
+        });
+        expect(contextualResponse.status).toBe(200);
+        expect(await contextualResponse.json()).toEqual(expect.objectContaining({
+            citations: [expect.objectContaining({ knowledgeItemId: primary.knowledgeItemId })],
+        }));
+
+        const longHistoryResponse = await fetch(`${harness.apiBaseUrl}/synthesis`, {
+            method: "POST", headers: { "content-type": "application/json" },
+            body: JSON.stringify({ question: primaryQuestion, conversation: Array.from({ length: 6 }, () => ({ question: primaryQuestion + " context".repeat(220), answer: "🧠".repeat(2_000) })) }),
+        });
+        expect(longHistoryResponse.status).toBe(200);
+        const longHistoryResult = await longHistoryResponse.json() as { citations: Array<{ excerpt: string }> };
+        const supplied = synthesisProvider.inputs.at(-1)!;
+        expect(Buffer.byteLength(JSON.stringify(supplied))).toBeLessThanOrEqual(26_000);
+        expect(supplied.conversation.length).toBeGreaterThan(0);
+        expect(longHistoryResult.citations[0]?.excerpt).toBe(supplied.evidence[0]?.text);
 
         const trashed = await fetch(`${harness.apiBaseUrl}/knowledge-items/${primary.knowledgeItemId}/trash`, { method: "POST" });
         expect(trashed.status).toBe(204);

@@ -15,6 +15,26 @@ afterEach(async () => {
 });
 
 describe("Extraction", () => {
+    test.skipIf(!process.env.TEST_DATABASE_URL)("accepts technical metadata while excluding generic platform titles from knowledge", async () => {
+        harness = await createIntegrationHarness(
+            database => createApp({ database: database.db, embeddingProvider: embeddings }),
+            (database, sourceServer) => createArticleProcessingWorker({ database: database.db, sourceFetchOptions: sourceServer.safeFetchDependencies(), embeddingProvider: embeddings, summaryProvider: summaries, topicTagProvider: topicTags, maxAttempts: 1 }),
+        );
+        for (const [path, availability] of [["/metadata/technical-error", "ready"], ["/posts/generic-title", "needs-attention"], ["/metadata/access-prompt", "needs-attention"], ["/metadata/http-error", "needs-attention"]] as const) {
+            const response = await fetch(`${harness.apiBaseUrl}/captures`, {
+                method: "POST", headers: { "content-type": "application/json" },
+                body: JSON.stringify({ url: harness.sourceServer.fetchUrl(path) }),
+            });
+            expect(response.status).toBe(201);
+            const captured = await response.json() as { knowledgeItemId: number };
+            await harness.drainWorker();
+            const item = await fetch(`${harness.apiBaseUrl}/knowledge-items/${captured.knowledgeItemId}`).then(response => response.json()) as { availability: string };
+            expect(item.availability).toBe(availability);
+            const matches = await fetch(`${harness.apiBaseUrl}/search?q=${encodeURIComponent("authentication error Express")}`).then(response => response.json()) as Array<{ id: number }>;
+            expect(matches.some(match => match.id === captured.knowledgeItemId)).toBe(availability === "ready");
+        }
+    });
+
     test.skipIf(!process.env.TEST_DATABASE_URL)("indexes informative metadata-only evidence with explicit limited coverage", async () => {
         harness = await createIntegrationHarness(
             database => createApp({ database: database.db, embeddingProvider: embeddings }),

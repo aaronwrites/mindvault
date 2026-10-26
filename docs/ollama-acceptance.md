@@ -57,3 +57,43 @@ representative corpus.
 Run `bun run test:ollama-live` with `TEST_DATABASE_URL` set to repeat the check.
 The provider switch does not close the URL-to-chat milestone or its reviewed
 defects.
+
+## Partial closeout assessment — 2026-10-26
+
+A local model check used the production parser, Recognition Summary prompt, and
+Ollama providers on fixture evidence from eight Sources: primary processing,
+logical replication metadata, account security, command-line identifiers,
+PostgreSQL text search, a climate studio homepage, database recovery metadata,
+and durable Source retention. This was a provider/parser check, **not** an
+API/PostgreSQL/worker acceptance run. The PostgreSQL server refused connections
+to `192.168.0.111:5432`, including outside the sandbox; milestone acceptance
+remains open. The test harness creates disposable databases through `postgres`,
+so creating a database named `mindvault-test` does not resolve that TCP failure.
+
+With the revised metadata prompt, Gemma 3 produced:
+
+- Title-only replication evidence: “A page about how PostgreSQL logical
+  replication keeps read models current.” No read-replica synchronization claim.
+- Homepage description: “A page about Signal Garden.” Grounded, but less
+  recognizable than the available description.
+- Database recovery description: “A page about recovering a PostgreSQL database
+  after an accidental schema migration.” Grounded in the description.
+
+The eight-item embedding comparison retained the intended first result. For the
+conceptual failure-visibility query, primary processing scored 0.3072 and Source
+retention 0.3317, while unrelated replication metadata (0.3848), account security
+(0.3880), and command-line text (0.3968) also crossed the existing 0.4 cutoff.
+For the replication query, its metadata scored 0.2513; generic retention text
+also crossed 0.35 at 0.3437. The rainfall question's closest candidate scored
+0.4688, outside the cutoff. Keep the cutoff unchanged: lowering it would not
+establish a general relevance guarantee, and generation still must restrict
+claims to supporting evidence. The expanded API live check records the same
+collection for later end-to-end assessment.
+
+The first contextual rewrite left “What does it preserve?” unchanged. After
+adding a concrete reference-resolution example, the real provider returned
+“What does MindVault preserve when processing fails?” for the prior failure
+visibility conversation. A separate unrelated capital-of-France question stayed
+unchanged. This checks interpretation only; fresh retrieval, cited answers,
+follow-ups, tags, and lifecycle regressions still need database-backed execution.
+The installed model digests match the 2026-09-08 record above.
