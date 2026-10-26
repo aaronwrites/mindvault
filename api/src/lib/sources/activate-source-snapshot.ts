@@ -30,16 +30,22 @@ export function createSourceSnapshotActivationStageHandler(database: Database) {
                 ));
             if (lexicalStage?.status !== "completed") throw new Error("Source Snapshot activation is waiting for Lexical indexing");
 
-            const [snapshot] = await transaction.select({ id: sourceSnapshots.id, extractedAt: sourceSnapshots.extractedAt, evidenceCoverage: sourceSnapshots.evidenceCoverage })
+            const [snapshot] = await transaction.select({ id: sourceSnapshots.id, extractedAt: sourceSnapshots.extractedAt, evidenceCoverage: sourceSnapshots.evidenceCoverage, pdfEvidence: sourceSnapshots.pdfEvidence })
                 .from(sourceSnapshots)
                 .where(and(eq(sourceSnapshots.id, attempt.sourceSnapshotId), eq(sourceSnapshots.sourceId, attempt.sourceId)));
             if (!snapshot) throw new Error("Source Snapshot activation could not find its Source Snapshot");
 
-            const [currentSnapshot] = await transaction.select({ evidenceCoverage: sourceSnapshots.evidenceCoverage })
+            const [currentSnapshot] = await transaction.select({ evidenceCoverage: sourceSnapshots.evidenceCoverage, pdfEvidence: sourceSnapshots.pdfEvidence })
                 .from(sources)
                 .innerJoin(sourceSnapshots, eq(sourceSnapshots.id, sources.currentSnapshotId))
                 .where(eq(sources.id, attempt.sourceId));
             if (currentSnapshot?.evidenceCoverage === "primary-content" && snapshot.evidenceCoverage === "metadata-only") return;
+
+            if (currentSnapshot?.pdfEvidence && snapshot.pdfEvidence) {
+                // Preserve every previously useful page before replacing the active representation.
+                const candidatePages = new Map(snapshot.pdfEvidence.pages.map(page => [page.pageNumber, page.text]));
+                if (currentSnapshot.pdfEvidence.pages.some(page => page.text && !candidatePages.get(page.pageNumber)?.includes(page.text))) return;
+            }
 
             const newerSnapshots = await transaction.select({ id: sourceSnapshots.id })
                 .from(sourceSnapshots)

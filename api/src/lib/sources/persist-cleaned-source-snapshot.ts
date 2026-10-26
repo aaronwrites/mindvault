@@ -20,13 +20,16 @@ export function createSnapshotPersistenceStageHandler(database: Database, source
         const evidenceCoverage = extractedSource.evidenceCoverage;
 
         const preview = extractedSource.sourcePreview as ExtractedSourcePreview;
-        const contentHash = contentHashFor(evidenceText, evidenceCoverage, preview);
+        const contentHash = extractedSource.pdfEvidence
+            ? createHash("sha256").update(JSON.stringify({ pdfEvidence: extractedSource.pdfEvidence })).digest("hex")
+            : contentHashFor(evidenceText, evidenceCoverage, preview);
         const { snapshotId } = await database.transaction(async transaction => {
             await transaction.insert(sourceSnapshots).values({
                 sourceId: extractedSource.sourceId,
                 title: extractedSource.title,
                 evidenceText,
                 evidenceCoverage,
+                pdfEvidence: extractedSource.pdfEvidence,
                 originalUrl: extractedSource.originalUrl,
                 finalUrl: extractedSource.finalUrl,
                 canonicalUrl: extractedSource.canonicalUrl,

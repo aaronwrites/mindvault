@@ -77,6 +77,16 @@ export class DeterministicOriginalFileStorageFake implements OriginalFileStorage
             && at.getTime() < expiresAt * 1_000;
     }
 
+    async read(request: { locator: string; maximumBytes: number; timeoutMs: number }): Promise<Uint8Array> {
+        if (this.#delayMs > request.timeoutMs) throw new OriginalFileStorageError("unavailable", "Retained Original File storage read timed out");
+        await this.#wait();
+        this.#assertAvailable();
+        const file = this.#files.get(request.locator.slice("fake:".length));
+        if (!file) throw new OriginalFileStorageError("unavailable", "Retained Original File is missing");
+        if (file.bytes.length > request.maximumBytes) throw new OriginalFileStorageError("rejected", "PDF processing byte limit exceeded; no pages were processed");
+        return new Uint8Array(file.bytes);
+    }
+
     async delete(locator: string): Promise<{ deleted: boolean }> {
         await this.#wait();
         this.#assertAvailable();

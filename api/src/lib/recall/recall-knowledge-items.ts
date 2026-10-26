@@ -20,11 +20,12 @@ export type RecallKnowledgeItemResult = {
     topicTags: string[];
     excerpts: Array<{
         text: string;
+        pageNumber: number | null;
         origin: "source-snapshot" | "selected-source-text" | "personal-note";
         sourceSnapshot: {
             id: number;
-            originalUrl: string;
-            finalUrl: string;
+            originalUrl: string | null;
+            finalUrl: string | null;
             canonicalUrl: string | null;
             extractedAt: string;
             evidenceCoverage: EvidenceCoverage;
@@ -45,7 +46,7 @@ export async function recallKnowledgeItems(database: Database, query: string, em
 
     const passageRows = await database
         .select({
-            passageId: passages.id, origin: passages.origin, text: passages.text, knowledgeItemId: knowledgeItems.id,
+            pageNumber: passages.pageNumber, passageId: passages.id, origin: passages.origin, text: passages.text, knowledgeItemId: knowledgeItems.id,
             sourceSnapshotId: sourceSnapshots.id, sourceSnapshotTitle: sourceSnapshots.title,
             originalUrl: sourceSnapshots.originalUrl, finalUrl: sourceSnapshots.finalUrl,
             canonicalUrl: sourceSnapshots.canonicalUrl, extractedAt: sourceSnapshots.extractedAt,
@@ -82,9 +83,10 @@ export async function recallKnowledgeItems(database: Database, query: string, em
                 if (!details) return [];
                 return [{
                     text: passage.text,
+                    pageNumber: details.pageNumber,
                     origin: passage.origin,
                     sourceSnapshot: details.sourceSnapshotId === null ? null : {
-                        id: details.sourceSnapshotId, originalUrl: details.originalUrl!, finalUrl: details.finalUrl!,
+                        id: details.sourceSnapshotId, originalUrl: details.originalUrl, finalUrl: details.finalUrl,
                         canonicalUrl: details.canonicalUrl, extractedAt: toIsoString(details.extractedAt!),
                         evidenceCoverage: details.evidenceCoverage!,
                     },

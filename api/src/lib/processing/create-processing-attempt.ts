@@ -1,7 +1,7 @@
 import { and, desc, eq } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as schema from "../../db/schema";
-import { extractedSources, knowledgeItems, processingAttempts, processingStages } from "../../db/schema";
+import { extractedSources, knowledgeItems, processingAttempts, processingStages, sources } from "../../db/schema";
 import { processingStageKinds, type ProcessingStageKind } from "./stages";
 
 type Database = NodePgDatabase<typeof schema>;
@@ -64,6 +64,7 @@ export async function createManualRetryProcessingAttempt(database: Database, kno
                 title: extractedSource.title,
                 evidenceText: extractedSource.evidenceText,
                 evidenceCoverage: extractedSource.evidenceCoverage,
+                pdfEvidence: extractedSource.pdfEvidence,
                 originalUrl: extractedSource.originalUrl,
                 finalUrl: extractedSource.finalUrl,
                 canonicalUrl: extractedSource.canonicalUrl,
@@ -78,10 +79,10 @@ export async function createManualRetryProcessingAttempt(database: Database, kno
 
 export async function createRefreshProcessingAttempt(database: Database, knowledgeItemId: number): Promise<number | undefined> {
     return database.transaction(async transaction => {
-        const [knowledgeItem] = await transaction.select({ id: knowledgeItems.id })
-            .from(knowledgeItems)
+        const [knowledgeItem] = await transaction.select({ id: knowledgeItems.id, provenanceKind: sources.provenanceKind, sourceKind: sources.sourceKind })
+            .from(knowledgeItems).innerJoin(sources, eq(sources.id, knowledgeItems.sourceId))
             .where(and(eq(knowledgeItems.id, knowledgeItemId), eq(knowledgeItems.lifecycleState, "active")));
-        if (!knowledgeItem) return undefined;
+        if (!knowledgeItem || (knowledgeItem.provenanceKind === "original-file" && knowledgeItem.sourceKind !== "pdf")) return undefined;
         return createProcessingAttempt(transaction, knowledgeItem.id, "refresh");
     });
 }

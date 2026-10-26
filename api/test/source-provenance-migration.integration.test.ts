@@ -47,17 +47,21 @@ test("Source provenance upgrade preserves existing webpage identity and dependen
     await pool.query("INSERT INTO passages (id, source_snapshot_id, origin, text, ordinal) VALUES (46, 45, 'source-snapshot', 'Primary text', 0)");
     await pool.query("INSERT INTO processing_stages (id, processing_attempt_id, kind) VALUES (49, 44, 'extraction')");
 
-    await applyMigrations(pool, 19, 18);
+    await pool.query("UPDATE passages SET lexical_search = to_tsvector('simple', text)");
+    await pool.query("INSERT INTO passage_embeddings (passage_id, embedding, provider, model, dimensions, metadata) VALUES (46, $1, 'test', 'existing', 768, '{}')", [JSON.stringify([1, ...Array(767).fill(0)])]);
+    await applyMigrations(pool, 25, 18);
 
     expect((await pool.query("SELECT id, provenance_kind, source_kind FROM sources")).rows).toEqual([{ id: 41, provenance_kind: "webpage", source_kind: "web" }]);
     expect((await pool.query("SELECT source_id, submitted_url, normalized_url FROM webpage_sources")).rows).toEqual([{ source_id: 41, submitted_url: "https://example.com/submitted", normalized_url: "https://example.com/canonical" }]);
     expect((await pool.query("SELECT source_id, lifecycle_state FROM knowledge_items")).rows).toEqual([{ source_id: 41, lifecycle_state: "active" }]);
     expect((await pool.query("SELECT source_id, knowledge_item_id FROM captures")).rows).toEqual([{ source_id: 41, knowledge_item_id: 42 }]);
-    expect((await pool.query("SELECT source_id FROM source_snapshots")).rows).toEqual([{ source_id: 41 }]);
+    expect((await pool.query("SELECT source_id, original_url, pdf_evidence FROM source_snapshots")).rows).toEqual([{ source_id: 41, original_url: "https://example.com/submitted", pdf_evidence: null }]);
     expect((await pool.query("SELECT source_snapshot_id, bytes FROM source_preview_media")).rows).toEqual([{ source_snapshot_id: 45, bytes: Buffer.from([1, 2, 3]) }]);
     expect((await pool.query("SELECT knowledge_item_id, source_snapshot_id FROM recognition_summaries")).rows).toEqual([{ knowledge_item_id: 42, source_snapshot_id: 45 }]);
     expect((await pool.query("SELECT knowledge_item_id, topic_tag_id, source_snapshot_id FROM knowledge_item_topic_tags")).rows).toEqual([{ knowledge_item_id: 42, topic_tag_id: 47, source_snapshot_id: 45 }]);
     expect((await pool.query("SELECT source_snapshot_id FROM passages")).rows).toEqual([{ source_snapshot_id: 45 }]);
+    expect((await pool.query("SELECT page_number, lexical_search @@ plainto_tsquery('simple', 'Primary') AS matches FROM passages")).rows).toEqual([{ page_number: null, matches: true }]);
+    expect((await pool.query("SELECT provider, model, dimensions FROM passage_embeddings")).rows).toEqual([{ provider: "test", model: "existing", dimensions: 768 }]);
     expect((await pool.query("SELECT processing_attempt_id FROM processing_stages")).rows).toEqual([{ processing_attempt_id: 44 }]);
 });
 

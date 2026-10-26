@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { db } from "./db";
 import type { Clock, EmbeddingProvider, TextGenerationProvider, TopicTagGenerationProvider } from "./lib/ai/providers";
 import { createOllamaProviders } from "./lib/ai/ollama";
@@ -16,6 +16,9 @@ import { createSemanticIndexingStageHandler } from "./lib/passages/index-semanti
 import type { SafeFetchOptions } from "./lib/sources/fetch-public-source";
 import * as schema from "./db/schema";
 import { cloudinaryOriginalFileStorageFromEnvironment } from "./lib/original-files/cloudinary-original-file-storage";
+import { processRetainedPdf } from "./lib/pdf/process-retained-pdf";
+import { pdfProcessingLimits, type PdfProcessingLimits } from "./lib/pdf/extract-pdf";
+import type { OriginalFileStorage } from "./lib/original-files/original-file-storage";
 import { OriginalFileStorageError } from "./lib/original-files/original-file-storage";
 import { createOriginalFileOperationsWorker } from "./lib/original-files/process-original-file-operations";
 type Database = NodePgDatabase<typeof schema>;
@@ -52,14 +55,25 @@ export function createArticleProcessingWorker({
     embeddingProvider,
     summaryProvider,
     topicTagProvider,
+    originalFileStorage = () => cloudinaryOriginalFileStorageFromEnvironment(),
+    pdfLimits = pdfProcessingLimits(),
     ...options
-}: Omit<ProcessingWorkerOptions, "handlers"> & { sourceFetchOptions?: SafeFetchOptions; embeddingProvider?: EmbeddingProvider; summaryProvider?: TextGenerationProvider; topicTagProvider?: TopicTagGenerationProvider }): ProcessingWorker {
+}: Omit<ProcessingWorkerOptions, "handlers"> & { originalFileStorage?: () => OriginalFileStorage; pdfLimits?: PdfProcessingLimits; sourceFetchOptions?: SafeFetchOptions; embeddingProvider?: EmbeddingProvider; summaryProvider?: TextGenerationProvider; topicTagProvider?: TopicTagGenerationProvider }): ProcessingWorker {
     const defaults = createOllamaProviders();
+    const extractWebpage = createExtractionStageHandler(database, sourceFetchOptions);
     return createProcessingWorker({
         database,
         ...options,
         handlers: {
-            extraction: createExtractionStageHandler(database, sourceFetchOptions),
+            extraction: async stage => {
+                const [source] = await database.select({ provenanceKind: schema.sources.provenanceKind })
+                    .from(schema.processingAttempts)
+                    .innerJoin(schema.knowledgeItems, eq(schema.knowledgeItems.id, schema.processingAttempts.knowledgeItemId))
+                    .innerJoin(schema.sources, eq(schema.sources.id, schema.knowledgeItems.sourceId))
+                    .where(eq(schema.processingAttempts.id, stage.processingAttemptId));
+                return source?.provenanceKind === "original-file"
+                    ? processRetainedPdf(database, stage, originalFileStorage(), pdfLimits) : extractWebpage(stage);
+            },
             "snapshot-persistence": createSnapshotPersistenceStageHandler(database, sourceFetchOptions),
             "passage-generation": createPassageGenerationStageHandler(database),
             "lexical-indexing": createLexicalIndexingStageHandler(database),

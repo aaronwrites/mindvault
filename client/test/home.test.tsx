@@ -998,3 +998,28 @@ describe("Knowledge Item Capture", () => {
     expect(screen.getByRole("button", { name: "Retry processing" })).toBeTruthy();
   });
 });
+
+test("processes an already retained PDF and exposes its generated enrichment", async () => {
+  const retained: KnowledgeItem = {
+    ...processingItem,
+    id: 31,
+    source: { id: 31, kind: "pdf", submittedUrl: "", normalizedUrl: "", filename: "recovery.pdf", mediaType: "application/pdf", byteSize: 1000,
+      originalFileActions: { open: "/knowledge-items/31/original-file/open", download: "/knowledge-items/31/original-file/download" } },
+    availability: "unsupported", organizationCondition: "complete", captureContexts: [], latestAttempt: null,
+  };
+  const ready: KnowledgeItem = { ...retained, availability: "ready", recognitionSummary: "A guide to durable transaction logs.", topicTags: ["PostgreSQL"],
+    latestAttempt: { id: 32, kind: "refresh", status: "completed", createdAt: retained.createdAt, warnings: ["Summary generation exceeded its input limit."] },
+    extractionCoverage: { pageCount: 2, pages: [{ pageNumber: 1, outcome: "extracted", reason: null }, { pageNumber: 2, outcome: "needs-ocr", reason: "OCR is required" }] } };
+  getKnowledgeItems.mockResolvedValueOnce([retained]).mockResolvedValue([ready]);
+  getTrashedKnowledgeItems.mockResolvedValue([]);
+  refreshKnowledgeItem.mockResolvedValue({ processingAttemptId: 32, knowledgeItem: ready });
+  const user = userEvent.setup({ document: dom.window.document });
+  renderHome();
+  await user.click(await screen.findByRole("button", { name: "Process PDF" }));
+  expect(refreshKnowledgeItem.mock.calls[0]?.[0]).toBe(31);
+  expect(await screen.findByText("A guide to durable transaction logs.")).toBeTruthy();
+  expect(screen.getByText("PostgreSQL")).toBeTruthy();
+  expect(screen.getByText(/Incomplete extraction: page 2/)).toBeTruthy();
+  expect(screen.getByText("Summary generation exceeded its input limit.")).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Open original file: recovery.pdf" })).toBeTruthy();
+});

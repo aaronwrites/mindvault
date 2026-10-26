@@ -47,6 +47,7 @@ export function KnowledgeItemCard({
   const { source } = knowledgeItem;
   const preview = knowledgeItem.sourcePreview;
   const isOriginalFile = source.filename !== undefined;
+  const canProcess = !isOriginalFile || source.kind === "pdf";
   const retryIsActionable = knowledgeItem.latestAttempt?.status === "failed";
   const originalFileTitleText = isOriginalFile ? originalFileTitle(source.filename, source.kind) : null;
   return (
@@ -107,13 +108,20 @@ export function KnowledgeItemCard({
             Searchable from source-provided metadata only; primary page content was unavailable.
           </p>
         )}
-        {!isOriginalFile && knowledgeItem.recognitionSummary && (
+        {knowledgeItem.extractionCoverage && (
+          <p className="text-sm text-muted-foreground" role="status">
+            Text extracted from {knowledgeItem.extractionCoverage.pages.filter(page => page.outcome === "extracted").length} of {knowledgeItem.extractionCoverage.pageCount} PDF pages.
+            {knowledgeItem.extractionCoverage.pages.some(page => !["extracted", "blank"].includes(page.outcome)) && ` Incomplete extraction: ${knowledgeItem.extractionCoverage.pages.filter(page => !["extracted", "blank"].includes(page.outcome)).map(page => `page ${page.pageNumber} (${page.reason ?? page.outcome})`).join("; ")}.`}
+            {" "}Diagrams, charts, and visual relationships have not been interpreted.
+          </p>
+        )}
+        {canProcess && knowledgeItem.recognitionSummary && (
           <section aria-label="Generated Recognition Summary" className="space-y-1">
             <p className="text-xs font-medium text-muted-foreground">Generated recognition summary</p>
             <p className="text-sm text-muted-foreground">{knowledgeItem.recognitionSummary}</p>
           </section>
         )}
-        {!isOriginalFile && knowledgeItem.topicTags.length > 0 && (
+        {canProcess && knowledgeItem.topicTags.length > 0 && (
           <section aria-label="Generated Topic Tags" className="space-y-1">
             <p className="text-xs font-medium text-muted-foreground">Generated topic tags</p>
             <ul className="flex flex-wrap gap-2">
@@ -121,40 +129,41 @@ export function KnowledgeItemCard({
             </ul>
           </section>
         )}
-        {!isOriginalFile && knowledgeItem.availability === "processing" && (
+        {canProcess && knowledgeItem.availability === "processing" && (
           <p className="text-sm text-muted-foreground">
             Capture succeeded. Processing continues in the background.
           </p>
         )}
-        {!isOriginalFile && knowledgeItem.availability === "needs-attention" && (
+        {canProcess && knowledgeItem.availability === "needs-attention" && (
           <p className="text-sm text-muted-foreground">
             Processing needs attention{knowledgeItem.latestAttempt?.failureReason ? `: ${knowledgeItem.latestAttempt.failureReason}` : "."}
           </p>
         )}
-        {!isOriginalFile && knowledgeItem.organizationCondition === "incomplete" && (
+        {canProcess && knowledgeItem.organizationCondition === "incomplete" && (
           <p className="text-sm text-muted-foreground">
             Organization is incomplete. Topic Tag generation needs attention, but your Ready content remains available.
           </p>
         )}
-        {!isOriginalFile && knowledgeItem.availability === "ready" && knowledgeItem.latestAttempt?.kind === "refresh" &&
+        {canProcess && knowledgeItem.availability === "ready" && knowledgeItem.latestAttempt?.kind === "refresh" &&
           (knowledgeItem.latestAttempt.status === "pending" || knowledgeItem.latestAttempt.status === "running") && (
             <p className="text-sm text-muted-foreground">
               Refresh underway. Your Ready content remains available.
             </p>
           )}
-        {!isOriginalFile && knowledgeItem.availability === "ready" && knowledgeItem.latestAttempt?.kind === "refresh" &&
+        {canProcess && knowledgeItem.availability === "ready" && knowledgeItem.latestAttempt?.kind === "refresh" &&
           knowledgeItem.latestAttempt.status === "failed" && (
             <p className="text-sm text-muted-foreground">
               Refresh could not update this Source. Your existing Ready content remains available.
             </p>
           )}
-        {!isOriginalFile && knowledgeItem.availability === "ready" && knowledgeItem.latestAttempt?.kind === "manual-retry" &&
+        {canProcess && knowledgeItem.availability === "ready" && knowledgeItem.latestAttempt?.kind === "manual-retry" &&
           (knowledgeItem.latestAttempt.status === "pending" || knowledgeItem.latestAttempt.status === "running") && (
             <p className="text-sm text-muted-foreground">
               Retrying failed processing. Your Ready content remains available.
             </p>
           )}
-        {!isOriginalFile && knowledgeItem.latestAttempt && (
+        {knowledgeItem.latestAttempt?.warnings?.map(warning => <p key={warning} className="text-sm text-muted-foreground" role="status">{warning}</p>)}
+        {canProcess && knowledgeItem.latestAttempt && (
           <p className="text-sm text-muted-foreground">
             Latest attempt:{" "}
             {knowledgeItem.latestAttempt.kind.replaceAll("-", " ")} (
@@ -167,7 +176,12 @@ export function KnowledgeItemCard({
           <Button variant="outline" onClick={() => onRestore(knowledgeItem.id)} disabled={isRestoring}>{isRestoring ? "Restoring…" : "Restore"}</Button>
           <Button variant="destructive" onClick={() => onPermanentlyDelete(knowledgeItem)} disabled={isPermanentlyDeleting}>{isPermanentlyDeleting ? "Deleting…" : "Delete permanently"}</Button>
         </> : knowledgeItem.lifecycleState === "pending-permanent-deletion" ? knowledgeItem.deletion?.status === "failed" ? <Button variant="outline" onClick={() => onPermanentlyDelete(knowledgeItem)} disabled={isPermanentlyDeleting}>{isPermanentlyDeleting ? "Retrying…" : "Retry deletion"}</Button> : null : <>
-        {!isOriginalFile && knowledgeItem.availability === "ready" && !retryIsActionable && (
+        {isOriginalFile && source.kind === "pdf" && knowledgeItem.availability === "unsupported" && (
+          <Button variant="outline" onClick={() => onRefresh(knowledgeItem.id)} disabled={isRefreshing}>
+            {isRefreshing ? "Starting…" : "Process PDF"}
+          </Button>
+        )}
+        {canProcess && knowledgeItem.availability === "ready" && !retryIsActionable && (
           <Button
             variant="outline"
             onClick={() => onRefresh(knowledgeItem.id)}
@@ -176,7 +190,7 @@ export function KnowledgeItemCard({
             {isRefreshing ? "Refreshing…" : "Refresh"}
           </Button>
         )}
-        {!isOriginalFile && retryIsActionable && (
+        {canProcess && retryIsActionable && (
           <Button
             variant="outline"
             onClick={() => onRetry(knowledgeItem.id)}

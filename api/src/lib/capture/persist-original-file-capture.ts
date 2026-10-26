@@ -5,8 +5,10 @@ import { captureContexts, captures, knowledgeItems, originalFileOperations, orig
 import type { OriginalFileClassification, ReceivedOriginalFile } from "./receive-original-file";
 import { OriginalFileStorageError, type OriginalFileStorage } from "../original-files/original-file-storage";
 
+import { createProcessingAttempt } from "../processing/create-processing-attempt";
+
 type Database = NodePgDatabase<typeof schema>;
-export type PersistedOriginalFileCapture = { captureId: number; sourceId: number; knowledgeItemId: number; processingAttemptId: null; reused: boolean; restoredFromTrash: boolean };
+export type PersistedOriginalFileCapture = { captureId: number; sourceId: number; knowledgeItemId: number; processingAttemptId: number | null; reused: boolean; restoredFromTrash: boolean };
 type OriginalFileCaptureIntent =
     | { kind: "capture"; capture: PersistedOriginalFileCapture }
     | { kind: "upload"; sourceId: number; existing: boolean };
@@ -90,5 +92,8 @@ async function createCapture(database: Database, sourceId: number, file: Receive
     const [capture] = await database.insert(captures).values({ sourceId, knowledgeItemId: knowledgeItem.id, submittedFilename: file.filename }).returning();
     if (!capture) throw new Error("Capture was not created");
     if (file.personalNote) await database.insert(captureContexts).values({ captureId: capture.id, kind: "personal-note", text: file.personalNote });
-    return { captureId: capture.id, sourceId, knowledgeItemId: knowledgeItem.id, processingAttemptId: null, reused, restoredFromTrash };
+    const [source] = await database.select({ sourceKind: sources.sourceKind }).from(sources).where(eq(sources.id, sourceId));
+    const processingAttemptId = source?.sourceKind === "pdf"
+        ? await createProcessingAttempt(database, knowledgeItem.id, reused ? "refresh" : "initial-capture") : null;
+    return { captureId: capture.id, sourceId, knowledgeItemId: knowledgeItem.id, processingAttemptId, reused, restoredFromTrash };
 }

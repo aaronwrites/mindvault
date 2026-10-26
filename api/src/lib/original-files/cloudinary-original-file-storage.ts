@@ -2,7 +2,7 @@ import { v2 as cloudinary } from "cloudinary";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { basename } from "node:path";
-import { OriginalFileStorageError, type OriginalFileStorage, type OriginalFileStorageUpload, type StoredOriginalFile } from "./original-file-storage";
+import { readBoundedOriginalFile, OriginalFileStorageError, type OriginalFileStorage, type OriginalFileStorageUpload, type StoredOriginalFile } from "./original-file-storage";
 
 type CloudinaryResourceType = "image" | "video" | "raw";
 
@@ -131,6 +131,17 @@ export class CloudinaryOriginalFileStorage implements OriginalFileStorage {
             }),
             expiresAt: request.expiresAt,
         };
+    }
+
+    async read(request: { locator: string; maximumBytes: number; timeoutMs: number }): Promise<Uint8Array> {
+        const access = await this.createSignedAccess({ locator: request.locator, filename: "original.pdf", disposition: "attachment", expiresAt: new Date(Date.now() + request.timeoutMs + 60_000) });
+        try {
+            const response = await fetch(access.url, { signal: AbortSignal.timeout(request.timeoutMs), redirect: "error" });
+            return await readBoundedOriginalFile(response, request.maximumBytes);
+        } catch (error) {
+            if (error instanceof OriginalFileStorageError) throw error;
+            throw new OriginalFileStorageError("unavailable", "Retained Original File storage read failed or timed out");
+        }
     }
 
     async delete(locator: string): Promise<{ deleted: boolean }> {

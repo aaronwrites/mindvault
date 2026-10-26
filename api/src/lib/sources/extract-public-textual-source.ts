@@ -92,7 +92,7 @@ function failureReasonForFetch(failure: { kind: string; status?: number }): stri
     return "MindVault could not fetch this Source safely";
 }
 
-async function withCurrentLease<T>(
+export async function withCurrentLease<T>(
     database: Database,
     stage: ClaimedProcessingStage,
     operation: (transaction: Parameters<Parameters<Database["transaction"]>[0]>[0]) => Promise<T>,
@@ -111,7 +111,7 @@ async function withCurrentLease<T>(
     });
 }
 
-async function completeCurrentStage(
+export async function completeCurrentStage(
     transaction: Parameters<Parameters<Database["transaction"]>[0]>[0],
     stage: ClaimedProcessingStage,
 ): Promise<void> {

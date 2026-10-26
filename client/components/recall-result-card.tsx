@@ -1,3 +1,4 @@
+import { API_URL } from "@/lib/api";
 import { ExternalLink } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,13 +18,13 @@ export function RecallResultCard({ result }: { result: RecallKnowledgeItem }) {
       <SourcePreviewMedia preview={result.sourcePreview} />
       <CardHeader>
         <Badge variant="outline" className="w-fit">Grounded match</Badge>
-        <CardTitle><h3>{sourcePreviewTitle(result.sourcePreview, result.source.submittedUrl)}</h3></CardTitle>
+        <CardTitle><h3>{result.source.filename ?? sourcePreviewTitle(result.sourcePreview, result.source.submittedUrl)}</h3></CardTitle>
         <CardAction>
           <Button
             variant="ghost"
             size="icon"
             aria-label="Open original Source"
-            render={<a href={result.excerpts[0]?.sourceSnapshot?.originalUrl ?? result.source.submittedUrl} target="_blank" rel="noreferrer" />}
+            render={<a href={result.source.originalFileActions?.open ? `${API_URL}${result.source.originalFileActions.open}` : result.excerpts[0]?.sourceSnapshot?.originalUrl ?? result.source.submittedUrl} target="_blank" rel="noreferrer" />}
             nativeButton={false}
           >
             <ExternalLink />
@@ -33,13 +34,13 @@ export function RecallResultCard({ result }: { result: RecallKnowledgeItem }) {
       <CardContent className="space-y-4">
         <section aria-label="Source preview" className="space-y-2">
           <p className="text-xs font-medium text-muted-foreground">Source-provided details</p>
-          <SourcePreviewFacts preview={result.sourcePreview} submittedUrl={result.source.submittedUrl} />
+          {result.source.filename !== undefined ? <p>{result.source.filename} · {result.source.mediaType}</p> : <SourcePreviewFacts preview={result.sourcePreview} submittedUrl={result.source.submittedUrl} />}
         </section>
         <section aria-label="Grounded matching excerpts" className="space-y-3">
           {result.excerpts.map((excerpt, index) => (
             <blockquote key={`${excerpt.origin}-${index}`} className="space-y-1 border-l-2 pl-3 text-sm">
               <p>{excerpt.text}</p>
-              <footer className="text-muted-foreground">{originLabels[excerpt.origin]}{excerpt.sourceSnapshot?.evidenceCoverage === "metadata-only" ? " · metadata-only evidence" : ""}</footer>
+              <footer className="text-muted-foreground">{originLabels[excerpt.origin]}{excerpt.pageNumber ? ` · Page ${excerpt.pageNumber}` : ""}{excerpt.sourceSnapshot?.evidenceCoverage === "metadata-only" ? " · metadata-only evidence" : ""}</footer>
             </blockquote>
           ))}
         </section>

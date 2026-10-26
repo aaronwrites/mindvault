@@ -31,6 +31,7 @@ export type KnowledgeItem = {
     faviconUrl: string | null;
   } | null;
   evidenceCoverage: EvidenceCoverage | null;
+  extractionCoverage?: { pageCount: number; pages: Array<{ pageNumber: number; outcome: "extracted" | "blank" | "needs-ocr" | "failed"; reason: string | null }> } | null;
   captureContexts: Array<{ kind: string; summary: string }>;
   availability: KnowledgeItemAvailability;
   organizationCondition: "processing" | "complete" | "incomplete";
@@ -42,6 +43,7 @@ export type KnowledgeItem = {
     status: string;
     createdAt: string;
     failureReason?: string;
+    warnings?: string[];
   } | null;
 };
 
@@ -54,11 +56,12 @@ export type RecallKnowledgeItem = {
   topicTags: string[];
   excerpts: Array<{
     text: string;
+    pageNumber?: number | null;
     origin: "source-snapshot" | "selected-source-text" | "personal-note";
     sourceSnapshot: {
       id: number;
-      originalUrl: string;
-      finalUrl: string;
+      originalUrl: string | null;
+      finalUrl: string | null;
       canonicalUrl: string | null;
       extractedAt: string;
       evidenceCoverage: EvidenceCoverage;

@@ -18,7 +18,7 @@ export function createPassageGenerationStageHandler(database: Database) {
             .where(eq(processingAttempts.id, stage.processingAttemptId));
         if (!attempt?.sourceSnapshotId) throw new Error("Passage generation could not find the Source Snapshot produced by this Processing Attempt");
 
-        const [snapshot] = await database.select({ id: sourceSnapshots.id, evidenceText: sourceSnapshots.evidenceText })
+        const [snapshot] = await database.select({ id: sourceSnapshots.id, evidenceText: sourceSnapshots.evidenceText, pdfEvidence: sourceSnapshots.pdfEvidence })
             .from(sourceSnapshots)
             .where(eq(sourceSnapshots.id, attempt.sourceSnapshotId));
         if (!snapshot) throw new Error("Passage generation could not find the Source Snapshot content");
@@ -30,7 +30,10 @@ export function createPassageGenerationStageHandler(database: Database) {
             .orderBy(captureContexts.id);
 
         const generatedPassages = [
-            ...passagesForSourceSnapshot(snapshot.id, snapshot.evidenceText),
+            ...(snapshot.pdfEvidence
+                ? snapshot.pdfEvidence.pages.flatMap(page => createPassageTexts(page.text).map(text => ({ text, pageNumber: page.pageNumber })))
+                    .map((passage, ordinal) => ({ ...passage, ordinal, sourceSnapshotId: snapshot.id, captureContextId: null, origin: "source-snapshot" }))
+                : passagesForSourceSnapshot(snapshot.id, snapshot.evidenceText)),
             ...contexts.flatMap(context => passagesForCaptureContext(context.id, captureContextKindFor(context.kind), context.text)),
         ];
         if (generatedPassages.length === 0) return;

@@ -6,11 +6,13 @@ const OMITTED_CONTENT_NOTICE = "\n\n[Additional Source content was omitted becau
  * Preserves the beginning of a prompt, where its instructions and source
  * attribution live, while dropping overflow without splitting UTF-8 text.
  */
-export function limitGenerationInput(prompt: string, closingInstructions = ""): string {
+export function limitGenerationInput(prompt: string, closingInstructions = "", options: { requireComplete?: boolean } = {}): string {
     const encoder = new TextEncoder();
     const promptBudget = MAXIMUM_GENERATION_INPUT_BYTES - encoder.encode(closingInstructions).byteLength;
     if (promptBudget < encoder.encode(OMITTED_CONTENT_NOTICE).byteLength) throw new Error("Generation instructions exceed the input budget");
     if (encoder.encode(prompt).byteLength <= promptBudget) return prompt + closingInstructions;
+
+    if (options.requireComplete) throw new Error("PDF evidence exceeds the generation input limit; whole-document enrichment was not generated");
 
     const contentBudget = promptBudget - encoder.encode(OMITTED_CONTENT_NOTICE).byteLength;
     let bytes = 0;

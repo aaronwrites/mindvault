@@ -24,6 +24,7 @@ import {
     knowledgeItemTopicTags,
     topicTags,
     type EvidenceCoverage,
+    type PdfEvidence,
 } from "../../db/schema";
 import { originalFileActions } from "../original-files/create-original-file-access";
 
@@ -60,6 +61,7 @@ export type KnowledgeItemView = {
         faviconUrl: string | null;
     } | null;
     evidenceCoverage: EvidenceCoverage | null;
+    extractionCoverage: Omit<PdfEvidence, "pages"> & { pages: Array<Omit<PdfEvidence["pages"][number], "text">> } | null;
     captureContexts: Array<{ kind: string; summary: string }>;
     availability: KnowledgeItemAvailability;
     organizationCondition: "processing" | "complete" | "incomplete";
@@ -71,6 +73,7 @@ export type KnowledgeItemView = {
         status: string;
         createdAt: string;
         failureReason?: string;
+        warnings?: string[];
     } | null;
 };
 
@@ -138,7 +141,7 @@ async function presentKnowledgeItems(
             .where(inArray(sourcePreviews.sourceSnapshotId, currentSnapshotIds)),
         currentSnapshotIds.length === 0 ? [] : await database.select({ sourceSnapshotId: sourcePreviewMedia.sourceSnapshotId, alternativeText: sourcePreviewMedia.alternativeText, presentation: sourcePreviewMedia.presentation }).from(sourcePreviewMedia)
             .where(inArray(sourcePreviewMedia.sourceSnapshotId, currentSnapshotIds)),
-        currentSnapshotIds.length === 0 ? [] : await database.select({ id: sourceSnapshots.id, evidenceCoverage: sourceSnapshots.evidenceCoverage }).from(sourceSnapshots)
+        currentSnapshotIds.length === 0 ? [] : await database.select({ id: sourceSnapshots.id, evidenceCoverage: sourceSnapshots.evidenceCoverage, pdfEvidence: sourceSnapshots.pdfEvidence }).from(sourceSnapshots)
             .where(inArray(sourceSnapshots.id, currentSnapshotIds)),
         await database.select({ sourceId: extractedSources.sourceId, sourcePreview: extractedSources.sourcePreview })
             .from(extractedSources)
@@ -167,6 +170,7 @@ async function presentKnowledgeItems(
     const previewsBySnapshot = new Map(previewRows.map(preview => [preview.sourceSnapshotId, preview]));
     const mediaBySnapshot = new Map(previewMediaRows.map(media => [media.sourceSnapshotId, media]));
     const coverageBySnapshot = new Map(currentSnapshotRows.map(snapshot => [snapshot.id, snapshot.evidenceCoverage]));
+    const pdfEvidenceBySnapshot = new Map(currentSnapshotRows.map(snapshot => [snapshot.id, snapshot.pdfEvidence]));
     const extractedPreviewsBySource = new Map<number, ExtractedSourcePreview>();
     for (const extractedPreview of extractedPreviewRows) {
         if (!extractedPreviewsBySource.has(extractedPreview.sourceId)) {
@@ -211,16 +215,21 @@ async function presentKnowledgeItems(
             evidenceCoverage: source.currentSnapshotId === null
                 ? null
                 : coverageBySnapshot.get(source.currentSnapshotId) ?? null,
+            extractionCoverage: (() => {
+                const pdf = source.currentSnapshotId ? pdfEvidenceBySnapshot.get(source.currentSnapshotId) : null;
+                return pdf ? { pageCount: pdf.pageCount, pages: pdf.pages.map(({ text: _text, ...page }) => page) } : null;
+            })(),
             captureContexts: contextsByItem.get(knowledgeItem.id) ?? [],
             availability: availabilityByItem.get(knowledgeItem.id) ?? "processing",
-            organizationCondition: source.provenanceKind === "original-file" ? "complete" : organizationConditions.get(knowledgeItem.id) ?? "processing",
+            organizationCondition: source.provenanceKind === "original-file" && source.sourceKind !== "pdf" ? "complete" : organizationConditions.get(knowledgeItem.id) ?? "processing",
             recognitionSummary: summariesByItem.get(knowledgeItem.id)?.text ?? null,
             topicTags: topicTagsByItem.get(knowledgeItem.id) ?? [],
             latestAttempt: latestAttempt ? {
                 id: latestAttempt.id,
                 kind: latestAttempt.kind,
-                status: displayedLatestAttemptStatuses.get(latestAttempt.id) ?? latestAttempt.status,
+                status: displayedLatestAttemptStatuses.get(latestAttempt.id)?.status ?? latestAttempt.status,
                 createdAt: toIsoString(latestAttempt.createdAt),
+                ...((displayedLatestAttemptStatuses.get(latestAttempt.id)?.warnings.length ?? 0) > 0 ? { warnings: displayedLatestAttemptStatuses.get(latestAttempt.id)!.warnings } : {}),
                 ...(latestAttempt.failureReason ? { failureReason: latestAttempt.failureReason } : {}),
             } : null,
         };
@@ -303,14 +312,14 @@ async function organizationConditionsByKnowledgeItem(
 async function latestAttemptStatuses(
     database: Database,
     latestAttempts: Map<number, typeof processingAttempts.$inferSelect>,
-): Promise<Map<number, string>> {
+): Promise<Map<number, { status: string; warnings: string[] }>> {
     const attempts = [...latestAttempts.values()];
     if (attempts.length === 0) return new Map();
 
-    const stages = await database.select({ processingAttemptId: processingStages.processingAttemptId, kind: processingStages.kind, status: processingStages.status })
+    const stages = await database.select({ processingAttemptId: processingStages.processingAttemptId, kind: processingStages.kind, status: processingStages.status, failureReason: processingStages.failureReason })
         .from(processingStages)
         .where(inArray(processingStages.processingAttemptId, attempts.map(attempt => attempt.id)));
-    const stagesByAttempt = new Map<number, Array<{ kind: string; status: string }>>();
+    const stagesByAttempt = new Map<number, Array<{ kind: string; status: string; failureReason: string | null }>>();
     for (const stage of stages) {
         const attemptStages = stagesByAttempt.get(stage.processingAttemptId) ?? [];
         attemptStages.push(stage);
@@ -322,7 +331,7 @@ async function latestAttemptStatuses(
         const status = attempt.status === "pending" && attemptStages.length > 0 && attemptStages.every(stage => ["completed", "skipped", "failed"].includes(stage.status))
             ? "completed"
             : attempt.status;
-        return [attempt.id, status];
+        return [attempt.id, { status, warnings: [...new Set(attemptStages.flatMap(stage => stage.status === "failed" && stage.failureReason ? [stage.failureReason] : []))] }];
     }));
 }
 
@@ -385,7 +394,7 @@ async function availabilityByKnowledgeItem(
                     && passagesForSnapshot.every(passage => passage.lexicalSearch !== null && indexedPassageIds.has(passage.id));
             });
         const latestAttempt = latestAttempts.get(knowledgeItem.id);
-        const availability: KnowledgeItemAvailability = source.provenanceKind === "original-file"
+        const availability: KnowledgeItemAvailability = source.provenanceKind === "original-file" && (source.sourceKind !== "pdf" || !latestAttempt)
             ? "unsupported"
             : hasTrustworthyRepresentation
             ? "ready"

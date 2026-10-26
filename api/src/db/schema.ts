@@ -17,6 +17,16 @@ export type CaptureContextKind = typeof captureContextKinds[number];
 export const evidenceCoverageKinds = ["primary-content", "metadata-only"] as const;
 export type EvidenceCoverage = typeof evidenceCoverageKinds[number];
 
+export type PdfPageEvidence = {
+    pageNumber: number;
+    pageLabel: string | null;
+    method: "native" | "none";
+    outcome: "extracted" | "blank" | "needs-ocr" | "failed";
+    text: string;
+    reason: string | null;
+};
+export type PdfEvidence = { pageCount: number; pages: PdfPageEvidence[] };
+
 export const sources = pgTable("sources", {
     id: serial("id").primaryKey(),
     provenanceKind: text("provenance_kind").notNull(),
@@ -127,9 +137,10 @@ export const extractedSources = pgTable("extracted_sources", {
     title: text("title").notNull(),
     evidenceText: text("primary_text"),
     evidenceCoverage: text("evidence_coverage").$type<EvidenceCoverage>(),
-    originalUrl: text("original_url").notNull(),
-    finalUrl: text("final_url").notNull(),
+    originalUrl: text("original_url"),
+    finalUrl: text("final_url"),
     canonicalUrl: text("canonical_url"),
+    pdfEvidence: jsonb("pdf_evidence").$type<PdfEvidence>(),
     permanentRedirects: jsonb("permanent_redirects").notNull(),
     sourcePreview: jsonb("source_preview").notNull(),
     extractedAt: timestamp("extracted_at").notNull().defaultNow(),
@@ -143,9 +154,10 @@ export const sourceSnapshots = pgTable("source_snapshots", {
     title: text("title").notNull(),
     evidenceText: text("primary_text").notNull(),
     evidenceCoverage: text("evidence_coverage").$type<EvidenceCoverage>().notNull().default("primary-content"),
-    originalUrl: text("original_url").notNull(),
-    finalUrl: text("final_url").notNull(),
+    originalUrl: text("original_url"),
+    finalUrl: text("final_url"),
     canonicalUrl: text("canonical_url"),
+    pdfEvidence: jsonb("pdf_evidence").$type<PdfEvidence>(),
     permanentRedirects: jsonb("permanent_redirects").notNull(),
     extractedAt: timestamp("extracted_at").notNull(),
     contentHash: text("content_hash").notNull(),
@@ -216,11 +228,13 @@ export const passages = pgTable("passages", {
     text: text("text").notNull(),
     lexicalSearch: tsvector("lexical_search"),
     ordinal: integer("ordinal").notNull(),
+    pageNumber: integer("page_number"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
 }, table => [
     uniqueIndex("passages_source_snapshot_ordinal_unique").on(table.sourceSnapshotId, table.ordinal),
     uniqueIndex("passages_capture_context_ordinal_unique").on(table.captureContextId, table.ordinal),
     index("passages_lexical_search_index").using("gin", table.lexicalSearch),
+    check("passages_page_reference", sql`${table.pageNumber} IS NULL OR (${table.pageNumber} > 0 AND ${table.sourceSnapshotId} IS NOT NULL)`),
     check("passages_one_content_origin", sql`(
         (source_snapshot_id IS NOT NULL AND capture_context_id IS NULL AND origin = 'source-snapshot')
         OR (source_snapshot_id IS NULL AND capture_context_id IS NOT NULL AND origin IN ('selected-source-text', 'personal-note'))
