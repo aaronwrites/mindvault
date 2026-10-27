@@ -26,6 +26,96 @@ describe("Ollama providers", () => {
         await expect(providers.summaryProvider.generate("evidence")).rejects.toThrow("failed validation");
     });
 
+    test("selects complete obtained statements for PDF Recognition Summaries", async () => {
+        const providers = createOllamaProviders({ configuration, fetchImplementation: async () => chatResponse(JSON.stringify({ statementIndexes: [0] })) });
+        const result = await providers.summaryProvider.generate("Summarize this PDF.", {
+            sourceText: "PostgreSQL printed recovery checklist\nRestore the base backup before replaying archived WAL.\nSCAN_RECOVERY_MARKER identifies the printed recovery procedure.",
+            extractionDisclosure: "All pages extracted.", partial: false,
+        });
+        expect(result).toBe("PostgreSQL printed recovery checklist Restore the base backup before replaying archived WAL.");
+    });
+
+    test("repairs invented technical identifiers using only the cited page evidence", async () => {
+        const responses = [
+            { answer: "Use WAL_RECOVERY_MARKER.", citationIds: ["page-2"], insufficientEvidence: false },
+            { answer: "Use SCAN_RECOVERY_MARKER.", citationIds: ["page-2"], insufficientEvidence: false },
+            { supported: true, reason: "The exact identifier occurs on the cited page." },
+        ];
+        const providers = createOllamaProviders({ configuration, fetchImplementation: async () => chatResponse(JSON.stringify(responses.shift())) });
+        const result = await providers.synthesisProvider.generateSynthesis({
+            question: "Which identifier appears in the checklist?", conversation: [], evidence: [{
+                citationId: "page-2", origin: "source-snapshot", knowledgeItemId: 1, sourceSnapshotId: 1,
+                title: "Recovery", text: "Identifier: SCAN_RECOVERY_MARKER.", originalUrl: null,
+                pageNumber: 2, evidenceCoverage: "primary-content",
+            }],
+        });
+        expect(result).toEqual({ answer: "Use SCAN_RECOVERY_MARKER.", citationIds: ["page-2"], insufficientEvidence: false });
+    });
+
+    test("fails closed when PDF statement selections remain outside obtained text", async () => {
+        let generations = 0;
+        const providers = createOllamaProviders({ configuration, fetchImplementation: async () => {
+            generations++;
+            return chatResponse(JSON.stringify({ statementIndexes: [999] }));
+        } });
+        await expect(providers.summaryProvider.generate("Summarize the PDF.", {
+            sourceText: "Restore the base backup.", extractionDisclosure: "All text extracted.", partial: false,
+        })).rejects.toThrow("grounding failed after one correction");
+        expect(generations).toBe(2);
+    });
+
+    test("does not let an uncited page substantiate a synthesis claim", async () => {
+        const providers = createOllamaProviders({ configuration, fetchImplementation: async () => chatResponse(JSON.stringify({
+            answer: "Use EXACT_OTHER_NAME.", citationIds: ["cited"], insufficientEvidence: false,
+        })) });
+        const evidence = ["cited", "uncited"].map(citationId => ({
+            citationId, origin: "source-snapshot" as const, knowledgeItemId: 1, sourceSnapshotId: 1,
+            title: "EXACT_OTHER_NAME", originalUrl: null, evidenceCoverage: "primary-content" as const,
+            text: citationId === "cited" ? "Restore the base backup." : "Use EXACT_OTHER_NAME.",
+        }));
+        await expect(providers.synthesisProvider.generateSynthesis({ question: "Which identifier?", evidence, conversation: [] }))
+            .rejects.toThrow("grounding failed after one correction");
+    });
+
+    test("reports grounding input overflow without omitting source text", async () => {
+        const providers = createOllamaProviders({ configuration, fetchImplementation: async () => chatResponse(JSON.stringify({ summary: "A recovery checklist." })) });
+        await expect(providers.summaryProvider.generate("Summarize the PDF.", {
+            sourceText: "x".repeat(28_001), extractionDisclosure: "All pages extracted.", partial: false,
+        })).rejects.toThrow("maximum is 28000 bytes");
+    });
+
+    test("keeps PDF summaries bounded and discloses partial extraction without truncating a statement", async () => {
+        const responses = [{ statementIndexes: [0] }, { statementIndexes: [1] }];
+        const providers = createOllamaProviders({ configuration, fetchImplementation: async () => chatResponse(JSON.stringify(responses.shift())) });
+        const result = await providers.summaryProvider.generate("Summarize the PDF.", {
+            sourceText: `${"Long source statement ".repeat(20)}.\nRestore the base backup.`, extractionDisclosure: "Physical page 3 unreadable.", partial: true,
+        });
+        expect(result).toBe("From partially extracted PDF text: Restore the base backup.");
+    });
+
+    test("preserves negation across wrapped PDF lines in a selected statement", async () => {
+        const providers = createOllamaProviders({ configuration, fetchImplementation: async () => chatResponse(JSON.stringify({ statementIndexes: [0] })) });
+        const result = await providers.summaryProvider.generate("Summarize the PDF.", {
+            sourceText: "Do not\nreplay archived WAL before restoring the base backup.", extractionDisclosure: "All text extracted.", partial: false,
+        });
+        expect(result).toBe("Do not replay archived WAL before restoring the base backup.");
+    });
+
+    test("does not accept generated prose in place of PDF source-statement selection", async () => {
+        const providers = createOllamaProviders({ configuration, fetchImplementation: async () => chatResponse(JSON.stringify({ summary: "An invented workflow." })) });
+        await expect(providers.summaryProvider.generate("Summarize the PDF.", {
+            sourceText: "Restore the base backup.", extractionDisclosure: "All text extracted.", partial: false,
+        })).rejects.toThrow("failed validation");
+    });
+
+    test("does not expose factual claims hidden inside an insufficient-evidence response", async () => {
+        const providers = createOllamaProviders({ configuration, fetchImplementation: async () => chatResponse(JSON.stringify({
+            answer: "The diagram shows a replication relationship, but evidence is insufficient.", citationIds: [], insufficientEvidence: true,
+        })) });
+        const result = await providers.synthesisProvider.generateSynthesis({ question: "What does the diagram show?", evidence: [], conversation: [] });
+        expect(result).toEqual({ answer: "I don't have enough captured evidence to answer that question.", citationIds: [], insufficientEvidence: true });
+    });
+
     test("resolves conversational references through structured generation and rejects unusable retrieval questions", async () => {
         const requests: string[] = [];
         let content = JSON.stringify({ question: "What does a durable Source Snapshot preserve?" });

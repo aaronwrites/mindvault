@@ -18,12 +18,25 @@ afterEach(async () => { await harness?.cleanup(); harness = undefined; });
 // This is a repeatable quality assessment, not an assertion of universal model factuality.
 // Review the emitted summaries, tags, excerpts and answers against fixtures/pdf/generate.py.
 test.skipIf(process.env.RUN_LIVE_PDF_CHECK !== "1" || !process.env.TEST_DATABASE_URL)("live PDF evidence supports grounded local-model Recall and Synthesis", async () => {
-    const providers = createOllamaProviders();
+    // Retain actual candidate/evidence/audit decisions for inspection. This is
+    // fixture-only data; no application captures or signed storage URLs enter it.
+    const groundingAssessments: Array<{ request: unknown; response: unknown }> = [];
+    const summarySelections: Array<{ request: unknown; response: unknown }> = [];
+    const providers = createOllamaProviders({ fetchImplementation: async (url, init) => {
+        const response = await fetch(url, init);
+        if (new URL(String(url)).pathname === "/api/chat" && init?.body) {
+            const body = JSON.parse(String(init.body));
+            const trace = body.format?.properties?.supported ? groundingAssessments
+                : body.format?.properties?.statementIndexes ? summarySelections : undefined;
+            if (trace) trace.push({ request: body.messages, response: await response.clone().json() });
+        }
+        return response;
+    } });
     await providers.preflight();
     const storage = new DeterministicOriginalFileStorageFake();
     const generationInputs: SynthesisGenerationInput[] = [];
     const answers: Array<{ name: string; output: Answer }> = [];
-    const records: Record<string, unknown> = { models: providers.modelDigests, generationInputs };
+    const records: Record<string, unknown> = { models: providers.modelDigests, generationInputs, groundingAssessments, summarySelections };
     harness = await createIntegrationHarness(
         database => createApp({ database: database.db, originalFileStorage: storage,
             embeddingProvider: providers.embeddingProvider, synthesisProvider: {
@@ -109,6 +122,7 @@ test.skipIf(process.env.RUN_LIVE_PDF_CHECK !== "1" || !process.env.TEST_DATABASE
             }
             const followUp = await ask(`${name}FollowUp`, "What SQL statement appears in its PostgreSQL recovery procedure?", [{ question, answer: answer.answer }]);
             expect(followUp.insufficientEvidence).toBe(false);
+            expect(followUp.answer).toContain("SELECT pg_switch_wal();");
             expect(followUp.citations.length).toBeGreaterThan(0);
             expect(followUp.citations.every(citation => citation.knowledgeItemId === captured.knowledgeItemId)).toBe(true);
             for (const other of others) await post(`/knowledge-items/${other.knowledgeItemId}/restore`);

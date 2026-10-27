@@ -31,7 +31,10 @@ export function createRecognitionSummaryStageHandler(database: Database, provide
             .innerJoin(captures, eq(captures.id, captureContexts.captureId))
             .where(eq(captures.knowledgeItemId, attempt.knowledgeItemId))
             .orderBy(captureContexts.id);
-        const text = conciseSummary(await provider.generate(recognitionSummaryPrompt(snapshot, contexts)));
+        const text = conciseSummary(await provider.generate(recognitionSummaryPrompt(snapshot, contexts), snapshot.pdfEvidence ? {
+            sourceText: snapshot.evidenceText, extractionDisclosure: pdfExtractionDisclosure(snapshot.pdfEvidence),
+            partial: pdfExtractionGaps(snapshot.pdfEvidence).length > 0,
+        } : undefined));
         if (!text) throw new Error("Recognition Summary generation returned empty text");
 
         await database.execute(sql`
