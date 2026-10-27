@@ -78,6 +78,21 @@ describe("Ollama providers", () => {
         expect(generations).toBe(4);
     });
 
+    test("preserves substantive source statements about missing domain data", async () => {
+        const answer = "The document says missing WAL files prevent recovery.";
+        const providers = createOllamaProviders({ configuration, fetchImplementation: async (_url, init) => {
+            const request = JSON.parse(String(init?.body));
+            return chatResponse(JSON.stringify(request.format.properties.supported
+                ? { supported: true, reason: "The supplied text states this recovery limitation." }
+                : { answer, citationIds: ["source"], insufficientEvidence: false }));
+        } });
+        const result = await providers.synthesisProvider.generateSynthesis({ question: "What prevents recovery?", conversation: [], evidence: [{
+            citationId: "source", origin: "source-snapshot", knowledgeItemId: 1, sourceSnapshotId: 1,
+            title: "Recovery", text: "Missing WAL files prevent recovery.", originalUrl: null, evidenceCoverage: "primary-content",
+        }] });
+        expect(result.answer).toBe(answer);
+    });
+
     test("recovers only supplied citations containing complete statements reused in an answer", async () => {
         const answer = "Restore the base backup before replaying archived WAL. Write-ahead logging keeps committed transactions durable after a crash.";
         const responses = [

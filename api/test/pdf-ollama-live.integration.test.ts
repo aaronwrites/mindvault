@@ -22,12 +22,14 @@ test.skipIf(process.env.RUN_LIVE_PDF_CHECK !== "1" || !process.env.TEST_DATABASE
     // fixture-only data; no application captures or signed storage URLs enter it.
     const groundingAssessments: Array<{ request: unknown; response: unknown }> = [];
     const summarySelections: Array<{ request: unknown; response: unknown }> = [];
+    const synthesisCandidates: Array<{ request: unknown; response: unknown }> = [];
     const providers = createOllamaProviders({ fetchImplementation: async (url, init) => {
         const response = await fetch(url, init);
         if (new URL(String(url)).pathname === "/api/chat" && init?.body) {
             const body = JSON.parse(String(init.body));
             const trace = body.format?.properties?.supported ? groundingAssessments
-                : body.format?.properties?.statementIndexes ? summarySelections : undefined;
+                : body.format?.properties?.statementIndexes ? summarySelections
+                : body.format?.properties?.answer ? synthesisCandidates : undefined;
             if (trace) trace.push({ request: body.messages, response: await response.clone().json() });
         }
         return response;
@@ -37,7 +39,7 @@ test.skipIf(process.env.RUN_LIVE_PDF_CHECK !== "1" || !process.env.TEST_DATABASE
     const generationInputs: SynthesisGenerationInput[] = [];
     const resolvedQuestions: Array<{ question: string; resolved: string }> = [];
     const answers: Array<{ name: string; output: Answer }> = [];
-    const records: Record<string, unknown> = { models: providers.modelDigests, generationInputs, resolvedQuestions, groundingAssessments, summarySelections };
+    const records: Record<string, unknown> = { models: providers.modelDigests, generationInputs, resolvedQuestions, groundingAssessments, summarySelections, synthesisCandidates };
     harness = await createIntegrationHarness(
         database => createApp({ database: database.db, originalFileStorage: storage,
             embeddingProvider: providers.embeddingProvider, synthesisProvider: {

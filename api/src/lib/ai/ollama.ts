@@ -315,12 +315,15 @@ function parseStructuredResponse<T>(content: string, schema: z.ZodType<T>, label
 // Extraction outcomes are application-owned facts. Keep generated availability
 // prose out of answers even when a semantic auditor would mistakenly accept it.
 function generatedCoverageClaim(answer: string): string | undefined {
-    const segmenter = new Intl.Segmenter("en", { granularity: "sentence" });
-    for (const { segment } of segmenter.segment(answer)) {
-        if (/\b(?:pages?|pdf|document|extraction)\b/iu.test(segment)
-            && /\b(?:available|unavailable|extracted|unextracted|unread|unprocessed|missing|uninterpreted|blank|coverage)\b|\b(?:fully|partially|not|been)\s+(?:read|processed|interpreted)\b/iu.test(segment)) {
-            return "Do not make page-availability or extraction-coverage claims. The application displays authoritative coverage separately. Answer only the substantive question from supplied text; use citationIds for page provenance.";
-        }
+    // Match coverage constructions, rather than unrelated words such as
+    // "the document says missing WAL files prevent recovery".
+    const coverageConstructions = [
+        /\b(?:pages?(?:\s+\d+(?:\s*(?:,|and|to|-)\s*\d+)*)?|pdf|document|file|(?:extraction\s+)?coverage)\s+(?:(?:is|are|was|were|remains?|has|have|had|been|not|only|fully|partially|still|already|now|yet)\s+)+(?:available|unavailable|extracted|unread|unprocessed|processed|read|interpreted|blank|complete|incomplete|missing)\b/iu,
+        /\b(?:only|all|no)\s+(?:available|extracted|readable|processed|interpreted)\s+pages?\b/iu,
+        /\b(?:unread|unprocessed|unavailable|missing|blank)\s+pages?\b|\b(?:incomplete|partial|complete|full)\s+(?:extraction|coverage)\b/iu,
+    ];
+    if (coverageConstructions.some(pattern => pattern.test(answer))) {
+        return "Do not make page-availability or extraction-coverage claims. The application displays authoritative coverage separately. Answer only the substantive question from supplied text; use citationIds for page provenance.";
     }
     return undefined;
 }
