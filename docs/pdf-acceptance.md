@@ -1,6 +1,6 @@
 # PDF quality acceptance — 2026-10-27
 
-**Current status: completed.** Tickets 04 and 05 are closed; see [the final closeout](#ticket-04-closeout--2026-10-27). Earlier rejected assessments remain below as history.
+**Current status: completed.** Tickets 04 and 05 are closed; see [the final closeout](#final-reviewed-closeout--2026-10-27). Earlier rejected assessments remain below as history.
 
 The bounded PDF milestone uses retained PDF bytes, actual PDF.js extraction/rendering, local Tesseract OCR, PostgreSQL hybrid retrieval, the real worker, and local Gemma 3/Nomic Embed Text. Storage in this assessment is the deterministic private-storage adapter, as required by the finalized specification. It retains actual fixture bytes and exercises signed Open/Download, expiry/signature validation and physical page targeting. Live Cloudinary delivery remains opt-in; this assessment does not claim a browser viewer or external Cloudinary check.
 
@@ -104,7 +104,7 @@ Final full API/PostgreSQL/real-worker regression: **156 passed, 3 opt-in checks 
 
 ## Ticket 04 closeout — 2026-10-27
 
-**Current outcome: the bounded PDF milestone is accepted; tickets 04 and 05 are completed.** This supersedes the historical incomplete statuses above. Ticket 05 was already completed when this reassessment began. Ticket 04's remaining blocker was an observed follow-up retrieving only native physical page 1 and answering with a recovery identifier instead of the SQL on physical page 2.
+**Intermediate assessment:** attempts 3/4 passed output inspection, but final Spec review subsequently required the coverage correction documented below. The final reviewed closeout supersedes this intermediate assessment. Ticket 05 was already completed when this reassessment began. Ticket 04's remaining blocker was an observed follow-up retrieving only native physical page 1 and answering with a recovery identifier instead of the SQL on physical page 2.
 
 Synthesis now retrieves both the current question and its conversational resolution. Resolved-subject Knowledge Items keep priority; current-question excerpts supplement the same items before unrelated current-question matches. Excerpts are deduplicated by item, Snapshot, origin, page and text, with unique citation IDs. The existing eight-excerpt, 12,000-character, 1,500-character-per-excerpt and complete-generation-input budgets remain. A public HTTP/worker regression first reproduced the omitted SQL page, then reproduced budget starvation with eight unrelated current-query matches. It now preserves the requested SQL page and resolved-subject page, keeps provenance distinct, and excludes Trash. The live runner also records actual resolved questions, so a rewrite cannot silently hide the retrieval input during assessment.
 
@@ -132,3 +132,34 @@ This closes the demonstrated conversational retrieval gap and accepts the agreed
 ### Spec
 
 0 remaining findings after the populated-collection regression, verbatim-citation correction and repeated manually inspected live acceptance. Total findings: Standards 0; Spec 0.
+
+
+## Final reviewed closeout — 2026-10-27
+
+**Final outcome: tickets 04 and 05 and the bounded PDF milestone are completed on implementation `4beef19`.** Final review correctly rejected closing on intermediate attempts 3/4 while attempt 2's false page-availability claim remained uncorrected. That counterexample now has a deterministic correction independent of semantic-audit success.
+
+The application continues to display authoritative missing-page notices from stored Extraction Coverage. The Ollama adapter rejects recognizable English page/document availability and extraction-coverage constructions, requests one correction and fails explicitly if the claim persists. Its regression reproduces “Only page 2 of the document is available” even with an auditor that incorrectly accepts it; the corrected answer or explicit failure is now required. The guard was narrowed after red-to-green regressions exposed false positives for source-domain data: statements about missing or unavailable WAL files remain answerable. This is a conservative bounded English policy, not general natural-language understanding or a universal classifier of coverage prose.
+
+Two subsequent attempts failed safely on generated citation IDs, including a fabricated `:1` suffix. The provider now constrains the structured `citationIds` array to the supplied IDs while retaining explicit runtime validation. Raw generation candidates join the actual evidence/audit traces. Another attempt repeated the SQL semicolon omission, so recognizable `SELECT function(...)` statements now must match a cited source literal, including its terminator, after whitespace normalization. This is a bounded literal check, not a SQL parser. Its provider regression demonstrates correction before a fallible auditor can accept altered punctuation. The existing one-correction budget, complete-input limits and provider-neutral interfaces remain.
+
+| Additional attempt | Actual checks | Inspection outcome |
+| --- | --- | --- |
+| 5 | 26 assertions; 41.09 s | Rejected: explicit generation error after invalid citations. |
+| 6 | 59 assertions; 45.47 s | Rejected: traced fabricated citation suffix persisted; explicit failure. Led to supplied-ID schema constraints. |
+| 7 | 97 assertions; 59.77 s | Rejected: repeated semicolon omission failed the unchanged exact-SQL criterion. Led to source-literal validation. |
+| 8 | 128 assertions; 83.12 s | Accepted on final implementation after complete manual evidence inspection. |
+| 9 | 127 assertions; 79.95 s | Accepted on consecutive final repeat after complete manual evidence inspection. |
+
+Both final runs preserve exact SQL for native, scan and mixed follow-ups; native physical page 2/printed label 1; correct retained-file targeting/private access; obtained-statement summaries; grounded native/OCR and collection-wide web/PDF answers; both mixed-answer supporting pages; deterministic missing-page disclosure; retained no-evidence outcomes; and honest visual refusal. No source bytes, broad recovery question, exact-SQL assertion, model digest or resource setting was weakened. Earlier unsupported outputs, safe failures and intermediate accepted outputs remain in `ticket04CloseoutAssessments`; `currentMilestoneOutcome` identifies final acceptance. A transient model-discovery connection failure before fixture processing is recorded separately and is not quality evidence.
+
+Final full suite on the reviewed implementation: **161 API tests passed, 3 opt-in skips, 0 failed**, 748 assertions in 286.32 s (`/private/tmp/mindvault-pdf-closeout-api-final-v4.log`). Provider checks: **20 passed**. Client: **30 passed**; API/client typechecking, client lint and whitespace checks passed. Final Standards and Spec reviews: **0 remaining findings**. Earlier full-suite counts above describe intermediate implementations. No migration, new dependency, cloud AI transfer or external Cloudinary acceptance was introduced; ADR-0026 remains the pre-existing untracked file.
+
+The known retrieval, omitted-citation, coverage-counterexample, invalid-ID and SQL-literal failures now have specific corrections. Semantic auditing and generation remain fallible beyond these bounds; this acceptance demonstrates the agreed corpus and does not promise universal factuality, unrestricted PDF input or visual understanding. Broader Source adapters are no longer blocked by this milestone.
+
+### Standards
+
+0 remaining findings after final coverage-policy and SQL-literal corrections.
+
+### Spec
+
+0 remaining findings after final actual-model attempts 8/9 and the full regression. Total findings: Standards 0; Spec 0.
