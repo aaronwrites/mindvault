@@ -3,6 +3,7 @@ import * as schema from "../../db/schema";
 import type { EmbeddingProvider, SynthesisConversationTurn, SynthesisEvidence, SynthesisGenerationProvider } from "../ai/providers";
 import { boundConversation, boundSynthesisInput } from "./bound-conversation";
 import { recallKnowledgeItems } from "../recall/recall-knowledge-items";
+import { pdfExtractionGaps } from "../pdf/pdf-extraction-disclosure";
 
 type Database = NodePgDatabase<typeof schema>;
 
@@ -59,10 +60,24 @@ export async function synthesizeKnowledge(
     }
 
     return {
-        answer: generated.answer,
+        answer: [...pdfCoverageNotices(citedEvidence), generated.answer].join("\n\n"),
         citations: citedEvidence.map(({ citationId: _citationId, text: excerpt, ...citation }) => ({ ...citation, excerpt })),
         insufficientEvidence: false,
     };
+}
+
+function pdfCoverageNotices(evidence: SynthesisEvidence[]): string[] {
+    const seenSnapshots = new Set<string>();
+    return evidence.flatMap(item => {
+        if (!item.extractionCoverage) return [];
+        const key = `${item.knowledgeItemId}:${item.sourceSnapshotId}`;
+        if (seenSnapshots.has(key)) return [];
+        seenSnapshots.add(key);
+        const gaps = pdfExtractionGaps(item.extractionCoverage);
+        return gaps.length > 0
+            ? [`Incomplete PDF extraction for ${JSON.stringify(item.title)}: physical pages ${gaps.map(page => page.pageNumber).join(", ")} have missing text. Only obtained text is available as evidence.`]
+            : [];
+    });
 }
 
 function evidenceFor(recalled: Awaited<ReturnType<typeof recallKnowledgeItems>>): SynthesisEvidence[] {

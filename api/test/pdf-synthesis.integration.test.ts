@@ -46,6 +46,8 @@ test("PDF citations preserve physical pages and fresh mixed evidence through fol
     const response = await ask("archived WAL");
     expect(response.status).toBe(200);
     const result = await response.json() as any;
+    expect(result.answer).toContain("Incomplete PDF extraction");
+    expect(result.answer).toContain("physical pages 3");
     const citation = result.citations.find((c: any) => c.knowledgeItemId === captured.knowledgeItemId && c.pageNumber === 2);
     expect(citation).toMatchObject({ pageNumber: 2, pageLabel: "1", originalUrl: null, sourceSnapshotId: expect.any(Number),
         extractionCoverage: { pageCount: 2 }, excerpt: expect.stringContaining("archived WAL"),

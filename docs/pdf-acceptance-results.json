@@ -1,0 +1,2204 @@
+{
+  "date": "2026-10-27",
+  "accepted": false,
+  "assessment": "Transport assertions passed; manual factuality assessment failed. See pdf-acceptance.md.",
+  "models": {
+    "generation": {
+      "model": "gemma3:latest",
+      "digest": "a2af6cc3eb7fa8be8504abaf9b04e88f17a119ec3f04a3addf55f92841195f5a"
+    },
+    "embedding": {
+      "model": "nomic-embed-text:latest",
+      "digest": "0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f"
+    }
+  },
+  "processingMs": 20487,
+  "uploadedFileCount": 3,
+  "items": {
+    "retainedSelectable": {
+      "id": 1,
+      "createdAt": "2026-10-27T05:32:58.872Z",
+      "lifecycleState": "active",
+      "trashedAt": null,
+      "deletion": null,
+      "source": {
+        "id": 1,
+        "kind": "pdf",
+        "filename": "selectable.pdf",
+        "mediaType": "application/pdf",
+        "byteSize": 2194,
+        "originalFileActions": {
+          "download": "/knowledge-items/1/original-file/download",
+          "open": "/knowledge-items/1/original-file/open"
+        }
+      },
+      "sourcePreview": {
+        "title": "selectable.pdf",
+        "description": null,
+        "websiteName": null,
+        "author": null,
+        "publishedAt": null,
+        "contentType": "application/pdf",
+        "previewImageUrl": null,
+        "previewImageAlt": null,
+        "previewImagePresentation": null,
+        "faviconUrl": null
+      },
+      "evidenceCoverage": "primary-content",
+      "extractionCoverage": {
+        "pageCount": 2,
+        "pages": [
+          {
+            "method": "native",
+            "reason": null,
+            "outcome": "extracted",
+            "pageLabel": "i",
+            "pageNumber": 1
+          },
+          {
+            "method": "native",
+            "reason": null,
+            "outcome": "extracted",
+            "pageLabel": "1",
+            "pageNumber": 2
+          }
+        ]
+      },
+      "captureContexts": [],
+      "availability": "ready",
+      "organizationCondition": "complete",
+      "recognitionSummary": "This guide details PostgreSQL recovery using WAL and transaction log management.",
+      "topicTags": [
+        "Backup",
+        "Point-in-Time Recovery (PITR)",
+        "PostgreSQL Recovery",
+        "Transaction Log",
+        "Write-Ahead Logging (WAL)"
+      ],
+      "latestAttempt": {
+        "id": 2,
+        "kind": "refresh",
+        "status": "completed",
+        "createdAt": "2026-10-27T05:32:59.195Z"
+      }
+    },
+    "printedScan": {
+      "id": 2,
+      "createdAt": "2026-10-27T05:32:59.406Z",
+      "lifecycleState": "active",
+      "trashedAt": null,
+      "deletion": null,
+      "source": {
+        "id": 2,
+        "kind": "pdf",
+        "filename": "printed-scan.pdf",
+        "mediaType": "application/pdf",
+        "byteSize": 39628,
+        "originalFileActions": {
+          "download": "/knowledge-items/2/original-file/download",
+          "open": "/knowledge-items/2/original-file/open"
+        }
+      },
+      "sourcePreview": {
+        "title": "printed-scan.pdf",
+        "description": null,
+        "websiteName": null,
+        "author": null,
+        "publishedAt": null,
+        "contentType": "application/pdf",
+        "previewImageUrl": null,
+        "previewImageAlt": null,
+        "previewImagePresentation": null,
+        "faviconUrl": null
+      },
+      "evidenceCoverage": "primary-content",
+      "extractionCoverage": {
+        "pageCount": 1,
+        "pages": [
+          {
+            "method": "ocr",
+            "reason": null,
+            "outcome": "extracted",
+            "pageLabel": null,
+            "pageNumber": 1
+          }
+        ]
+      },
+      "captureContexts": [],
+      "availability": "ready",
+      "organizationCondition": "complete",
+      "recognitionSummary": "This document outlines a PostgreSQL recovery checklist using WAL replay and scan procedures.",
+      "topicTags": [
+        "pg_switch_wal",
+        "PostgreSQL Recovery",
+        "SCAN_RECOVERY_MARKER",
+        "Transaction Log Management"
+      ],
+      "latestAttempt": {
+        "id": 3,
+        "kind": "initial-capture",
+        "status": "completed",
+        "createdAt": "2026-10-27T05:32:59.406Z"
+      }
+    },
+    "mixed": {
+      "id": 3,
+      "createdAt": "2026-10-27T05:32:59.681Z",
+      "lifecycleState": "active",
+      "trashedAt": null,
+      "deletion": null,
+      "source": {
+        "id": 3,
+        "kind": "pdf",
+        "filename": "mixed.pdf",
+        "mediaType": "application/pdf",
+        "byteSize": 41171,
+        "originalFileActions": {
+          "download": "/knowledge-items/3/original-file/download",
+          "open": "/knowledge-items/3/original-file/open"
+        }
+      },
+      "sourcePreview": {
+        "title": "mixed.pdf",
+        "description": null,
+        "websiteName": null,
+        "author": null,
+        "publishedAt": null,
+        "contentType": "application/pdf",
+        "previewImageUrl": null,
+        "previewImageAlt": null,
+        "previewImagePresentation": null,
+        "faviconUrl": null
+      },
+      "evidenceCoverage": "primary-content",
+      "extractionCoverage": {
+        "pageCount": 4,
+        "pages": [
+          {
+            "method": "native",
+            "reason": null,
+            "outcome": "extracted",
+            "pageLabel": null,
+            "pageNumber": 1
+          },
+          {
+            "method": "ocr",
+            "reason": null,
+            "outcome": "extracted",
+            "pageLabel": null,
+            "pageNumber": 2
+          },
+          {
+            "method": "ocr",
+            "reason": "No trustworthy printed English text from local OCR; visual content has not been interpreted",
+            "outcome": "unreadable",
+            "pageLabel": null,
+            "pageNumber": 3
+          },
+          {
+            "method": "none",
+            "reason": null,
+            "outcome": "blank",
+            "pageLabel": null,
+            "pageNumber": 4
+          }
+        ]
+      },
+      "captureContexts": [],
+      "availability": "ready",
+      "organizationCondition": "complete",
+      "recognitionSummary": "From partially extracted PDF text, the document outlines PostgreSQL recovery procedures and identifiers.",
+      "topicTags": [
+        "pg_switch_wal",
+        "PostgreSQL Recovery",
+        "Recovery Checklist",
+        "SCAN_RECOVERY_MARKER",
+        "Write-Ahead Logging (WAL)"
+      ],
+      "latestAttempt": {
+        "id": 4,
+        "kind": "initial-capture",
+        "status": "completed",
+        "createdAt": "2026-10-27T05:32:59.681Z"
+      }
+    }
+  },
+  "recall": {
+    "retainedSelectable": {
+      "exact": [
+        {
+          "id": 1,
+          "ranking": {
+            "score": 0.03598669659120479,
+            "matchedPassageCount": 2
+          },
+          "excerpts": [
+            {
+              "text": "PostgreSQL recovery field guide\nWrite-ahead logging keeps committed transactions durable after a crash.\nThe WAL_RECOVERY_TARGET identifier selects the recovery destination.",
+              "pageNumber": 1,
+              "pageLabel": "i",
+              "ranking": {
+                "score": 0.032018442622950824,
+                "semanticRank": 4,
+                "lexicalRank": 1
+              }
+            },
+            {
+              "text": "Physical page two - printed page 1\nPoint-in-time recovery replays archived WAL to restore an earlier state.\nOperators take regular base backups before replaying the transaction log.\nSELECT pg_switch_wal(); -- force a transaction log segment switch",
+              "pageNumber": 2,
+              "pageLabel": "1",
+              "ranking": {
+                "score": 0.015873015873015872,
+                "semanticRank": 3
+              }
+            }
+          ]
+        }
+      ],
+      "conceptual": [
+        {
+          "id": 1,
+          "ranking": {
+            "score": 0.02042570068746695,
+            "matchedPassageCount": 2
+          },
+          "excerpts": [
+            {
+              "text": "Physical page two - printed page 1\nPoint-in-time recovery replays archived WAL to restore an earlier state.\nOperators take regular base backups before replaying the transaction log.\nSELECT pg_switch_wal(); -- force a transaction log segment switch",
+              "pageNumber": 2,
+              "pageLabel": "1",
+              "ranking": {
+                "score": 0.01639344262295082,
+                "semanticRank": 1
+              }
+            },
+            {
+              "text": "PostgreSQL recovery field guide\nWrite-ahead logging keeps committed transactions durable after a crash.\nThe WAL_RECOVERY_TARGET identifier selects the recovery destination.",
+              "pageNumber": 1,
+              "pageLabel": "i",
+              "ranking": {
+                "score": 0.016129032258064516,
+                "semanticRank": 2
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "printedScan": {
+      "exact": [
+        {
+          "id": 2,
+          "ranking": {
+            "score": 0.03278688524590164,
+            "matchedPassageCount": 1
+          },
+          "excerpts": [
+            {
+              "text": "PostgreSQL printed recovery checklist\nRestore the base backup before replaying archived WAL.\nSCAN_RECOVERY_MARKER identifies the printed recovery procedure.\nSELECT pg_switch_wal();\nKeep transaction logs until the recovery check succeeds.",
+              "pageNumber": 1,
+              "pageLabel": null,
+              "ranking": {
+                "score": 0.03278688524590164,
+                "semanticRank": 1,
+                "lexicalRank": 1
+              }
+            }
+          ]
+        }
+      ],
+      "conceptual": [
+        {
+          "id": 2,
+          "ranking": {
+            "score": 0.015625,
+            "matchedPassageCount": 1
+          },
+          "excerpts": [
+            {
+              "text": "PostgreSQL printed recovery checklist\nRestore the base backup before replaying archived WAL.\nSCAN_RECOVERY_MARKER identifies the printed recovery procedure.\nSELECT pg_switch_wal();\nKeep transaction logs until the recovery check succeeds.",
+              "pageNumber": 1,
+              "pageLabel": null,
+              "ranking": {
+                "score": 0.015625,
+                "semanticRank": 4
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "mixed": {
+      "exact": [
+        {
+          "id": 3,
+          "ranking": {
+            "score": 0.03616431451612903,
+            "matchedPassageCount": 2
+          },
+          "excerpts": [
+            {
+              "text": "PostgreSQL printed recovery checklist\nRestore the base backup before replaying archived WAL.\nSCAN_RECOVERY_MARKER identifies the printed recovery procedure.\nSELECT pg_switch_wal();\nKeep transaction logs until the recovery check succeeds.",
+              "pageNumber": 2,
+              "pageLabel": null,
+              "ranking": {
+                "score": 0.03225806451612903,
+                "semanticRank": 2,
+                "lexicalRank": 2
+              }
+            },
+            {
+              "text": "PostgreSQL recovery field guide\nWrite-ahead logging keeps committed transactions durable after a crash.\nThe WAL_RECOVERY_TARGET identifier selects the recovery destination.",
+              "pageNumber": 1,
+              "pageLabel": null,
+              "ranking": {
+                "score": 0.015625,
+                "semanticRank": 4
+              }
+            }
+          ]
+        }
+      ],
+      "conceptual": [
+        {
+          "id": 3,
+          "ranking": {
+            "score": 0.01971916971916972,
+            "matchedPassageCount": 2
+          },
+          "excerpts": [
+            {
+              "text": "PostgreSQL recovery field guide\nWrite-ahead logging keeps committed transactions durable after a crash.\nThe WAL_RECOVERY_TARGET identifier selects the recovery destination.",
+              "pageNumber": 1,
+              "pageLabel": null,
+              "ranking": {
+                "score": 0.015873015873015872,
+                "semanticRank": 3
+              }
+            },
+            {
+              "text": "PostgreSQL printed recovery checklist\nRestore the base backup before replaying archived WAL.\nSCAN_RECOVERY_MARKER identifies the printed recovery procedure.\nSELECT pg_switch_wal();\nKeep transaction logs until the recovery check succeeds.",
+              "pageNumber": 2,
+              "pageLabel": null,
+              "ranking": {
+                "score": 0.015384615384615385,
+                "semanticRank": 5
+              }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "answers": {
+    "retainedSelectableAnswer": {
+      "question": "How does the captured PostgreSQL guide use base backups and archived WAL for recovery?",
+      "answer": "PostgreSQL recovery uses archived WAL to restore an earlier state by replaying archived WAL. Operators take regular base backups before replaying the transaction log. SELECT pg_switch_wal(); -- force a transaction log segment switch.",
+      "citations": [
+        {
+          "origin": "source-snapshot",
+          "knowledgeItemId": 1,
+          "sourceSnapshotId": 1,
+          "title": "selectable.pdf",
+          "originalUrl": null,
+          "pageNumber": 1,
+          "pageLabel": "i",
+          "extractionCoverage": {
+            "pageCount": 2,
+            "pages": [
+              {
+                "method": "native",
+                "reason": null,
+                "outcome": "extracted",
+                "pageLabel": "i",
+                "pageNumber": 1
+              },
+              {
+                "method": "native",
+                "reason": null,
+                "outcome": "extracted",
+                "pageLabel": "1",
+                "pageNumber": 2
+              }
+            ]
+          },
+          "openOriginalFile": "/knowledge-items/1/original-file/open?page=1",
+          "evidenceCoverage": "primary-content",
+          "excerpt": "PostgreSQL recovery field guide\nWrite-ahead logging keeps committed transactions durable after a crash.\nThe WAL_RECOVERY_TARGET identifier selects the recovery destination."
+        },
+        {
+          "origin": "source-snapshot",
+          "knowledgeItemId": 1,
+          "sourceSnapshotId": 1,
+          "title": "selectable.pdf",
+          "originalUrl": null,
+          "pageNumber": 2,
+          "pageLabel": "1",
+          "extractionCoverage": {
+            "pageCount": 2,
+            "pages": [
+              {
+                "method": "native",
+                "reason": null,
+                "outcome": "extracted",
+                "pageLabel": "i",
+                "pageNumber": 1
+              },
+              {
+                "method": "native",
+                "reason": null,
+                "outcome": "extracted",
+                "pageLabel": "1",
+                "pageNumber": 2
+              }
+            ]
+          },
+          "openOriginalFile": "/knowledge-items/1/original-file/open?page=2",
+          "evidenceCoverage": "primary-content",
+          "excerpt": "Physical page two - printed page 1\nPoint-in-time recovery replays archived WAL to restore an earlier state.\nOperators take regular base backups before replaying the transaction log.\nSELECT pg_switch_wal(); -- force a transaction log segment switch"
+        }
+      ],
+      "insufficientEvidence": false
+    },
+    "retainedSelectableFollowUp": {
+      "question": "What SQL statement appears in its PostgreSQL recovery procedure?",
+      "answer": "The SQL statement `SELECT pg_switch_wal();` appears in the PostgreSQL recovery procedure.",
+      "citations": [
+        {
+          "origin": "source-snapshot",
+          "knowledgeItemId": 1,
+          "sourceSnapshotId": 1,
+          "title": "selectable.pdf",
+          "originalUrl": null,
+          "pageNumber": 2,
+          "pageLabel": "1",
+          "extractionCoverage": {
+            "pageCount": 2,
+            "pages": [
+              {
+                "method": "native",
+                "reason": null,
+                "outcome": "extracted",
+                "pageLabel": "i",
+                "pageNumber": 1
+              },
+              {
+                "method": "native",
+                "reason": null,
+                "outcome": "extracted",
+                "pageLabel": "1",
+                "pageNumber": 2
+              }
+            ]
+          },
+          "openOriginalFile": "/knowledge-items/1/original-file/open?page=2",
+          "evidenceCoverage": "primary-content",
+          "excerpt": "Physical page two - printed page 1\nPoint-in-time recovery replays archived WAL to restore an earlier state.\nOperators take regular base backups before replaying the transaction log.\nSELECT pg_switch_wal(); -- force a transaction log segment switch"
+        }
+      ],
+      "insufficientEvidence": false
+    },
+    "printedScanAnswer": {
+      "question": "How does the captured PostgreSQL guide use base backups and archived WAL for recovery?",
+      "answer": "According to the captured PostgreSQL guide, base backups should be restored before replaying archived WAL. Transaction logs should be kept until the recovery check succeeds. Only extracted page 1 of the printed-scan.pdf is available.",
+      "citations": [
+        {
+          "origin": "source-snapshot",
+          "knowledgeItemId": 2,
+          "sourceSnapshotId": 2,
+          "title": "printed-scan.pdf",
+          "originalUrl": null,
+          "pageNumber": 1,
+          "pageLabel": null,
+          "extractionCoverage": {
+            "pageCount": 1,
+            "pages": [
+              {
+                "method": "ocr",
+                "reason": null,
+                "outcome": "extracted",
+                "pageLabel": null,
+                "pageNumber": 1
+              }
+            ]
+          },
+          "openOriginalFile": "/knowledge-items/2/original-file/open?page=1",
+          "evidenceCoverage": "primary-content",
+          "excerpt": "PostgreSQL printed recovery checklist\nRestore the base backup before replaying archived WAL.\nSCAN_RECOVERY_MARKER identifies the printed recovery procedure.\nSELECT pg_switch_wal();\nKeep transaction logs until the recovery check succeeds."
+        }
+      ],
+      "insufficientEvidence": false
+    },
+    "printedScanFollowUp": {
+      "question": "What SQL statement appears in its PostgreSQL recovery procedure?",
+      "answer": "SELECT pg_switch_wal();",
+      "citations": [
+        {
+          "origin": "source-snapshot",
+          "knowledgeItemId": 2,
+          "sourceSnapshotId": 2,
+          "title": "printed-scan.pdf",
+          "originalUrl": null,
+          "pageNumber": 1,
+          "pageLabel": null,
+          "extractionCoverage": {
+            "pageCount": 1,
+            "pages": [
+              {
+                "method": "ocr",
+                "reason": null,
+                "outcome": "extracted",
+                "pageLabel": null,
+                "pageNumber": 1
+              }
+            ]
+          },
+          "openOriginalFile": "/knowledge-items/2/original-file/open?page=1",
+          "evidenceCoverage": "primary-content",
+          "excerpt": "PostgreSQL printed recovery checklist\nRestore the base backup before replaying archived WAL.\nSCAN_RECOVERY_MARKER identifies the printed recovery procedure.\nSELECT pg_switch_wal();\nKeep transaction logs until the recovery check succeeds."
+        }
+      ],
+      "insufficientEvidence": false
+    },
+    "mixedAnswer": {
+      "question": "How does the captured PostgreSQL guide use base backups and archived WAL for recovery?",
+      "answer": "Incomplete PDF extraction for \"mixed.pdf\": physical pages 3 have missing text. Only obtained text is available as evidence.\n\nAccording to the captured PostgreSQL guide, base backups should be restored before replaying archived WAL. The guide states, \"Restore the base backup before replaying archived WAL.\" and \"Keep transaction logs until the recovery check succeeds.\" WAL_RECOVERY_MARKER identifies the recovery procedure. Only extracted pages from PDF pages 1 and 2 are available.",
+      "citations": [
+        {
+          "origin": "source-snapshot",
+          "knowledgeItemId": 3,
+          "sourceSnapshotId": 3,
+          "title": "mixed.pdf",
+          "originalUrl": null,
+          "pageNumber": 2,
+          "pageLabel": null,
+          "extractionCoverage": {
+            "pageCount": 4,
+            "pages": [
+              {
+                "method": "native",
+                "reason": null,
+                "outcome": "extracted",
+                "pageLabel": null,
+                "pageNumber": 1
+              },
+              {
+                "method": "ocr",
+                "reason": null,
+                "outcome": "extracted",
+                "pageLabel": null,
+                "pageNumber": 2
+              },
+              {
+                "method": "ocr",
+                "reason": "No trustworthy printed English text from local OCR; visual content has not been interpreted",
+                "outcome": "unreadable",
+                "pageLabel": null,
+                "pageNumber": 3
+              },
+              {
+                "method": "none",
+                "reason": null,
+                "outcome": "blank",
+                "pageLabel": null,
+                "pageNumber": 4
+              }
+            ]
+          },
+          "openOriginalFile": "/knowledge-items/3/original-file/open?page=2",
+          "evidenceCoverage": "primary-content",
+          "excerpt": "PostgreSQL printed recovery checklist\nRestore the base backup before replaying archived WAL.\nSCAN_RECOVERY_MARKER identifies the printed recovery procedure.\nSELECT pg_switch_wal();\nKeep transaction logs until the recovery check succeeds."
+        }
+      ],
+      "insufficientEvidence": false
+    },
+    "mixedFollowUp": {
+      "question": "What SQL statement appears in its PostgreSQL recovery procedure?",
+      "answer": "Incomplete PDF extraction for \"mixed.pdf\": physical pages 3 have missing text. Only obtained text is available as evidence.\n\nThe SQL statement `SELECT pg_switch_wal();` appears in the PostgreSQL recovery procedure.",
+      "citations": [
+        {
+          "origin": "source-snapshot",
+          "knowledgeItemId": 3,
+          "sourceSnapshotId": 3,
+          "title": "mixed.pdf",
+          "originalUrl": null,
+          "pageNumber": 2,
+          "pageLabel": null,
+          "extractionCoverage": {
+            "pageCount": 4,
+            "pages": [
+              {
+                "method": "native",
+                "reason": null,
+                "outcome": "extracted",
+                "pageLabel": null,
+                "pageNumber": 1
+              },
+              {
+                "method": "ocr",
+                "reason": null,
+                "outcome": "extracted",
+                "pageLabel": null,
+                "pageNumber": 2
+              },
+              {
+                "method": "ocr",
+                "reason": "No trustworthy printed English text from local OCR; visual content has not been interpreted",
+                "outcome": "unreadable",
+                "pageLabel": null,
+                "pageNumber": 3
+              },
+              {
+                "method": "none",
+                "reason": null,
+                "outcome": "blank",
+                "pageLabel": null,
+                "pageNumber": 4
+              }
+            ]
+          },
+          "openOriginalFile": "/knowledge-items/3/original-file/open?page=2",
+          "evidenceCoverage": "primary-content",
+          "excerpt": "PostgreSQL printed recovery checklist\nRestore the base backup before replaying archived WAL.\nSCAN_RECOVERY_MARKER identifies the printed recovery procedure.\nSELECT pg_switch_wal();\nKeep transaction logs until the recovery check succeeds."
+        }
+      ],
+      "insufficientEvidence": false
+    },
+    "collectionAnswer": {
+      "question": "How do the captured guides preserve database recovery knowledge with WAL, and how does MindVault preserve article text when a website disappears?",
+      "answer": "Incomplete PDF extraction for \"mixed.pdf\": physical pages 3 have missing text. Only obtained text is available as evidence.\n\nThe captured guides preserve database recovery knowledge with WAL by using write-ahead logging to ensure durable transactions after a crash. Specifically, the WAL_RECOVERY_TARGET identifier selects the recovery destination, and operators take base backups before replaying the transaction log (knowledge-item-1-excerpt-1, knowledge-item-1-excerpt-2, knowledge-item-3-excerpt-1, knowledge-item-3-excerpt-2). Point-in-time recovery replays archived WAL to restore an earlier state (knowledge-item-1-excerpt-2). MindVault preserves article text when a website disappears by creating durable Source Snapshots, which supply meaningful primary text for trustworthy conceptual retrieval (knowledge-item-4-excerpt-1).",
+      "citations": [
+        {
+          "origin": "source-snapshot",
+          "knowledgeItemId": 1,
+          "sourceSnapshotId": 1,
+          "title": "selectable.pdf",
+          "originalUrl": null,
+          "pageNumber": 1,
+          "pageLabel": "i",
+          "extractionCoverage": {
+            "pageCount": 2,
+            "pages": [
+              {
+                "method": "native",
+                "reason": null,
+                "outcome": "extracted",
+                "pageLabel": "i",
+                "pageNumber": 1
+              },
+              {
+                "method": "native",
+                "reason": null,
+                "outcome": "extracted",
+                "pageLabel": "1",
+                "pageNumber": 2
+              }
+            ]
+          },
+          "openOriginalFile": "/knowledge-items/1/original-file/open?page=1",
+          "evidenceCoverage": "primary-content",
+          "excerpt": "PostgreSQL recovery field guide\nWrite-ahead logging keeps committed transactions durable after a crash.\nThe WAL_RECOVERY_TARGET identifier selects the recovery destination."
+        },
+        {
+          "origin": "source-snapshot",
+          "knowledgeItemId": 1,
+          "sourceSnapshotId": 1,
+          "title": "selectable.pdf",
+          "originalUrl": null,
+          "pageNumber": 2,
+          "pageLabel": "1",
+          "extractionCoverage": {
+            "pageCount": 2,
+            "pages": [
+              {
+                "method": "native",
+                "reason": null,
+                "outcome": "extracted",
+                "pageLabel": "i",
+                "pageNumber": 1
+              },
+              {
+                "method": "native",
+                "reason": null,
+                "outcome": "extracted",
+                "pageLabel": "1",
+                "pageNumber": 2
+              }
+            ]
+          },
+          "openOriginalFile": "/knowledge-items/1/original-file/open?page=2",
+          "evidenceCoverage": "primary-content",
+          "excerpt": "Physical page two - printed page 1\nPoint-in-time recovery replays archived WAL to restore an earlier state.\nOperators take regular base backups before replaying the transaction log.\nSELECT pg_switch_wal(); -- force a transaction log segment switch"
+        },
+        {
+          "origin": "source-snapshot",
+          "knowledgeItemId": 3,
+          "sourceSnapshotId": 3,
+          "title": "mixed.pdf",
+          "originalUrl": null,
+          "pageNumber": 1,
+          "pageLabel": null,
+          "extractionCoverage": {
+            "pageCount": 4,
+            "pages": [
+              {
+                "method": "native",
+                "reason": null,
+                "outcome": "extracted",
+                "pageLabel": null,
+                "pageNumber": 1
+              },
+              {
+                "method": "ocr",
+                "reason": null,
+                "outcome": "extracted",
+                "pageLabel": null,
+                "pageNumber": 2
+              },
+              {
+                "method": "ocr",
+                "reason": "No trustworthy printed English text from local OCR; visual content has not been interpreted",
+                "outcome": "unreadable",
+                "pageLabel": null,
+                "pageNumber": 3
+              },
+              {
+                "method": "none",
+                "reason": null,
+                "outcome": "blank",
+                "pageLabel": null,
+                "pageNumber": 4
+              }
+            ]
+          },
+          "openOriginalFile": "/knowledge-items/3/original-file/open?page=1",
+          "evidenceCoverage": "primary-content",
+          "excerpt": "PostgreSQL recovery field guide\nWrite-ahead logging keeps committed transactions durable after a crash.\nThe WAL_RECOVERY_TARGET identifier selects the recovery destination."
+        },
+        {
+          "origin": "source-snapshot",
+          "knowledgeItemId": 3,
+          "sourceSnapshotId": 3,
+          "title": "mixed.pdf",
+          "originalUrl": null,
+          "pageNumber": 2,
+          "pageLabel": null,
+          "extractionCoverage": {
+            "pageCount": 4,
+            "pages": [
+              {
+                "method": "native",
+                "reason": null,
+                "outcome": "extracted",
+                "pageLabel": null,
+                "pageNumber": 1
+              },
+              {
+                "method": "ocr",
+                "reason": null,
+                "outcome": "extracted",
+                "pageLabel": null,
+                "pageNumber": 2
+              },
+              {
+                "method": "ocr",
+                "reason": "No trustworthy printed English text from local OCR; visual content has not been interpreted",
+                "outcome": "unreadable",
+                "pageLabel": null,
+                "pageNumber": 3
+              },
+              {
+                "method": "none",
+                "reason": null,
+                "outcome": "blank",
+                "pageLabel": null,
+                "pageNumber": 4
+              }
+            ]
+          },
+          "openOriginalFile": "/knowledge-items/3/original-file/open?page=2",
+          "evidenceCoverage": "primary-content",
+          "excerpt": "PostgreSQL printed recovery checklist\nRestore the base backup before replaying archived WAL.\nSCAN_RECOVERY_MARKER identifies the printed recovery procedure.\nSELECT pg_switch_wal();\nKeep transaction logs until the recovery check succeeds."
+        },
+        {
+          "origin": "source-snapshot",
+          "knowledgeItemId": 4,
+          "sourceSnapshotId": 4,
+          "title": "Retained knowledge",
+          "originalUrl": "http://127.0.0.1:51038/articles/semantic-retention",
+          "pageNumber": null,
+          "pageLabel": null,
+          "evidenceCoverage": "primary-content",
+          "excerpt": "MindVault preserves useful article text in a durable Source Snapshot so the knowledge remains available when the original website changes or disappears. This fixture supplies enough meaningful primary text for trustworthy conceptual retrieval after a public article is no longer available at its original address."
+        }
+      ],
+      "insufficientEvidence": false
+    },
+    "unsupportedVisual": {
+      "question": "In the captured PostgreSQL WAL recovery PDF, what relationship does the diagram on physical page 3 show between its shapes?",
+      "answer": "InsufficientEvidence true",
+      "citations": [],
+      "insufficientEvidence": true
+    }
+  },
+  "generationInputs": [
+    {
+      "question": "How does the captured PostgreSQL guide use base backups and archived WAL for recovery?",
+      "evidence": [
+        {
+          "citationId": "knowledge-item-1-excerpt-1",
+          "origin": "source-snapshot",
+          "knowledgeItemId": 1,
+          "sourceSnapshotId": 1,
+          "title": "selectable.pdf",
+          "text": "PostgreSQL recovery field guide\nWrite-ahead logging keeps committed transactions durable after a crash.\nThe WAL_RECOVERY_TARGET identifier selects the recovery destination.",
+          "originalUrl": null,
+          "pageNumber": 1,
+          "pageLabel": "i",
+          "extractionCoverage": {
+            "pageCount": 2,
+            "pages": [
+              {
+                "method": "native",
+                "reason": null,
+                "outcome": "extracted",
+                "pageLabel": "i",
+                "pageNumber": 1
+              },
+              {
+                "method": "native",
+                "reason": null,
+                "outcome": "extracted",
+                "pageLabel": "1",
+                "pageNumber": 2
+              }
+            ]
+          },
+          "openOriginalFile": "/knowledge-items/1/original-file/open?page=1",
+          "evidenceCoverage": "primary-content"
+        },
+        {
+          "citationId": "knowledge-item-1-excerpt-2",
+          "origin": "source-snapshot",
+          "knowledgeItemId": 1,
+          "sourceSnapshotId": 1,
+          "title": "selectable.pdf",
+          "text": "Physical page two - printed page 1\nPoint-in-time recovery replays archived WAL to restore an earlier state.\nOperators take regular base backups before replaying the transaction log.\nSELECT pg_switch_wal(); -- force a transaction log segment switch",
+          "originalUrl": null,
+          "pageNumber": 2,
+          "pageLabel": "1",
+          "extractionCoverage": {
+            "pageCount": 2,
+            "pages": [
+              {
+                "method": "native",
+                "reason": null,
+                "outcome": "extracted",
+                "pageLabel": "i",
+                "pageNumber": 1
+              },
+              {
+                "method": "native",
+                "reason": null,
+                "outcome": "extracted",
+                "pageLabel": "1",
+                "pageNumber": 2
+              }
+            ]
+          },
+          "openOriginalFile": "/knowledge-items/1/original-file/open?page=2",
+          "evidenceCoverage": "primary-content"
+        }
+      ],
+      "conversation": []
+    },
+    {
+      "question": "What SQL statement appears in its PostgreSQL recovery procedure?",
+      "evidence": [
+        {
+          "citationId": "knowledge-item-1-excerpt-1",
+          "origin": "source-snapshot",
+          "knowledgeItemId": 1,
+          "sourceSnapshotId": 1,
+          "title": "selectable.pdf",
+          "text": "PostgreSQL recovery field guide\nWrite-ahead logging keeps committed transactions durable after a crash.\nThe WAL_RECOVERY_TARGET identifier selects the recovery destination.",
+          "originalUrl": null,
+          "pageNumber": 1,
+          "pageLabel": "i",
+          "extractionCoverage": {
+            "pageCount": 2,
+            "pages": [
+              {
+                "method": "native",
+                "reason": null,
+                "outcome": "extracted",
+                "pageLabel": "i",
+                "pageNumber": 1
+              },
+              {
+                "method": "native",
+                "reason": null,
+                "outcome": "extracted",
+                "pageLabel": "1",
+                "pageNumber": 2
+              }
+            ]
+          },
+          "openOriginalFile": "/knowledge-items/1/original-file/open?page=1",
+          "evidenceCoverage": "primary-content"
+        },
+        {
+          "citationId": "knowledge-item-1-excerpt-2",
+          "origin": "source-snapshot",
+          "knowledgeItemId": 1,
+          "sourceSnapshotId": 1,
+          "title": "selectable.pdf",
+          "text": "Physical page two - printed page 1\nPoint-in-time recovery replays archived WAL to restore an earlier state.\nOperators take regular base backups before replaying the transaction log.\nSELECT pg_switch_wal(); -- force a transaction log segment switch",
+          "originalUrl": null,
+          "pageNumber": 2,
+          "pageLabel": "1",
+          "extractionCoverage": {
+            "pageCount": 2,
+            "pages": [
+              {
+                "method": "native",
+                "reason": null,
+                "outcome": "extracted",
+                "pageLabel": "i",
+                "pageNumber": 1
+              },
+              {
+                "method": "native",
+                "reason": null,
+                "outcome": "extracted",
+                "pageLabel": "1",
+                "pageNumber": 2
+              }
+            ]
+          },
+          "openOriginalFile": "/knowledge-items/1/original-file/open?page=2",
+          "evidenceCoverage": "primary-content"
+        }
+      ],
+      "conversation": [
+        {
+          "question": "How does the captured PostgreSQL guide use base backups and archived WAL for recovery?",
+          "answer": "PostgreSQL recovery uses archived WAL to restore an earlier state by replaying archived WAL. Operators take regular base backups before replaying the transaction log. SELECT pg_switch_wal(); -- force a transaction log segment switch."
+        }
+      ]
+    },
+    {
+      "question": "How does the captured PostgreSQL guide use base backups and archived WAL for recovery?",
+      "evidence": [
+        {
+          "citationId": "knowledge-item-2-excerpt-1",
+          "origin": "source-snapshot",
+          "knowledgeItemId": 2,
+          "sourceSnapshotId": 2,
+          "title": "printed-scan.pdf",
+          "text": "PostgreSQL printed recovery checklist\nRestore the base backup before replaying archived WAL.\nSCAN_RECOVERY_MARKER identifies the printed recovery procedure.\nSELECT pg_switch_wal();\nKeep transaction logs until the recovery check succeeds.",
+          "originalUrl": null,
+          "pageNumber": 1,
+          "pageLabel": null,
+          "extractionCoverage": {
+            "pageCount": 1,
+            "pages": [
+              {
+                "method": "ocr",
+                "reason": null,
+                "outcome": "extracted",
+                "pageLabel": null,
+                "pageNumber": 1
+              }
+            ]
+          },
+          "openOriginalFile": "/knowledge-items/2/original-file/open?page=1",
+          "evidenceCoverage": "primary-content"
+        }
+      ],
+      "conversation": []
+    },
+    {
+      "question": "What SQL statement appears in its PostgreSQL recovery procedure?",
+      "evidence": [
+        {
+          "citationId": "knowledge-item-2-excerpt-1",
+          "origin": "source-snapshot",
+          "knowledgeItemId": 2,
+          "sourceSnapshotId": 2,
+          "title": "printed-scan.pdf",
+          "text": "PostgreSQL printed recovery checklist\nRestore the base backup before replaying archived WAL.\nSCAN_RECOVERY_MARKER identifies the printed recovery procedure.\nSELECT pg_switch_wal();\nKeep transaction logs until the recovery check succeeds.",
+          "originalUrl": null,
+          "pageNumber": 1,
+          "pageLabel": null,
+          "extractionCoverage": {
+            "pageCount": 1,
+            "pages": [
+              {
+                "method": "ocr",
+                "reason": null,
+                "outcome": "extracted",
+                "pageLabel": null,
+                "pageNumber": 1
+              }
+            ]
+          },
+          "openOriginalFile": "/knowledge-items/2/original-file/open?page=1",
+          "evidenceCoverage": "primary-content"
+        }
+      ],
+      "conversation": [
+        {
+          "question": "How does the captured PostgreSQL guide use base backups and archived WAL for recovery?",
+          "answer": "According to the captured PostgreSQL guide, base backups should be restored before replaying archived WAL. Transaction logs should be kept until the recovery check succeeds. Only extracted page 1 of the printed-scan.pdf is available."
+        }
+      ]
+    },
+    {
+      "question": "How does the captured PostgreSQL guide use base backups and archived WAL for recovery?",
+      "evidence": [
+        {
+          "citationId": "knowledge-item-3-excerpt-1",
+          "origin": "source-snapshot",
+          "knowledgeItemId": 3,
+          "sourceSnapshotId": 3,
+          "title": "mixed.pdf",
+          "text": "PostgreSQL printed recovery checklist\nRestore the base backup before replaying archived WAL.\nSCAN_RECOVERY_MARKER identifies the printed recovery procedure.\nSELECT pg_switch_wal();\nKeep transaction logs until the recovery check succeeds.",
+          "originalUrl": null,
+          "pageNumber": 2,
+          "pageLabel": null,
+          "extractionCoverage": {
+            "pageCount": 4,
+            "pages": [
+              {
+                "method": "native",
+                "reason": null,
+                "outcome": "extracted",
+                "pageLabel": null,
+                "pageNumber": 1
+              },
+              {
+                "method": "ocr",
+                "reason": null,
+                "outcome": "extracted",
+                "pageLabel": null,
+                "pageNumber": 2
+              },
+              {
+                "method": "ocr",
+                "reason": "No trustworthy printed English text from local OCR; visual content has not been interpreted",
+                "outcome": "unreadable",
+                "pageLabel": null,
+                "pageNumber": 3
+              },
+              {
+                "method": "none",
+                "reason": null,
+                "outcome": "blank",
+                "pageLabel": null,
+                "pageNumber": 4
+              }
+            ]
+          },
+          "openOriginalFile": "/knowledge-items/3/original-file/open?page=2",
+          "evidenceCoverage": "primary-content"
+        },
+        {
+          "citationId": "knowledge-item-3-excerpt-2",
+          "origin": "source-snapshot",
+          "knowledgeItemId": 3,
+          "sourceSnapshotId": 3,
+          "title": "mixed.pdf",
+          "text": "PostgreSQL recovery field guide\nWrite-ahead logging keeps committed transactions durable after a crash.\nThe WAL_RECOVERY_TARGET identifier selects the recovery destination.",
+          "originalUrl": null,
+          "pageNumber": 1,
+          "pageLabel": null,
+          "extractionCoverage": {
+            "pageCount": 4,
+            "pages": [
+              {
+                "method": "native",
+                "reason": null,
+                "outcome": "extracted",
+                "pageLabel": null,
+                "pageNumber": 1
+              },
+              {
+                "method": "ocr",
+                "reason": null,
+                "outcome": "extracted",
+                "pageLabel": null,
+                "pageNumber": 2
+              },
+              {
+                "method": "ocr",
+                "reason": "No trustworthy printed English text from local OCR; visual content has not been interpreted",
+                "outcome": "unreadable",
+                "pageLabel": null,
+                "pageNumber": 3
+              },
+              {
+                "method": "none",
+                "reason": null,
+                "outcome": "blank",
+                "pageLabel": null,
+                "pageNumber": 4
+              }
+            ]
+          },
+          "openOriginalFile": "/knowledge-items/3/original-file/open?page=1",
+          "evidenceCoverage": "primary-content"
+        }
+      ],
+      "conversation": []
+    },
+    {
+      "question": "What SQL statement appears in its PostgreSQL recovery procedure?",
+      "evidence": [
+        {
+          "citationId": "knowledge-item-3-excerpt-1",
+          "origin": "source-snapshot",
+          "knowledgeItemId": 3,
+          "sourceSnapshotId": 3,
+          "title": "mixed.pdf",
+          "text": "PostgreSQL recovery field guide\nWrite-ahead logging keeps committed transactions durable after a crash.\nThe WAL_RECOVERY_TARGET identifier selects the recovery destination.",
+          "originalUrl": null,
+          "pageNumber": 1,
+          "pageLabel": null,
+          "extractionCoverage": {
+            "pageCount": 4,
+            "pages": [
+              {
+                "method": "native",
+                "reason": null,
+                "outcome": "extracted",
+                "pageLabel": null,
+                "pageNumber": 1
+              },
+              {
+                "method": "ocr",
+                "reason": null,
+                "outcome": "extracted",
+                "pageLabel": null,
+                "pageNumber": 2
+              },
+              {
+                "method": "ocr",
+                "reason": "No trustworthy printed English text from local OCR; visual content has not been interpreted",
+                "outcome": "unreadable",
+                "pageLabel": null,
+                "pageNumber": 3
+              },
+              {
+                "method": "none",
+                "reason": null,
+                "outcome": "blank",
+                "pageLabel": null,
+                "pageNumber": 4
+              }
+            ]
+          },
+          "openOriginalFile": "/knowledge-items/3/original-file/open?page=1",
+          "evidenceCoverage": "primary-content"
+        },
+        {
+          "citationId": "knowledge-item-3-excerpt-2",
+          "origin": "source-snapshot",
+          "knowledgeItemId": 3,
+          "sourceSnapshotId": 3,
+          "title": "mixed.pdf",
+          "text": "PostgreSQL printed recovery checklist\nRestore the base backup before replaying archived WAL.\nSCAN_RECOVERY_MARKER identifies the printed recovery procedure.\nSELECT pg_switch_wal();\nKeep transaction logs until the recovery check succeeds.",
+          "originalUrl": null,
+          "pageNumber": 2,
+          "pageLabel": null,
+          "extractionCoverage": {
+            "pageCount": 4,
+            "pages": [
+              {
+                "method": "native",
+                "reason": null,
+                "outcome": "extracted",
+                "pageLabel": null,
+                "pageNumber": 1
+              },
+              {
+                "method": "ocr",
+                "reason": null,
+                "outcome": "extracted",
+                "pageLabel": null,
+                "pageNumber": 2
+              },
+              {
+                "method": "ocr",
+                "reason": "No trustworthy printed English text from local OCR; visual content has not been interpreted",
+                "outcome": "unreadable",
+                "pageLabel": null,
+                "pageNumber": 3
+              },
+              {
+                "method": "none",
+                "reason": null,
+                "outcome": "blank",
+                "pageLabel": null,
+                "pageNumber": 4
+              }
+            ]
+          },
+          "openOriginalFile": "/knowledge-items/3/original-file/open?page=2",
+          "evidenceCoverage": "primary-content"
+        }
+      ],
+      "conversation": [
+        {
+          "question": "How does the captured PostgreSQL guide use base backups and archived WAL for recovery?",
+          "answer": "Incomplete PDF extraction for \"mixed.pdf\": physical pages 3 have missing text. Only obtained text is available as evidence.\n\nAccording to the captured PostgreSQL guide, base backups should be restored before replaying archived WAL. The guide states, \"Restore the base backup before replaying archived WAL.\" and \"Keep transaction logs until the recovery check succeeds.\" WAL_RECOVERY_MARKER identifies the recovery procedure. Only extracted pages from PDF pages 1 and 2 are available."
+        }
+      ]
+    },
+    {
+      "question": "How do the captured guides preserve database recovery knowledge with WAL, and how does MindVault preserve article text when a website disappears?",
+      "evidence": [
+        {
+          "citationId": "knowledge-item-1-excerpt-1",
+          "origin": "source-snapshot",
+          "knowledgeItemId": 1,
+          "sourceSnapshotId": 1,
+          "title": "selectable.pdf",
+          "text": "PostgreSQL recovery field guide\nWrite-ahead logging keeps committed transactions durable after a crash.\nThe WAL_RECOVERY_TARGET identifier selects the recovery destination.",
+          "originalUrl": null,
+          "pageNumber": 1,
+          "pageLabel": "i",
+          "extractionCoverage": {
+            "pageCount": 2,
+            "pages": [
+              {
+                "method": "native",
+                "reason": null,
+                "outcome": "extracted",
+                "pageLabel": "i",
+                "pageNumber": 1
+              },
+              {
+                "method": "native",
+                "reason": null,
+                "outcome": "extracted",
+                "pageLabel": "1",
+                "pageNumber": 2
+              }
+            ]
+          },
+          "openOriginalFile": "/knowledge-items/1/original-file/open?page=1",
+          "evidenceCoverage": "primary-content"
+        },
+        {
+          "citationId": "knowledge-item-1-excerpt-2",
+          "origin": "source-snapshot",
+          "knowledgeItemId": 1,
+          "sourceSnapshotId": 1,
+          "title": "selectable.pdf",
+          "text": "Physical page two - printed page 1\nPoint-in-time recovery replays archived WAL to restore an earlier state.\nOperators take regular base backups before replaying the transaction log.\nSELECT pg_switch_wal(); -- force a transaction log segment switch",
+          "originalUrl": null,
+          "pageNumber": 2,
+          "pageLabel": "1",
+          "extractionCoverage": {
+            "pageCount": 2,
+            "pages": [
+              {
+                "method": "native",
+                "reason": null,
+                "outcome": "extracted",
+                "pageLabel": "i",
+                "pageNumber": 1
+              },
+              {
+                "method": "native",
+                "reason": null,
+                "outcome": "extracted",
+                "pageLabel": "1",
+                "pageNumber": 2
+              }
+            ]
+          },
+          "openOriginalFile": "/knowledge-items/1/original-file/open?page=2",
+          "evidenceCoverage": "primary-content"
+        },
+        {
+          "citationId": "knowledge-item-3-excerpt-1",
+          "origin": "source-snapshot",
+          "knowledgeItemId": 3,
+          "sourceSnapshotId": 3,
+          "title": "mixed.pdf",
+          "text": "PostgreSQL recovery field guide\nWrite-ahead logging keeps committed transactions durable after a crash.\nThe WAL_RECOVERY_TARGET identifier selects the recovery destination.",
+          "originalUrl": null,
+          "pageNumber": 1,
+          "pageLabel": null,
+          "extractionCoverage": {
+            "pageCount": 4,
+            "pages": [
+              {
+                "method": "native",
+                "reason": null,
+                "outcome": "extracted",
+                "pageLabel": null,
+                "pageNumber": 1
+              },
+              {
+                "method": "ocr",
+                "reason": null,
+                "outcome": "extracted",
+                "pageLabel": null,
+                "pageNumber": 2
+              },
+              {
+                "method": "ocr",
+                "reason": "No trustworthy printed English text from local OCR; visual content has not been interpreted",
+                "outcome": "unreadable",
+                "pageLabel": null,
+                "pageNumber": 3
+              },
+              {
+                "method": "none",
+                "reason": null,
+                "outcome": "blank",
+                "pageLabel": null,
+                "pageNumber": 4
+              }
+            ]
+          },
+          "openOriginalFile": "/knowledge-items/3/original-file/open?page=1",
+          "evidenceCoverage": "primary-content"
+        },
+        {
+          "citationId": "knowledge-item-3-excerpt-2",
+          "origin": "source-snapshot",
+          "knowledgeItemId": 3,
+          "sourceSnapshotId": 3,
+          "title": "mixed.pdf",
+          "text": "PostgreSQL printed recovery checklist\nRestore the base backup before replaying archived WAL.\nSCAN_RECOVERY_MARKER identifies the printed recovery procedure.\nSELECT pg_switch_wal();\nKeep transaction logs until the recovery check succeeds.",
+          "originalUrl": null,
+          "pageNumber": 2,
+          "pageLabel": null,
+          "extractionCoverage": {
+            "pageCount": 4,
+            "pages": [
+              {
+                "method": "native",
+                "reason": null,
+                "outcome": "extracted",
+                "pageLabel": null,
+                "pageNumber": 1
+              },
+              {
+                "method": "ocr",
+                "reason": null,
+                "outcome": "extracted",
+                "pageLabel": null,
+                "pageNumber": 2
+              },
+              {
+                "method": "ocr",
+                "reason": "No trustworthy printed English text from local OCR; visual content has not been interpreted",
+                "outcome": "unreadable",
+                "pageLabel": null,
+                "pageNumber": 3
+              },
+              {
+                "method": "none",
+                "reason": null,
+                "outcome": "blank",
+                "pageLabel": null,
+                "pageNumber": 4
+              }
+            ]
+          },
+          "openOriginalFile": "/knowledge-items/3/original-file/open?page=2",
+          "evidenceCoverage": "primary-content"
+        },
+        {
+          "citationId": "knowledge-item-4-excerpt-1",
+          "origin": "source-snapshot",
+          "knowledgeItemId": 4,
+          "sourceSnapshotId": 4,
+          "title": "Retained knowledge",
+          "text": "MindVault preserves useful article text in a durable Source Snapshot so the knowledge remains available when the original website changes or disappears. This fixture supplies enough meaningful primary text for trustworthy conceptual retrieval after a public article is no longer available at its original address.",
+          "originalUrl": "http://127.0.0.1:51038/articles/semantic-retention",
+          "pageNumber": null,
+          "pageLabel": null,
+          "evidenceCoverage": "primary-content"
+        },
+        {
+          "citationId": "knowledge-item-2-excerpt-1",
+          "origin": "source-snapshot",
+          "knowledgeItemId": 2,
+          "sourceSnapshotId": 2,
+          "title": "printed-scan.pdf",
+          "text": "PostgreSQL printed recovery checklist\nRestore the base backup before replaying archived WAL.\nSCAN_RECOVERY_MARKER identifies the printed recovery procedure.\nSELECT pg_switch_wal();\nKeep transaction logs until the recovery check succeeds.",
+          "originalUrl": null,
+          "pageNumber": 1,
+          "pageLabel": null,
+          "extractionCoverage": {
+            "pageCount": 1,
+            "pages": [
+              {
+                "method": "ocr",
+                "reason": null,
+                "outcome": "extracted",
+                "pageLabel": null,
+                "pageNumber": 1
+              }
+            ]
+          },
+          "openOriginalFile": "/knowledge-items/2/original-file/open?page=1",
+          "evidenceCoverage": "primary-content"
+        }
+      ],
+      "conversation": []
+    },
+    {
+      "question": "In the captured PostgreSQL WAL recovery PDF, what relationship does the diagram on physical page 3 show between its shapes?",
+      "evidence": [
+        {
+          "citationId": "knowledge-item-3-excerpt-1",
+          "origin": "source-snapshot",
+          "knowledgeItemId": 3,
+          "sourceSnapshotId": 3,
+          "title": "mixed.pdf",
+          "text": "PostgreSQL printed recovery checklist\nRestore the base backup before replaying archived WAL.\nSCAN_RECOVERY_MARKER identifies the printed recovery procedure.\nSELECT pg_switch_wal();\nKeep transaction logs until the recovery check succeeds.",
+          "originalUrl": null,
+          "pageNumber": 2,
+          "pageLabel": null,
+          "extractionCoverage": {
+            "pageCount": 4,
+            "pages": [
+              {
+                "method": "native",
+                "reason": null,
+                "outcome": "extracted",
+                "pageLabel": null,
+                "pageNumber": 1
+              },
+              {
+                "method": "ocr",
+                "reason": null,
+                "outcome": "extracted",
+                "pageLabel": null,
+                "pageNumber": 2
+              },
+              {
+                "method": "ocr",
+                "reason": "No trustworthy printed English text from local OCR; visual content has not been interpreted",
+                "outcome": "unreadable",
+                "pageLabel": null,
+                "pageNumber": 3
+              },
+              {
+                "method": "none",
+                "reason": null,
+                "outcome": "blank",
+                "pageLabel": null,
+                "pageNumber": 4
+              }
+            ]
+          },
+          "openOriginalFile": "/knowledge-items/3/original-file/open?page=2",
+          "evidenceCoverage": "primary-content"
+        },
+        {
+          "citationId": "knowledge-item-3-excerpt-2",
+          "origin": "source-snapshot",
+          "knowledgeItemId": 3,
+          "sourceSnapshotId": 3,
+          "title": "mixed.pdf",
+          "text": "PostgreSQL recovery field guide\nWrite-ahead logging keeps committed transactions durable after a crash.\nThe WAL_RECOVERY_TARGET identifier selects the recovery destination.",
+          "originalUrl": null,
+          "pageNumber": 1,
+          "pageLabel": null,
+          "extractionCoverage": {
+            "pageCount": 4,
+            "pages": [
+              {
+                "method": "native",
+                "reason": null,
+                "outcome": "extracted",
+                "pageLabel": null,
+                "pageNumber": 1
+              },
+              {
+                "method": "ocr",
+                "reason": null,
+                "outcome": "extracted",
+                "pageLabel": null,
+                "pageNumber": 2
+              },
+              {
+                "method": "ocr",
+                "reason": "No trustworthy printed English text from local OCR; visual content has not been interpreted",
+                "outcome": "unreadable",
+                "pageLabel": null,
+                "pageNumber": 3
+              },
+              {
+                "method": "none",
+                "reason": null,
+                "outcome": "blank",
+                "pageLabel": null,
+                "pageNumber": 4
+              }
+            ]
+          },
+          "openOriginalFile": "/knowledge-items/3/original-file/open?page=1",
+          "evidenceCoverage": "primary-content"
+        },
+        {
+          "citationId": "knowledge-item-1-excerpt-1",
+          "origin": "source-snapshot",
+          "knowledgeItemId": 1,
+          "sourceSnapshotId": 1,
+          "title": "selectable.pdf",
+          "text": "PostgreSQL recovery field guide\nWrite-ahead logging keeps committed transactions durable after a crash.\nThe WAL_RECOVERY_TARGET identifier selects the recovery destination.",
+          "originalUrl": null,
+          "pageNumber": 1,
+          "pageLabel": "i",
+          "extractionCoverage": {
+            "pageCount": 2,
+            "pages": [
+              {
+                "method": "native",
+                "reason": null,
+                "outcome": "extracted",
+                "pageLabel": "i",
+                "pageNumber": 1
+              },
+              {
+                "method": "native",
+                "reason": null,
+                "outcome": "extracted",
+                "pageLabel": "1",
+                "pageNumber": 2
+              }
+            ]
+          },
+          "openOriginalFile": "/knowledge-items/1/original-file/open?page=1",
+          "evidenceCoverage": "primary-content"
+        },
+        {
+          "citationId": "knowledge-item-1-excerpt-2",
+          "origin": "source-snapshot",
+          "knowledgeItemId": 1,
+          "sourceSnapshotId": 1,
+          "title": "selectable.pdf",
+          "text": "Physical page two - printed page 1\nPoint-in-time recovery replays archived WAL to restore an earlier state.\nOperators take regular base backups before replaying the transaction log.\nSELECT pg_switch_wal(); -- force a transaction log segment switch",
+          "originalUrl": null,
+          "pageNumber": 2,
+          "pageLabel": "1",
+          "extractionCoverage": {
+            "pageCount": 2,
+            "pages": [
+              {
+                "method": "native",
+                "reason": null,
+                "outcome": "extracted",
+                "pageLabel": "i",
+                "pageNumber": 1
+              },
+              {
+                "method": "native",
+                "reason": null,
+                "outcome": "extracted",
+                "pageLabel": "1",
+                "pageNumber": 2
+              }
+            ]
+          },
+          "openOriginalFile": "/knowledge-items/1/original-file/open?page=2",
+          "evidenceCoverage": "primary-content"
+        },
+        {
+          "citationId": "knowledge-item-2-excerpt-1",
+          "origin": "source-snapshot",
+          "knowledgeItemId": 2,
+          "sourceSnapshotId": 2,
+          "title": "printed-scan.pdf",
+          "text": "PostgreSQL printed recovery checklist\nRestore the base backup before replaying archived WAL.\nSCAN_RECOVERY_MARKER identifies the printed recovery procedure.\nSELECT pg_switch_wal();\nKeep transaction logs until the recovery check succeeds.",
+          "originalUrl": null,
+          "pageNumber": 1,
+          "pageLabel": null,
+          "extractionCoverage": {
+            "pageCount": 1,
+            "pages": [
+              {
+                "method": "ocr",
+                "reason": null,
+                "outcome": "extracted",
+                "pageLabel": null,
+                "pageNumber": 1
+              }
+            ]
+          },
+          "openOriginalFile": "/knowledge-items/2/original-file/open?page=1",
+          "evidenceCoverage": "primary-content"
+        }
+      ],
+      "conversation": []
+    }
+  ],
+  "pageTarget": {
+    "physicalPage": 2,
+    "printedLabel": "1",
+    "status": 302,
+    "fragment": "#page=2"
+  },
+  "noEvidence": {
+    "id": 5,
+    "createdAt": "2026-10-27T05:33:53.457Z",
+    "lifecycleState": "active",
+    "trashedAt": null,
+    "deletion": null,
+    "source": {
+      "id": 5,
+      "kind": "pdf",
+      "filename": "no-evidence.pdf",
+      "mediaType": "application/pdf",
+      "byteSize": 1433,
+      "originalFileActions": {
+        "download": "/knowledge-items/5/original-file/download",
+        "open": "/knowledge-items/5/original-file/open"
+      }
+    },
+    "sourcePreview": null,
+    "evidenceCoverage": null,
+    "captureContexts": [],
+    "availability": "needs-attention",
+    "organizationCondition": "processing",
+    "recognitionSummary": null,
+    "topicTags": [],
+    "latestAttempt": {
+      "id": 6,
+      "kind": "initial-capture",
+      "status": "failed",
+      "createdAt": "2026-10-27T05:33:53.457Z",
+      "warnings": [
+        "PDF contains no trustworthy selectable text or printed English OCR evidence. No trustworthy printed English text from local OCR; visual content has not been interpreted"
+      ],
+      "failureReason": "PDF contains no trustworthy selectable text or printed English OCR evidence. No trustworthy printed English text from local OCR; visual content has not been interpreted"
+    }
+  },
+  "repeatAssessment": {
+    "automatedAssertions": 126,
+    "automatedPass": true,
+    "accepted": false,
+    "durationMs": 62001,
+    "assessment": "Mixed answer used supported identifiers on repeat, but printed-scan summary still invents a scan procedure. Passing the automated identifier check does not establish factuality.",
+    "models": {
+      "generation": {
+        "model": "gemma3:latest",
+        "digest": "a2af6cc3eb7fa8be8504abaf9b04e88f17a119ec3f04a3addf55f92841195f5a"
+      },
+      "embedding": {
+        "model": "nomic-embed-text:latest",
+        "digest": "0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f"
+      }
+    },
+    "summaries": {
+      "retainedSelectable": "This guide details PostgreSQL recovery using WAL and transaction log management.",
+      "printedScan": "This document outlines a PostgreSQL recovery checklist using WAL replay and a scan procedure.",
+      "mixed": "From partially extracted PDF text, the document details PostgreSQL recovery procedures and identifiers."
+    },
+    "answers": {
+      "retainedSelectableAnswer": {
+        "question": "How does the captured PostgreSQL guide use base backups and archived WAL for recovery?",
+        "answer": "PostgreSQL recovery field guide states that operators take regular base backups before replaying the transaction log. Point-in-time recovery replays archived WAL to restore an earlier state. The WAL_RECOVERY_TARGET identifier selects the recovery destination.",
+        "citations": [
+          {
+            "origin": "source-snapshot",
+            "knowledgeItemId": 1,
+            "sourceSnapshotId": 1,
+            "title": "selectable.pdf",
+            "originalUrl": null,
+            "pageNumber": 1,
+            "pageLabel": "i",
+            "extractionCoverage": {
+              "pageCount": 2,
+              "pages": [
+                {
+                  "method": "native",
+                  "reason": null,
+                  "outcome": "extracted",
+                  "pageLabel": "i",
+                  "pageNumber": 1
+                },
+                {
+                  "method": "native",
+                  "reason": null,
+                  "outcome": "extracted",
+                  "pageLabel": "1",
+                  "pageNumber": 2
+                }
+              ]
+            },
+            "openOriginalFile": "/knowledge-items/1/original-file/open?page=1",
+            "evidenceCoverage": "primary-content",
+            "excerpt": "PostgreSQL recovery field guide\nWrite-ahead logging keeps committed transactions durable after a crash.\nThe WAL_RECOVERY_TARGET identifier selects the recovery destination."
+          },
+          {
+            "origin": "source-snapshot",
+            "knowledgeItemId": 1,
+            "sourceSnapshotId": 1,
+            "title": "selectable.pdf",
+            "originalUrl": null,
+            "pageNumber": 2,
+            "pageLabel": "1",
+            "extractionCoverage": {
+              "pageCount": 2,
+              "pages": [
+                {
+                  "method": "native",
+                  "reason": null,
+                  "outcome": "extracted",
+                  "pageLabel": "i",
+                  "pageNumber": 1
+                },
+                {
+                  "method": "native",
+                  "reason": null,
+                  "outcome": "extracted",
+                  "pageLabel": "1",
+                  "pageNumber": 2
+                }
+              ]
+            },
+            "openOriginalFile": "/knowledge-items/1/original-file/open?page=2",
+            "evidenceCoverage": "primary-content",
+            "excerpt": "Physical page two - printed page 1\nPoint-in-time recovery replays archived WAL to restore an earlier state.\nOperators take regular base backups before replaying the transaction log.\nSELECT pg_switch_wal(); -- force a transaction log segment switch"
+          }
+        ],
+        "insufficientEvidence": false
+      },
+      "retainedSelectableFollowUp": {
+        "question": "What SQL statement appears in its PostgreSQL recovery procedure?",
+        "answer": "The SQL statement `SELECT pg_switch_wal();` appears in the PostgreSQL recovery procedure.",
+        "citations": [
+          {
+            "origin": "source-snapshot",
+            "knowledgeItemId": 1,
+            "sourceSnapshotId": 1,
+            "title": "selectable.pdf",
+            "originalUrl": null,
+            "pageNumber": 2,
+            "pageLabel": "1",
+            "extractionCoverage": {
+              "pageCount": 2,
+              "pages": [
+                {
+                  "method": "native",
+                  "reason": null,
+                  "outcome": "extracted",
+                  "pageLabel": "i",
+                  "pageNumber": 1
+                },
+                {
+                  "method": "native",
+                  "reason": null,
+                  "outcome": "extracted",
+                  "pageLabel": "1",
+                  "pageNumber": 2
+                }
+              ]
+            },
+            "openOriginalFile": "/knowledge-items/1/original-file/open?page=2",
+            "evidenceCoverage": "primary-content",
+            "excerpt": "Physical page two - printed page 1\nPoint-in-time recovery replays archived WAL to restore an earlier state.\nOperators take regular base backups before replaying the transaction log.\nSELECT pg_switch_wal(); -- force a transaction log segment switch"
+          }
+        ],
+        "insufficientEvidence": false
+      },
+      "printedScanAnswer": {
+        "question": "How does the captured PostgreSQL guide use base backups and archived WAL for recovery?",
+        "answer": "According to the captured PostgreSQL guide, base backups should be restored before replaying archived WAL. Transaction logs should be kept until the recovery check succeeds. [knowledge-item-2-excerpt-1]",
+        "citations": [
+          {
+            "origin": "source-snapshot",
+            "knowledgeItemId": 2,
+            "sourceSnapshotId": 2,
+            "title": "printed-scan.pdf",
+            "originalUrl": null,
+            "pageNumber": 1,
+            "pageLabel": null,
+            "extractionCoverage": {
+              "pageCount": 1,
+              "pages": [
+                {
+                  "method": "ocr",
+                  "reason": null,
+                  "outcome": "extracted",
+                  "pageLabel": null,
+                  "pageNumber": 1
+                }
+              ]
+            },
+            "openOriginalFile": "/knowledge-items/2/original-file/open?page=1",
+            "evidenceCoverage": "primary-content",
+            "excerpt": "PostgreSQL printed recovery checklist\nRestore the base backup before replaying archived WAL.\nSCAN_RECOVERY_MARKER identifies the printed recovery procedure.\nSELECT pg_switch_wal();\nKeep transaction logs until the recovery check succeeds."
+          }
+        ],
+        "insufficientEvidence": false
+      },
+      "printedScanFollowUp": {
+        "question": "What SQL statement appears in its PostgreSQL recovery procedure?",
+        "answer": "The SQL statement that appears in the PostgreSQL recovery procedure is `SELECT pg_switch_wal();` [knowledge-item-2-excerpt-1]",
+        "citations": [
+          {
+            "origin": "source-snapshot",
+            "knowledgeItemId": 2,
+            "sourceSnapshotId": 2,
+            "title": "printed-scan.pdf",
+            "originalUrl": null,
+            "pageNumber": 1,
+            "pageLabel": null,
+            "extractionCoverage": {
+              "pageCount": 1,
+              "pages": [
+                {
+                  "method": "ocr",
+                  "reason": null,
+                  "outcome": "extracted",
+                  "pageLabel": null,
+                  "pageNumber": 1
+                }
+              ]
+            },
+            "openOriginalFile": "/knowledge-items/2/original-file/open?page=1",
+            "evidenceCoverage": "primary-content",
+            "excerpt": "PostgreSQL printed recovery checklist\nRestore the base backup before replaying archived WAL.\nSCAN_RECOVERY_MARKER identifies the printed recovery procedure.\nSELECT pg_switch_wal();\nKeep transaction logs until the recovery check succeeds."
+          }
+        ],
+        "insufficientEvidence": false
+      },
+      "mixedAnswer": {
+        "question": "How does the captured PostgreSQL guide use base backups and archived WAL for recovery?",
+        "answer": "Incomplete PDF extraction for \"mixed.pdf\": physical pages 3 have missing text. Only obtained text is available as evidence.\n\nAccording to the captured PostgreSQL guide, base backups should be restored before replaying archived WAL. The guide states, \"Restore the base backup before replaying archived WAL.\" and \"Keep transaction logs until the recovery check succeeds.\" WAL_RECOVERY_TARGET identifier selects the recovery destination. WAL keeps committed transactions durable after a crash.",
+        "citations": [
+          {
+            "origin": "source-snapshot",
+            "knowledgeItemId": 3,
+            "sourceSnapshotId": 3,
+            "title": "mixed.pdf",
+            "originalUrl": null,
+            "pageNumber": 2,
+            "pageLabel": null,
+            "extractionCoverage": {
+              "pageCount": 4,
+              "pages": [
+                {
+                  "method": "native",
+                  "reason": null,
+                  "outcome": "extracted",
+                  "pageLabel": null,
+                  "pageNumber": 1
+                },
+                {
+                  "method": "ocr",
+                  "reason": null,
+                  "outcome": "extracted",
+                  "pageLabel": null,
+                  "pageNumber": 2
+                },
+                {
+                  "method": "ocr",
+                  "reason": "No trustworthy printed English text from local OCR; visual content has not been interpreted",
+                  "outcome": "unreadable",
+                  "pageLabel": null,
+                  "pageNumber": 3
+                },
+                {
+                  "method": "none",
+                  "reason": null,
+                  "outcome": "blank",
+                  "pageLabel": null,
+                  "pageNumber": 4
+                }
+              ]
+            },
+            "openOriginalFile": "/knowledge-items/3/original-file/open?page=2",
+            "evidenceCoverage": "primary-content",
+            "excerpt": "PostgreSQL printed recovery checklist\nRestore the base backup before replaying archived WAL.\nSCAN_RECOVERY_MARKER identifies the printed recovery procedure.\nSELECT pg_switch_wal();\nKeep transaction logs until the recovery check succeeds."
+          },
+          {
+            "origin": "source-snapshot",
+            "knowledgeItemId": 3,
+            "sourceSnapshotId": 3,
+            "title": "mixed.pdf",
+            "originalUrl": null,
+            "pageNumber": 1,
+            "pageLabel": null,
+            "extractionCoverage": {
+              "pageCount": 4,
+              "pages": [
+                {
+                  "method": "native",
+                  "reason": null,
+                  "outcome": "extracted",
+                  "pageLabel": null,
+                  "pageNumber": 1
+                },
+                {
+                  "method": "ocr",
+                  "reason": null,
+                  "outcome": "extracted",
+                  "pageLabel": null,
+                  "pageNumber": 2
+                },
+                {
+                  "method": "ocr",
+                  "reason": "No trustworthy printed English text from local OCR; visual content has not been interpreted",
+                  "outcome": "unreadable",
+                  "pageLabel": null,
+                  "pageNumber": 3
+                },
+                {
+                  "method": "none",
+                  "reason": null,
+                  "outcome": "blank",
+                  "pageLabel": null,
+                  "pageNumber": 4
+                }
+              ]
+            },
+            "openOriginalFile": "/knowledge-items/3/original-file/open?page=1",
+            "evidenceCoverage": "primary-content",
+            "excerpt": "PostgreSQL recovery field guide\nWrite-ahead logging keeps committed transactions durable after a crash.\nThe WAL_RECOVERY_TARGET identifier selects the recovery destination."
+          }
+        ],
+        "insufficientEvidence": false
+      },
+      "mixedFollowUp": {
+        "question": "What SQL statement appears in its PostgreSQL recovery procedure?",
+        "answer": "Incomplete PDF extraction for \"mixed.pdf\": physical pages 3 have missing text. Only obtained text is available as evidence.\n\nThe SQL statement \"SELECT pg_switch_wal();\" appears in the PostgreSQL recovery procedure.",
+        "citations": [
+          {
+            "origin": "source-snapshot",
+            "knowledgeItemId": 3,
+            "sourceSnapshotId": 3,
+            "title": "mixed.pdf",
+            "originalUrl": null,
+            "pageNumber": 2,
+            "pageLabel": null,
+            "extractionCoverage": {
+              "pageCount": 4,
+              "pages": [
+                {
+                  "method": "native",
+                  "reason": null,
+                  "outcome": "extracted",
+                  "pageLabel": null,
+                  "pageNumber": 1
+                },
+                {
+                  "method": "ocr",
+                  "reason": null,
+                  "outcome": "extracted",
+                  "pageLabel": null,
+                  "pageNumber": 2
+                },
+                {
+                  "method": "ocr",
+                  "reason": "No trustworthy printed English text from local OCR; visual content has not been interpreted",
+                  "outcome": "unreadable",
+                  "pageLabel": null,
+                  "pageNumber": 3
+                },
+                {
+                  "method": "none",
+                  "reason": null,
+                  "outcome": "blank",
+                  "pageLabel": null,
+                  "pageNumber": 4
+                }
+              ]
+            },
+            "openOriginalFile": "/knowledge-items/3/original-file/open?page=2",
+            "evidenceCoverage": "primary-content",
+            "excerpt": "PostgreSQL printed recovery checklist\nRestore the base backup before replaying archived WAL.\nSCAN_RECOVERY_MARKER identifies the printed recovery procedure.\nSELECT pg_switch_wal();\nKeep transaction logs until the recovery check succeeds."
+          }
+        ],
+        "insufficientEvidence": false
+      },
+      "collectionAnswer": {
+        "question": "How do the captured guides preserve database recovery knowledge with WAL, and how does MindVault preserve article text when a website disappears?",
+        "answer": "Incomplete PDF extraction for \"mixed.pdf\": physical pages 3 have missing text. Only obtained text is available as evidence.\n\nThe captured guides preserve database recovery knowledge with WAL by using write-ahead logging to ensure durable transactions after a crash. Specifically, the WAL_RECOVERY_TARGET identifier selects the recovery destination, and operators take base backups before replaying the transaction log (knowledge-item-1-excerpt-1, knowledge-item-1-excerpt-2, knowledge-item-3-excerpt-1, knowledge-item-3-excerpt-2). Point-in-time recovery replays archived WAL to restore an earlier state (knowledge-item-1-excerpt-2). MindVault preserves article text when a website disappears by creating durable Source Snapshots, which supply meaningful primary text for trustworthy conceptual retrieval (knowledge-item-4-excerpt-1).",
+        "citations": [
+          {
+            "origin": "source-snapshot",
+            "knowledgeItemId": 1,
+            "sourceSnapshotId": 1,
+            "title": "selectable.pdf",
+            "originalUrl": null,
+            "pageNumber": 1,
+            "pageLabel": "i",
+            "extractionCoverage": {
+              "pageCount": 2,
+              "pages": [
+                {
+                  "method": "native",
+                  "reason": null,
+                  "outcome": "extracted",
+                  "pageLabel": "i",
+                  "pageNumber": 1
+                },
+                {
+                  "method": "native",
+                  "reason": null,
+                  "outcome": "extracted",
+                  "pageLabel": "1",
+                  "pageNumber": 2
+                }
+              ]
+            },
+            "openOriginalFile": "/knowledge-items/1/original-file/open?page=1",
+            "evidenceCoverage": "primary-content",
+            "excerpt": "PostgreSQL recovery field guide\nWrite-ahead logging keeps committed transactions durable after a crash.\nThe WAL_RECOVERY_TARGET identifier selects the recovery destination."
+          },
+          {
+            "origin": "source-snapshot",
+            "knowledgeItemId": 1,
+            "sourceSnapshotId": 1,
+            "title": "selectable.pdf",
+            "originalUrl": null,
+            "pageNumber": 2,
+            "pageLabel": "1",
+            "extractionCoverage": {
+              "pageCount": 2,
+              "pages": [
+                {
+                  "method": "native",
+                  "reason": null,
+                  "outcome": "extracted",
+                  "pageLabel": "i",
+                  "pageNumber": 1
+                },
+                {
+                  "method": "native",
+                  "reason": null,
+                  "outcome": "extracted",
+                  "pageLabel": "1",
+                  "pageNumber": 2
+                }
+              ]
+            },
+            "openOriginalFile": "/knowledge-items/1/original-file/open?page=2",
+            "evidenceCoverage": "primary-content",
+            "excerpt": "Physical page two - printed page 1\nPoint-in-time recovery replays archived WAL to restore an earlier state.\nOperators take regular base backups before replaying the transaction log.\nSELECT pg_switch_wal(); -- force a transaction log segment switch"
+          },
+          {
+            "origin": "source-snapshot",
+            "knowledgeItemId": 3,
+            "sourceSnapshotId": 3,
+            "title": "mixed.pdf",
+            "originalUrl": null,
+            "pageNumber": 1,
+            "pageLabel": null,
+            "extractionCoverage": {
+              "pageCount": 4,
+              "pages": [
+                {
+                  "method": "native",
+                  "reason": null,
+                  "outcome": "extracted",
+                  "pageLabel": null,
+                  "pageNumber": 1
+                },
+                {
+                  "method": "ocr",
+                  "reason": null,
+                  "outcome": "extracted",
+                  "pageLabel": null,
+                  "pageNumber": 2
+                },
+                {
+                  "method": "ocr",
+                  "reason": "No trustworthy printed English text from local OCR; visual content has not been interpreted",
+                  "outcome": "unreadable",
+                  "pageLabel": null,
+                  "pageNumber": 3
+                },
+                {
+                  "method": "none",
+                  "reason": null,
+                  "outcome": "blank",
+                  "pageLabel": null,
+                  "pageNumber": 4
+                }
+              ]
+            },
+            "openOriginalFile": "/knowledge-items/3/original-file/open?page=1",
+            "evidenceCoverage": "primary-content",
+            "excerpt": "PostgreSQL recovery field guide\nWrite-ahead logging keeps committed transactions durable after a crash.\nThe WAL_RECOVERY_TARGET identifier selects the recovery destination."
+          },
+          {
+            "origin": "source-snapshot",
+            "knowledgeItemId": 3,
+            "sourceSnapshotId": 3,
+            "title": "mixed.pdf",
+            "originalUrl": null,
+            "pageNumber": 2,
+            "pageLabel": null,
+            "extractionCoverage": {
+              "pageCount": 4,
+              "pages": [
+                {
+                  "method": "native",
+                  "reason": null,
+                  "outcome": "extracted",
+                  "pageLabel": null,
+                  "pageNumber": 1
+                },
+                {
+                  "method": "ocr",
+                  "reason": null,
+                  "outcome": "extracted",
+                  "pageLabel": null,
+                  "pageNumber": 2
+                },
+                {
+                  "method": "ocr",
+                  "reason": "No trustworthy printed English text from local OCR; visual content has not been interpreted",
+                  "outcome": "unreadable",
+                  "pageLabel": null,
+                  "pageNumber": 3
+                },
+                {
+                  "method": "none",
+                  "reason": null,
+                  "outcome": "blank",
+                  "pageLabel": null,
+                  "pageNumber": 4
+                }
+              ]
+            },
+            "openOriginalFile": "/knowledge-items/3/original-file/open?page=2",
+            "evidenceCoverage": "primary-content",
+            "excerpt": "PostgreSQL printed recovery checklist\nRestore the base backup before replaying archived WAL.\nSCAN_RECOVERY_MARKER identifies the printed recovery procedure.\nSELECT pg_switch_wal();\nKeep transaction logs until the recovery check succeeds."
+          },
+          {
+            "origin": "source-snapshot",
+            "knowledgeItemId": 4,
+            "sourceSnapshotId": 4,
+            "title": "Retained knowledge",
+            "originalUrl": "http://127.0.0.1:51693/articles/semantic-retention",
+            "pageNumber": null,
+            "pageLabel": null,
+            "evidenceCoverage": "primary-content",
+            "excerpt": "MindVault preserves useful article text in a durable Source Snapshot so the knowledge remains available when the original website changes or disappears. This fixture supplies enough meaningful primary text for trustworthy conceptual retrieval after a public article is no longer available at its original address."
+          }
+        ],
+        "insufficientEvidence": false
+      },
+      "unsupportedVisual": {
+        "question": "In the captured PostgreSQL WAL recovery PDF, what relationship does the diagram on physical page 3 show between its shapes?",
+        "answer": "InsufficientEvidence true",
+        "citations": [],
+        "insufficientEvidence": true
+      }
+    }
+  }
+}
