@@ -1,3 +1,4 @@
+import { GenerationInputLimitError } from "../ai/providers";
 import type { SynthesisConversationTurn, SynthesisGenerationInput } from "../ai/providers";
 
 /** History is interpretation context, so retain recent turns within a byte budget. */
@@ -39,6 +40,9 @@ export function boundSynthesisInput(input: SynthesisGenerationInput): SynthesisG
                 break;
             }
             text = utf8Prefix(text, Math.max(0, Buffer.byteLength(text) - Math.max(256, bytes - maximumContextBytes)));
+        }
+        if (!text) {
+            throw new GenerationInputLimitError("Synthesis evidence and provenance exceed the generation input limit");
         }
     }
     return context;

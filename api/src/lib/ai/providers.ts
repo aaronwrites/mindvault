@@ -2,6 +2,14 @@ import type { PdfExtractionCoverage } from "../pdf/pdf-extraction-disclosure";
 
 export const MAXIMUM_RECOGNITION_SUMMARY_CHARACTERS = 320;
 
+/** Provider-neutral failure for generation requests that cannot fit safely. */
+export class GenerationInputLimitError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = "GenerationInputLimitError";
+    }
+}
+
 export interface TextGenerationProvider {
     generate(prompt: string): Promise<string>;
 }

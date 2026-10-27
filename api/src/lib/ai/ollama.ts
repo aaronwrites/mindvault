@@ -7,7 +7,7 @@ import type {
     TextGenerationProvider,
     TopicTagGenerationProvider,
 } from "./providers";
-import { MAXIMUM_RECOGNITION_SUMMARY_CHARACTERS } from "./providers";
+import { GenerationInputLimitError, MAXIMUM_RECOGNITION_SUMMARY_CHARACTERS } from "./providers";
 import { boundConversation } from "../synthesis/bound-conversation";
 import { MAXIMUM_GENERATION_INPUT_BYTES } from "./limit-generation-input";
 
@@ -211,7 +211,7 @@ async function requestJson(
 function assertInputSize(prompt: string): void {
     const bytes = new TextEncoder().encode(prompt).byteLength;
     if (bytes > MAXIMUM_GENERATION_INPUT_BYTES) {
-        throw new OllamaProviderError(`Ollama generation input is ${bytes} bytes; the maximum is ${MAXIMUM_GENERATION_INPUT_BYTES} bytes`, "input");
+        throw new GenerationInputLimitError(`Ollama generation input is ${bytes} bytes; the maximum is ${MAXIMUM_GENERATION_INPUT_BYTES} bytes`);
     }
 }
 

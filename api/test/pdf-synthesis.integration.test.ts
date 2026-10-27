@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import { OllamaProviderError } from "../src/lib/ai/ollama";
+import { GenerationInputLimitError } from "../src/lib/ai/providers";
 import { createApp } from "../src/app";
 import { createArticleProcessingWorker } from "../src/worker";
 import type { SynthesisGenerationInput, SynthesisGenerationProvider } from "../src/lib/ai/providers";
@@ -21,7 +21,7 @@ test("PDF citations preserve physical pages and fresh mixed evidence through fol
         async resolveQuestion() { return "archived WAL"; },
         async generateSynthesis(input) {
             inputs.push(input);
-            if (inputLimit) throw new OllamaProviderError("Generation input exceeds the supported limit", "input");
+            if (inputLimit) throw new GenerationInputLimitError("Generation input exceeds the supported limit");
             return { answer: insufficient ? "Extracted text does not establish the diagram relationship." : "Captured recovery evidence.",
                 citationIds: insufficient ? [] : invalid ? ["invented-page"] : input.evidence.map(e => e.citationId), insufficientEvidence: insufficient };
         },
@@ -80,4 +80,33 @@ test("PDF citations preserve physical pages and fresh mixed evidence through fol
     const afterTrash = await (await ask("What does it preserve?", history)).json() as any;
     expect(afterTrash.citations.some((c: any) => c.knowledgeItemId === captured.knowledgeItemId)).toBe(false);
     expect(inputs.at(-1)?.evidence.some(e => e.knowledgeItemId === captured.knowledgeItemId)).toBe(false);
+}, 20_000);
+
+test("large PDF coverage returns a recoverable limit instead of claiming no evidence on follow-ups", async () => {
+    const storage = new DeterministicOriginalFileStorageFake();
+    const embeddings = new DeterministicEmbeddingProvider();
+    const { pdfProcessingLimits } = await import("../src/lib/pdf/extract-pdf");
+    let generations = 0;
+    const synthesisProvider: SynthesisGenerationProvider = {
+        async resolveQuestion() { return "archived WAL"; },
+        async generateSynthesis(input) { generations++; return { answer: "Restore the base backup.", citationIds: input.evidence.map(e => e.citationId), insufficientEvidence: false }; },
+    };
+    harness = await createIntegrationHarness(
+        database => createApp({ database: database.db, originalFileStorage: storage, embeddingProvider: embeddings, synthesisProvider }),
+        database => createArticleProcessingWorker({ database: database.db, originalFileStorage: () => storage, embeddingProvider: embeddings,
+            pdfLimits: { ...pdfProcessingLimits({}), maximumOcrPages: 1 },
+            summaryProvider: new DeterministicGenerationProvider(), topicTagProvider: new DeterministicTopicTagGenerationProvider() }),
+    );
+    const form = new FormData();
+    form.set("file", new Blob([await Bun.file(new URL("fixtures/pdf/coverage-limit.pdf", import.meta.url)).arrayBuffer()]), "coverage-limit.pdf");
+    expect((await fetch(`${harness.apiBaseUrl}/captures/file`, { method: "POST", body: form })).status).toBe(201);
+    await harness.drainWorker();
+    const recalled = await (await fetch(`${harness.apiBaseUrl}/search?q=archived%20WAL`)).json() as any;
+    expect(recalled[0].excerpts[0]).toMatchObject({ pageNumber: 1, sourceSnapshot: { extractionCoverage: { pageCount: 200 } } });
+    const response = await fetch(`${harness.apiBaseUrl}/synthesis`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({
+        question: "What does it preserve?", conversation: [{ question: "Earlier question. ".repeat(100), answer: "Earlier answer. ".repeat(100) }],
+    }) });
+    expect(response.status).toBe(422);
+    expect(await response.json()).toMatchObject({ error: expect.stringContaining("input limit") });
+    expect(generations).toBe(0);
 }, 20_000);
