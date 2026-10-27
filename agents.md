@@ -15,7 +15,7 @@ Built solo — as both a portfolio piece and a university project proposal.
 - **AI**: Local Ollama using Gemma 3 for generation and Nomic Embed Text for embeddings
 - **Frontend**: Next.js + shadcn/ui (kept at defaults for now — visual polish deferred until backend is solid)
 - **Validation**: Zod
-- **Next**: Resolve real-model PDF grounding acceptance, then broaden Source adapters before a thin browser capture client
+- **Next**: Broaden Source adapters before a thin browser capture client
 
 ## Structure
 
@@ -58,7 +58,7 @@ mindvault/
 
 ## Current status
 
-MindVault durably captures and processes public textual webpages and retained PDFs using native text and local printed English OCR into recognizable Preview Cards, Source Snapshots, indexed Passages, Recognition Summaries, and Topic Tags. PDF evidence preserves physical page provenance and discloses partial Extraction Coverage, including bounded OCR gaps; page-grounded Recall and Synthesis are implemented. Actual local-model quality acceptance remains incomplete because of unsupported generated PDF claims (see `docs/pdf-acceptance.md`). Original File capture, access, and lifecycle operations are implemented; other file understanding remains deferred. Knowledge Item availability is Processing, Ready, Unsupported, or Needs attention; Organization incomplete is a secondary condition. The next authoritative milestone is `.scratch/pdf-understanding/spec.md`: resolve ticket 04 acceptance and grounding follow-up 05 before broadening adapters. URL-to-chat closeout is verified. `context.md` is the domain glossary and `docs/adr/` records accepted architectural decisions.
+MindVault durably captures and processes public textual webpages and retained PDFs using native text and local printed English OCR into recognizable Preview Cards, Source Snapshots, indexed Passages, Recognition Summaries, and Topic Tags. PDF evidence preserves physical page provenance and discloses partial Extraction Coverage, including bounded OCR gaps; page-grounded Recall and Synthesis are implemented. Bounded real-model PDF quality acceptance is complete after conversational retrieval and citation corrections, with rejected and accepted actual outputs preserved in `docs/pdf-acceptance.md`. Original File capture, access, and lifecycle operations are implemented; other file understanding remains deferred. Knowledge Item availability is Processing, Ready, Unsupported, or Needs attention; Organization incomplete is a secondary condition. The PDF milestone in `.scratch/pdf-understanding/spec.md` is complete, including tickets 04 and 05; broader Source adapters are next before a thin browser capture client. URL-to-chat closeout is verified. `context.md` is the domain glossary and `docs/adr/` records accepted architectural decisions.
 
 ## Agent skills
 

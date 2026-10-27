@@ -1,5 +1,7 @@
 # Retained PDF processing
 
+Current milestone status: PDF understanding and tickets 04/05 are completed. See [final quality acceptance](pdf-acceptance.md#ticket-04-closeout--2026-10-27); ticket-specific results below preserve implementation history.
+
 Uploaded and already-retained PDFs support native selectable-text extraction, local printed English OCR, page-target citation actions, and collection-wide PDF Synthesis. Other Original File kinds remain Unsupported. No automatic backfill runs: use **Process PDF** on an existing retained item (the existing `POST /knowledge-items/:id/refresh` action). New PDF Captures schedule the normal staged Processing Attempt in the Capture transaction after storage succeeds. See the dated [PDF quality acceptance record](pdf-acceptance.md) for real-model results, fixture provenance, verification, and limitations.
 
 ## Runtime

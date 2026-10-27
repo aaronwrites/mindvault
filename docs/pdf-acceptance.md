@@ -1,5 +1,7 @@
 # PDF quality acceptance — 2026-10-27
 
+**Current status: completed.** Tickets 04 and 05 are closed; see [the final closeout](#ticket-04-closeout--2026-10-27). Earlier rejected assessments remain below as history.
+
 The bounded PDF milestone uses retained PDF bytes, actual PDF.js extraction/rendering, local Tesseract OCR, PostgreSQL hybrid retrieval, the real worker, and local Gemma 3/Nomic Embed Text. Storage in this assessment is the deterministic private-storage adapter, as required by the finalized specification. It retains actual fixture bytes and exercises signed Open/Download, expiry/signature validation and physical page targeting. Live Cloudinary delivery remains opt-in; this assessment does not claim a browser viewer or external Cloudinary check.
 
 ## Reproduce
@@ -99,3 +101,34 @@ Final actual assessments: **125 assertions / 80.18 seconds**, then **128 asserti
 An intermediate extractive run passed 125 transport assertions but returned a supported recovery identifier instead of SQL for the selectable-PDF follow-up: fresh retrieval supplied only physical page 1, omitting the SQL on physical page 2. This run is **not accepted as successful follow-up evidence** and is retained with the rejected/intermediate records. The stronger SQL assertion prevents that result from passing the runner again. The two final runs answered correctly, but no retrieval/resolution correction was made for that intermittent observation. Ticket 05's bounded summary/identifier correction is complete; **ticket 04 and the parent milestone remain open** for explicit conversational retrieval reassessment rather than declaring adapter expansion unblocked. This record does not conceal that remaining quality concern behind the final passing runs.
 
 Final full API/PostgreSQL/real-worker regression: **156 passed, 3 opt-in checks skipped, 0 failed**, 722 assertions in 260.22 seconds (`/private/tmp/mindvault-ticket05-api-final.log`). The focused HTTP/worker grounding and PDF citation checks passed, including preservation of Ready availability after rejected summary generation and separation of primary text from filename/notes. Provider checks: **16 passed**. Client: **30 passed**; API/client typechecking, client lint and whitespace checks passed. Final Standards and Spec reviews: **0 remaining implementation findings** after refusal and wrapped-negation corrections. No migration, new dependency, cloud AI transfer or external Cloudinary acceptance was introduced. Ticket/planning files and the pre-existing untracked ADR-0026 remain outside the commit.
+
+## Ticket 04 closeout — 2026-10-27
+
+**Current outcome: the bounded PDF milestone is accepted; tickets 04 and 05 are completed.** This supersedes the historical incomplete statuses above. Ticket 05 was already completed when this reassessment began. Ticket 04's remaining blocker was an observed follow-up retrieving only native physical page 1 and answering with a recovery identifier instead of the SQL on physical page 2.
+
+Synthesis now retrieves both the current question and its conversational resolution. Resolved-subject Knowledge Items keep priority; current-question excerpts supplement the same items before unrelated current-question matches. Excerpts are deduplicated by item, Snapshot, origin, page and text, with unique citation IDs. The existing eight-excerpt, 12,000-character, 1,500-character-per-excerpt and complete-generation-input budgets remain. A public HTTP/worker regression first reproduced the omitted SQL page, then reproduced budget starvation with eight unrelated current-query matches. It now preserves the requested SQL page and resolved-subject page, keeps provenance distinct, and excludes Trash. The live runner also records actual resolved questions, so a rewrite cannot silently hide the retrieval input during assessment.
+
+The first closeout run exposed another concrete citation gap: the mixed answer repeated the complete native durability sentence but returned only the scan-page citation; its semantic audit incorrectly accepted that support. The provider now recovers omitted citations for complete answer sentences occurring literally in supplied excerpts after whitespace normalization. It prefers existing matching citations, adds only the first matching omitted excerpt, and keeps unrelated excerpts uncited. Identifier validation and the local semantic audit then run against the expanded cited evidence. A provider regression recorded red before this correction and green afterward. Literal occurrence supplies provenance, not proof of meaning or attribution; the audit remains fallible for paraphrases and other semantic claims.
+
+All four closeout attempts are preserved under `ticket04CloseoutAssessments` in [the actual-output record](pdf-acceptance-results.json). Its `currentMilestoneOutcome` records final acceptance; the root `accepted: false` still describes the original rejected ticket 04 assessment.
+
+| Attempt | Actual checks | Inspection outcome |
+| --- | --- | --- |
+| 1 | 127 assertions; 90.61 s | Rejected: mixed answer omitted native-page support for its durability sentence. Led to the citation correction. |
+| 2 | 97 assertions before failure; 67.21 s | Rejected: the mixed SQL follow-up omitted the semicolon, failing the unchanged exact-statement assertion. Its main answer also falsely said only page 2 was available despite supplied/cited native page 1. Correct SQL evidence was retrieved; these outputs remain evidence of model variability. |
+| 3 | 127 assertions; 85.55 s | Accepted after manual comparison of every summary and answer with its actual excerpts. |
+| 4 | 128 assertions; 77.23 s | Accepted on consecutive repeat with unchanged fixtures, broad questions, model digests and inspection criteria. |
+
+In both final runs, all three SQL follow-ups return `SELECT pg_switch_wal();`; the native citation targets physical page 2 with printed label `1`. The mixed answer repeats the same durability sentence that failed attempt 1, now with both supporting physical pages returned. Summaries contain obtained source statements, without an invented scanning workflow or identifier. Collection-wide answers combine captured web and PDF evidence, partial extraction identifies physical page 3 as missing text, private Open/Download and page targeting pass, and the actual unsupported visual question returns an honest refusal. No-evidence PDFs remain retained with Needs attention. Actual resolved questions, generation inputs, summary selections, audit decisions and returned excerpts accompany every attempt.
+
+Final full API/PostgreSQL/real-worker regression: **158 passed, 3 opt-in skips, 0 failed**, 740 assertions in 272.18 s (`/private/tmp/mindvault-pdf-closeout-api-final.log`). Provider checks: **17 passed**. Client: **30 passed**; API/client typechecking, client lint and whitespace checks passed. Full-suite coverage includes migrations, retained-file lifecycle, Trash/Restore/deletion, processing limits, OCR and existing URL behavior. No new dependency, migration, cloud AI transfer, resource-limit increase or external Cloudinary acceptance was introduced. The pre-existing untracked ADR-0026 was left untouched.
+
+This closes the demonstrated conversational retrieval gap and accepts the agreed small native/printed-English/mixed corpus. It does not establish universal model factuality: attempt 2, on the final implementation, is explicitly rejected and retained. Generation can still produce an incorrect paraphrase or limitation despite a model audit. Unsupported visual understanding, difficult scans and other deferred inputs remain outside this milestone. Broader Source adapters are no longer gated on tickets 04/05.
+
+### Standards
+
+0 remaining findings after correcting resolved-subject priority. Provider boundaries, provenance, budgets and repository conventions are preserved.
+
+### Spec
+
+0 remaining findings after the populated-collection regression, verbatim-citation correction and repeated manually inspected live acceptance. Total findings: Standards 0; Spec 0.
