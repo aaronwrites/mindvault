@@ -96,6 +96,23 @@ describe("Ollama providers", () => {
         }
     });
 
+    test("preserves complete supplied SELECT function statements including their terminator", async () => {
+        let generations = 0;
+        const providers = createOllamaProviders({ configuration, fetchImplementation: async (_url, init) => {
+            const request = JSON.parse(String(init?.body));
+            if (request.format.properties.supported) return chatResponse(JSON.stringify({ supported: true, reason: "A fallible audit accepts the SQL." }));
+            generations++;
+            return chatResponse(JSON.stringify({ answer: generations === 1
+                ? "The SQL statement is SELECT pg_switch_wal()." : "The SQL statement is SELECT pg_switch_wal();",
+                citationIds: ["source"], insufficientEvidence: false }));
+        } });
+        const result = await providers.synthesisProvider.generateSynthesis({ question: "Which SQL statement appears?", conversation: [], evidence: [{
+            citationId: "source", origin: "source-snapshot", knowledgeItemId: 1, sourceSnapshotId: 1,
+            title: "Recovery", text: "SELECT pg_switch_wal();", originalUrl: null, evidenceCoverage: "primary-content",
+        }] });
+        expect(result.answer).toBe("The SQL statement is SELECT pg_switch_wal();");
+    });
+
     test("recovers only supplied citations containing complete statements reused in an answer", async () => {
         const answer = "Restore the base backup before replaying archived WAL. Write-ahead logging keeps committed transactions durable after a crash.";
         const responses = [
