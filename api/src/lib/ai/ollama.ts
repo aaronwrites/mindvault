@@ -212,10 +212,19 @@ export function createOllamaProviders({
                 return parseStructuredResponse(content, z.object({ question: z.string().trim().min(1).max(2000) }), "retrieval question").question;
             },
             async generateSynthesis(input) {
+                const format = {
+                    ...synthesisJsonSchema,
+                    properties: {
+                        ...synthesisJsonSchema.properties,
+                        citationIds: { type: "array", items: input.evidence.length > 0
+                            ? { type: "string", enum: input.evidence.map(item => item.citationId) }
+                            : { type: "string" } },
+                    },
+                };
                 let failure: string | undefined;
                 for (let attempt = 0; attempt < 2; attempt++) {
                     const prompt = synthesisPrompt(input);
-                    const content = await chat(failure ? `${prompt}\n\nCorrect the previous unsupported claim: ${failure}` : prompt, synthesisJsonSchema);
+                    const content = await chat(failure ? `${prompt}\n\nCorrect the previous unsupported claim: ${failure}` : prompt, format);
                     const result = parseStructuredResponse(content, synthesisResponseSchema, "Synthesis");
                     if (result.insufficientEvidence) return {
                         answer: "I don't have enough captured evidence to answer that question.", citationIds: [], insufficientEvidence: true,
@@ -318,7 +327,7 @@ function generatedCoverageClaim(answer: string): string | undefined {
     // Match coverage constructions, rather than unrelated words such as
     // "the document says missing WAL files prevent recovery".
     const coverageConstructions = [
-        /\b(?:pages?(?:\s+\d+(?:\s*(?:,|and|to|-)\s*\d+)*)?|pdf|document|file|(?:extraction\s+)?coverage)\s+(?:(?:is|are|was|were|remains?|has|have|had|been|not|only|fully|partially|still|already|now|yet)\s+)+(?:available|unavailable|extracted|unread|unprocessed|processed|read|interpreted|blank|complete|incomplete|missing)\b/iu,
+        /\b(?:pages?(?:\s+\d+(?:\s*(?:,|and|to|-)\s*\d+)*)?|pdf|document|(?:extraction\s+)?coverage)\s+(?:(?:is|are|was|were|remains?|has|have|had|been|not|only|fully|partially|still|already|now|yet)\s+)+(?:available|unavailable|extracted|unread|unprocessed|processed|read|interpreted|blank|complete|incomplete|missing)\b/iu,
         /\b(?:only|all|no)\s+(?:available|extracted|readable|processed|interpreted)\s+pages?\b/iu,
         /\b(?:unread|unprocessed|unavailable|missing|blank)\s+pages?\b|\b(?:incomplete|partial|complete|full)\s+(?:extraction|coverage)\b/iu,
     ];

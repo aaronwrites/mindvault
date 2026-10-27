@@ -79,18 +79,21 @@ describe("Ollama providers", () => {
     });
 
     test("preserves substantive source statements about missing domain data", async () => {
-        const answer = "The document says missing WAL files prevent recovery.";
+        let answer = "The document says missing WAL files prevent recovery.";
         const providers = createOllamaProviders({ configuration, fetchImplementation: async (_url, init) => {
             const request = JSON.parse(String(init?.body));
             return chatResponse(JSON.stringify(request.format.properties.supported
                 ? { supported: true, reason: "The supplied text states this recovery limitation." }
                 : { answer, citationIds: ["source"], insufficientEvidence: false }));
         } });
-        const result = await providers.synthesisProvider.generateSynthesis({ question: "What prevents recovery?", conversation: [], evidence: [{
-            citationId: "source", origin: "source-snapshot", knowledgeItemId: 1, sourceSnapshotId: 1,
-            title: "Recovery", text: "Missing WAL files prevent recovery.", originalUrl: null, evidenceCoverage: "primary-content",
-        }] });
-        expect(result.answer).toBe(answer);
+        for (const statement of [answer, "Recovery cannot proceed because the WAL file is missing.", "The archived WAL file is unavailable."]) {
+            answer = statement;
+            const result = await providers.synthesisProvider.generateSynthesis({ question: "What prevents recovery?", conversation: [], evidence: [{
+                citationId: "source", origin: "source-snapshot", knowledgeItemId: 1, sourceSnapshotId: 1,
+                title: "Recovery", text: "Missing WAL files prevent recovery. Recovery cannot proceed because the WAL file is missing. The archived WAL file is unavailable.", originalUrl: null, evidenceCoverage: "primary-content",
+            }] });
+            expect(result.answer).toBe(answer);
+        }
     });
 
     test("recovers only supplied citations containing complete statements reused in an answer", async () => {
