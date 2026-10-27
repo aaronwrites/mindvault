@@ -52,6 +52,32 @@ describe("Ollama providers", () => {
         expect(result).toEqual({ answer: "Use SCAN_RECOVERY_MARKER.", citationIds: ["page-2"], insufficientEvidence: false });
     });
 
+    test("corrects generated page-availability claims before returning an answer", async () => {
+        let generations = 0;
+        let invalidCorrection = false;
+        const providers = createOllamaProviders({ configuration, fetchImplementation: async (_url, init) => {
+            const request = JSON.parse(String(init?.body));
+            if (request.format.properties.supported) return chatResponse(JSON.stringify({ supported: true, reason: "Accepted by the fallible semantic auditor." }));
+            generations++;
+            return chatResponse(JSON.stringify({
+                answer: generations === 1 || invalidCorrection ? "Restore the base backup. Only page 2 of the document is available." : "Restore the base backup.",
+                citationIds: ["scan"], insufficientEvidence: false,
+            }));
+        } });
+        const result = await providers.synthesisProvider.generateSynthesis({ question: "How does recovery work?", conversation: [], evidence: [{
+            citationId: "scan", origin: "source-snapshot", knowledgeItemId: 1, sourceSnapshotId: 1,
+            title: "Recovery", text: "Restore the base backup.", originalUrl: null, pageNumber: 2, evidenceCoverage: "primary-content",
+        }] });
+        expect(result.answer).toBe("Restore the base backup.");
+        expect(generations).toBe(2);
+        invalidCorrection = true;
+        await expect(providers.synthesisProvider.generateSynthesis({ question: "How does recovery work?", conversation: [], evidence: [{
+            citationId: "scan", origin: "source-snapshot", knowledgeItemId: 1, sourceSnapshotId: 1,
+            title: "Recovery", text: "Restore the base backup.", originalUrl: null, pageNumber: 2, evidenceCoverage: "primary-content",
+        }] })).rejects.toThrow("grounding failed after one correction");
+        expect(generations).toBe(4);
+    });
+
     test("recovers only supplied citations containing complete statements reused in an answer", async () => {
         const answer = "Restore the base backup before replaying archived WAL. Write-ahead logging keeps committed transactions durable after a crash.";
         const responses = [
