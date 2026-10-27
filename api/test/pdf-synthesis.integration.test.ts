@@ -118,7 +118,7 @@ test("follow-ups preserve requested evidence when conversational resolution lose
     const question = "What SQL statement appears in its recovery procedure?";
     const vector = (index: number) => Array.from({ length: 768 }, (_, i) => i === index ? 1 : 0);
     const embeddings = new class extends DeterministicEmbeddingProvider {
-        override async embed(text: string) { return vector(text.includes("SELECT pg_switch_wal();") ? 1 : 0); }
+        override async embed(text: string) { return vector(text.includes("SELECT pg_switch_wal();") || text.includes("Unrelated SQL distractor") ? 1 : text.includes("WAL_RECOVERY_TARGET") ? 0 : 2); }
         override async embedQuery(text: string) { return vector(text === question ? 1 : 0); }
     }();
     const inputs: SynthesisGenerationInput[] = [];
@@ -131,9 +131,22 @@ test("follow-ups preserve requested evidence when conversational resolution lose
                     return { answer: "Obtained recovery evidence.", citationIds: input.evidence.map(e => e.citationId), insufficientEvidence: false };
                 },
             } }),
-        database => createArticleProcessingWorker({ database: database.db, originalFileStorage: () => storage, embeddingProvider: embeddings,
+        (database, server) => createArticleProcessingWorker({ database: database.db, originalFileStorage: () => storage, embeddingProvider: embeddings, sourceFetchOptions: server.safeFetchDependencies(),
             summaryProvider: new DeterministicGenerationProvider(), topicTagProvider: new DeterministicTopicTagGenerationProvider() }),
     );
+    // Eight unrelated current-question matches must not crowd out the subject
+    // identified by the conversation, even when they rank ahead of its SQL page.
+    const distractorIds: number[] = [];
+    for (let i = 0; i < 8; i++) {
+        const response = await fetch(`${harness.apiBaseUrl}/captures`, {
+            method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({
+                url: `${harness.sourceServer.fetchUrl("/articles/independent-one")}?edition=${i}`,
+                personalNote: `Unrelated SQL distractor ${i}: a different database command.`,
+            }),
+        });
+        expect(response.status).toBe(201);
+        distractorIds.push(((await response.json()) as { knowledgeItemId: number }).knowledgeItemId);
+    }
     const form = new FormData();
     form.set("file", new Blob([await Bun.file(new URL("fixtures/pdf/selectable.pdf", import.meta.url)).arrayBuffer()]), "recovery.pdf");
     const captured = await (await fetch(`${harness.apiBaseUrl}/captures/file`, { method: "POST", body: form })).json() as { knowledgeItemId: number };
@@ -147,9 +160,13 @@ test("follow-ups preserve requested evidence when conversational resolution lose
     expect(response.status).toBe(200);
     const result = await response.json() as any;
     expect(result.citations).toContainEqual(expect.objectContaining({ pageNumber: 2, pageLabel: "1", excerpt: expect.stringContaining("SELECT pg_switch_wal();") }));
+    expect(result.citations[0]).toMatchObject({ knowledgeItemId: captured.knowledgeItemId, pageNumber: 2 });
+    expect(inputs[0]!.evidence.length).toBeLessThanOrEqual(8);
     expect(inputs[0]?.evidence).toContainEqual(expect.objectContaining({ pageNumber: 1 }));
     expect(new Set(inputs[0]!.evidence.map(e => e.citationId)).size).toBe(inputs[0]!.evidence.length);
     expect(new Set(inputs[0]!.evidence.map(e => e.text)).size).toBe(inputs[0]!.evidence.length);
-    await fetch(`${harness.apiBaseUrl}/knowledge-items/${captured.knowledgeItemId}/trash`, { method: "POST" });
+    for (const id of [...distractorIds, captured.knowledgeItemId]) {
+        await fetch(`${harness.apiBaseUrl}/knowledge-items/${id}/trash`, { method: "POST" });
+    }
     expect(await (await ask()).json()).toMatchObject({ insufficientEvidence: true, citations: [] });
-}, 20_000);
+}, 30_000);

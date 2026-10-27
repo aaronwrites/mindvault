@@ -52,6 +52,26 @@ describe("Ollama providers", () => {
         expect(result).toEqual({ answer: "Use SCAN_RECOVERY_MARKER.", citationIds: ["page-2"], insufficientEvidence: false });
     });
 
+    test("recovers only supplied citations containing complete statements reused in an answer", async () => {
+        const answer = "Restore the base backup before replaying archived WAL. Write-ahead logging keeps committed transactions durable after a crash.";
+        const responses = [
+            { answer, citationIds: ["scan"], insufficientEvidence: false },
+            { supported: true, reason: "Both complete statements have their source pages." },
+        ];
+        const providers = createOllamaProviders({ configuration, fetchImplementation: async () => chatResponse(JSON.stringify(responses.shift())) });
+        const evidence = (citationId: string, text: string, pageNumber: number) => ({
+            citationId, text, pageNumber, origin: "source-snapshot" as const, knowledgeItemId: 1, sourceSnapshotId: 1,
+            title: "Recovery", originalUrl: null, evidenceCoverage: "primary-content" as const,
+        });
+        const result = await providers.synthesisProvider.generateSynthesis({ question: "How does recovery work?", conversation: [], evidence: [
+            evidence("native", "Recovery guide\nWrite-ahead logging keeps committed transactions\ndurable after a crash.", 1),
+            evidence("scan", "Restore the base backup before replaying archived WAL.", 2),
+            evidence("unrelated", "Retain the original PDF for later inspection.", 3),
+        ] });
+        expect(result.answer).toBe(answer);
+        expect(result.citationIds).toEqual(["scan", "native"]);
+    });
+
     test("fails closed when PDF statement selections remain outside obtained text", async () => {
         let generations = 0;
         const providers = createOllamaProviders({ configuration, fetchImplementation: async () => {
@@ -71,7 +91,7 @@ describe("Ollama providers", () => {
         const evidence = ["cited", "uncited"].map(citationId => ({
             citationId, origin: "source-snapshot" as const, knowledgeItemId: 1, sourceSnapshotId: 1,
             title: "EXACT_OTHER_NAME", originalUrl: null, evidenceCoverage: "primary-content" as const,
-            text: citationId === "cited" ? "Restore the base backup." : "Use EXACT_OTHER_NAME.",
+            text: citationId === "cited" ? "Restore the base backup." : "Identifier: EXACT_OTHER_NAME.",
         }));
         await expect(providers.synthesisProvider.generateSynthesis({ question: "Which identifier?", evidence, conversation: [] }))
             .rejects.toThrow("grounding failed after one correction");

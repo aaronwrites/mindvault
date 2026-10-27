@@ -220,11 +220,13 @@ export function createOllamaProviders({
                     if (result.insufficientEvidence) return {
                         answer: "I don't have enough captured evidence to answer that question.", citationIds: [], insufficientEvidence: true,
                     };
-                    const cited = input.evidence.filter(item => result.citationIds.includes(item.citationId));
+                    let cited = input.evidence.filter(item => result.citationIds.includes(item.citationId));
                     if (result.citationIds.some(id => !input.evidence.some(item => item.citationId === id)) || cited.length === 0) {
                         failure = "Cite supplied evidence supporting the answer, or report insufficient evidence.";
                         continue;
                     }
+                    result.citationIds = recoverVerbatimCitations(result.answer, result.citationIds, input.evidence);
+                    cited = input.evidence.filter(item => result.citationIds.includes(item.citationId));
                     // Titles, URLs and conversation can identify a source, but cannot
                     // substantiate claims about the content of a cited page.
                     const evidence = cited.map(({ title: _title, originalUrl: _url, openOriginalFile: _open, ...item }) => item);
@@ -306,6 +308,24 @@ function parseStructuredResponse<T>(content: string, schema: z.ZodType<T>, label
     const parsed = schema.safeParse(json);
     if (!parsed.success) throw new OllamaProviderError(`Ollama ${label} response failed validation: ${parsed.error.message}`, "response");
     return parsed.data;
+}
+
+// Recover omitted provenance only for complete answer statements that occur
+// literally in supplied text. The cited-evidence audit still checks meaning,
+// attribution and paraphrases; exact containment alone does not prove entailment.
+function recoverVerbatimCitations(answer: string, citationIds: string[], evidence: SynthesisGenerationInput["evidence"]): string[] {
+    const normalize = (text: string) => text.replace(/\s+/gu, " ").trim();
+    const excerpts = evidence.map(item => ({ citationId: item.citationId, text: normalize(item.text) }));
+    const recovered = new Set(citationIds);
+    const segmenter = new Intl.Segmenter("en", { granularity: "sentence" });
+    for (const { segment } of segmenter.segment(normalize(answer))) {
+        const statement = segment.trim();
+        if (!/[.!?]$/u.test(statement)) continue;
+        const matches = excerpts.filter(item => item.text.includes(statement));
+        if (matches.some(item => recovered.has(item.citationId))) continue;
+        if (matches[0]) recovered.add(matches[0].citationId);
+    }
+    return [...recovered];
 }
 
 function synthesisPrompt(input: SynthesisGenerationInput): string {

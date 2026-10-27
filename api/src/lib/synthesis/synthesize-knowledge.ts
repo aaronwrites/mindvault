@@ -29,11 +29,18 @@ export async function synthesizeKnowledge(
     // The resolved question is a search input, never source evidence.
     const retrievalQuestion = conversation.length > 0
         ? await generationProvider.resolveQuestion({ question, conversation }) : question;
-    // A rewrite can lose the requested detail (for example SQL on a different
-    // PDF page). Search both intents against current active evidence, giving the
-    // user's current question first use of the existing evidence budget.
-    const queries = [...new Set([question, retrievalQuestion])];
-    const recalled = (await Promise.all(queries.map(query => recallKnowledgeItems(database, query, embeddingProvider)))).flat();
+    // Keep the resolved subject ahead of unrelated matches to a generic follow-up,
+    // while supplementing each subject with details the rewrite may have lost.
+    const [resolved, current] = await Promise.all([
+        recallKnowledgeItems(database, retrievalQuestion, embeddingProvider),
+        retrievalQuestion === question ? Promise.resolve([]) : recallKnowledgeItems(database, question, embeddingProvider),
+    ]);
+    const currentById = new Map(current.map(item => [item.id, item]));
+    const resolvedIds = new Set(resolved.map(item => item.id));
+    const recalled = [
+        ...resolved.map(item => ({ ...item, excerpts: [...(currentById.get(item.id)?.excerpts ?? []), ...item.excerpts] })),
+        ...current.filter(item => !resolvedIds.has(item.id)),
+    ];
     const input = boundSynthesisInput({ question, evidence: evidenceFor(recalled), conversation });
     const evidence = input.evidence;
     if (evidence.length === 0) {
