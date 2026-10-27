@@ -29,7 +29,11 @@ export async function synthesizeKnowledge(
     // The resolved question is a search input, never source evidence.
     const retrievalQuestion = conversation.length > 0
         ? await generationProvider.resolveQuestion({ question, conversation }) : question;
-    const recalled = await recallKnowledgeItems(database, retrievalQuestion, embeddingProvider);
+    // A rewrite can lose the requested detail (for example SQL on a different
+    // PDF page). Search both intents against current active evidence, giving the
+    // user's current question first use of the existing evidence budget.
+    const queries = [...new Set([question, retrievalQuestion])];
+    const recalled = (await Promise.all(queries.map(query => recallKnowledgeItems(database, query, embeddingProvider)))).flat();
     const input = boundSynthesisInput({ question, evidence: evidenceFor(recalled), conversation });
     const evidence = input.evidence;
     if (evidence.length === 0) {
@@ -83,14 +87,18 @@ function pdfCoverageNotices(evidence: SynthesisEvidence[]): string[] {
 function evidenceFor(recalled: Awaited<ReturnType<typeof recallKnowledgeItems>>): SynthesisEvidence[] {
     const evidence: SynthesisEvidence[] = [];
     let characterCount = 0;
+    const seenExcerpts = new Set<string>();
     for (const result of recalled) {
-        for (const [excerptIndex, excerpt] of result.excerpts.entries()) {
+        for (const excerpt of result.excerpts) {
+            const key = JSON.stringify([result.id, excerpt.sourceSnapshot?.id, excerpt.origin, excerpt.pageNumber, excerpt.text]);
+            if (seenExcerpts.has(key)) continue;
+            seenExcerpts.add(key);
             if (evidence.length >= maximumEvidenceItems || characterCount >= maximumEvidenceCharacters) return evidence;
             const text = excerpt.text.slice(0, Math.min(maximumExcerptCharacters, maximumEvidenceCharacters - characterCount));
             if (!text) continue;
             characterCount += text.length;
             evidence.push({
-                citationId: `knowledge-item-${result.id}-excerpt-${excerptIndex + 1}`,
+                citationId: `knowledge-item-${result.id}-excerpt-${evidence.length + 1}`,
                 origin: excerpt.origin,
                 knowledgeItemId: result.id,
                 sourceSnapshotId: excerpt.sourceSnapshot?.id ?? null,

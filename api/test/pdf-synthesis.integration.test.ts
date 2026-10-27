@@ -112,3 +112,44 @@ test("large PDF coverage returns a recoverable limit instead of claiming no evid
     expect(await response.json()).toMatchObject({ error: expect.stringContaining("input limit") });
     expect(generations).toBe(0);
 }, 20_000);
+
+test("follow-ups preserve requested evidence when conversational resolution loses the SQL intent", async () => {
+    const storage = new DeterministicOriginalFileStorageFake();
+    const question = "What SQL statement appears in its recovery procedure?";
+    const vector = (index: number) => Array.from({ length: 768 }, (_, i) => i === index ? 1 : 0);
+    const embeddings = new class extends DeterministicEmbeddingProvider {
+        override async embed(text: string) { return vector(text.includes("SELECT pg_switch_wal();") ? 1 : 0); }
+        override async embedQuery(text: string) { return vector(text === question ? 1 : 0); }
+    }();
+    const inputs: SynthesisGenerationInput[] = [];
+    harness = await createIntegrationHarness(
+        database => createApp({ database: database.db, originalFileStorage: storage, embeddingProvider: embeddings,
+            synthesisProvider: {
+                async resolveQuestion() { return "PostgreSQL base backup recovery guide"; },
+                async generateSynthesis(input) {
+                    inputs.push(input);
+                    return { answer: "Obtained recovery evidence.", citationIds: input.evidence.map(e => e.citationId), insufficientEvidence: false };
+                },
+            } }),
+        database => createArticleProcessingWorker({ database: database.db, originalFileStorage: () => storage, embeddingProvider: embeddings,
+            summaryProvider: new DeterministicGenerationProvider(), topicTagProvider: new DeterministicTopicTagGenerationProvider() }),
+    );
+    const form = new FormData();
+    form.set("file", new Blob([await Bun.file(new URL("fixtures/pdf/selectable.pdf", import.meta.url)).arrayBuffer()]), "recovery.pdf");
+    const captured = await (await fetch(`${harness.apiBaseUrl}/captures/file`, { method: "POST", body: form })).json() as { knowledgeItemId: number };
+    await harness.drainWorker();
+    const ask = () => fetch(`${harness!.apiBaseUrl}/synthesis`, {
+        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ question,
+            conversation: [{ question: "How does the captured PostgreSQL guide use base backups and archived WAL?", answer: "Restore a base backup and replay WAL." }],
+        }),
+    });
+    const response = await ask();
+    expect(response.status).toBe(200);
+    const result = await response.json() as any;
+    expect(result.citations).toContainEqual(expect.objectContaining({ pageNumber: 2, pageLabel: "1", excerpt: expect.stringContaining("SELECT pg_switch_wal();") }));
+    expect(inputs[0]?.evidence).toContainEqual(expect.objectContaining({ pageNumber: 1 }));
+    expect(new Set(inputs[0]!.evidence.map(e => e.citationId)).size).toBe(inputs[0]!.evidence.length);
+    expect(new Set(inputs[0]!.evidence.map(e => e.text)).size).toBe(inputs[0]!.evidence.length);
+    await fetch(`${harness.apiBaseUrl}/knowledge-items/${captured.knowledgeItemId}/trash`, { method: "POST" });
+    expect(await (await ask()).json()).toMatchObject({ insufficientEvidence: true, citations: [] });
+}, 20_000);

@@ -35,12 +35,17 @@ test.skipIf(process.env.RUN_LIVE_PDF_CHECK !== "1" || !process.env.TEST_DATABASE
     await providers.preflight();
     const storage = new DeterministicOriginalFileStorageFake();
     const generationInputs: SynthesisGenerationInput[] = [];
+    const resolvedQuestions: Array<{ question: string; resolved: string }> = [];
     const answers: Array<{ name: string; output: Answer }> = [];
-    const records: Record<string, unknown> = { models: providers.modelDigests, generationInputs, groundingAssessments, summarySelections };
+    const records: Record<string, unknown> = { models: providers.modelDigests, generationInputs, resolvedQuestions, groundingAssessments, summarySelections };
     harness = await createIntegrationHarness(
         database => createApp({ database: database.db, originalFileStorage: storage,
             embeddingProvider: providers.embeddingProvider, synthesisProvider: {
-                resolveQuestion: input => providers.synthesisProvider.resolveQuestion(input),
+                resolveQuestion: async input => {
+                    const resolved = await providers.synthesisProvider.resolveQuestion(input);
+                    resolvedQuestions.push({ question: input.question, resolved });
+                    return resolved;
+                },
                 generateSynthesis: input => {
                     generationInputs.push(input);
                     return providers.synthesisProvider.generateSynthesis(input);
