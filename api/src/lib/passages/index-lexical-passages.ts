@@ -12,12 +12,13 @@ export function createLexicalIndexingStageHandler(database: Database) {
         const [attempt] = await database.select({
             knowledgeItemId: processingAttempts.knowledgeItemId,
             sourceSnapshotId: processingAttempts.sourceSnapshotId,
+            kind: processingAttempts.kind,
         }).from(processingAttempts)
             .innerJoin(knowledgeItems, eq(knowledgeItems.id, processingAttempts.knowledgeItemId))
             .where(eq(processingAttempts.id, stage.processingAttemptId));
         if (!attempt) throw new Error("Lexical indexing could not find the Processing Attempt");
         const { knowledgeItemId, sourceSnapshotId } = attempt;
-        if (!sourceSnapshotId) throw new Error("Lexical indexing could not find the Source Snapshot produced by this Processing Attempt");
+        if (!sourceSnapshotId && attempt.kind !== "context-update") throw new Error("Lexical indexing could not find the Source Snapshot produced by this Processing Attempt");
 
         const eligiblePassages = passagesEligibleForLexicalIndex({ knowledgeItemId, sourceSnapshotId });
         await database.execute(sql`
@@ -39,7 +40,7 @@ export function createLexicalIndexingStageHandler(database: Database) {
     };
 }
 
-function passagesEligibleForLexicalIndex(attempt: { sourceSnapshotId: number; knowledgeItemId: number }): SQL {
+function passagesEligibleForLexicalIndex(attempt: { sourceSnapshotId: number | null; knowledgeItemId: number }): SQL {
     return sql`(
         source_snapshot_id = ${attempt.sourceSnapshotId}
         OR capture_context_id IN (

@@ -10,3 +10,7 @@ export const updateTagsSchema = z.object({
     // Generated and pre-existing names may exceed the new-name limit.
     remove: z.array(z.string().normalize("NFKC").trim().min(1)).max(50),
 }).strict().refine(value => value.add.length + value.remove.length > 0);
+
+export const personalNoteSchema = z.object({
+    text: z.string().max(50000).refine(text => text.trim().length > 0 && !/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/.test(text)),
+}).strict();

@@ -116,10 +116,10 @@ describe("URL Capture", () => {
                 normalizedUrl: "https://docs.example.com/guides/capture?topic=queues",
             }),
             captureContexts: [
-                { kind: "selected-source-text", summary: "The first source-authored selection." },
-                { kind: "personal-note", summary: "The first reason this mattered." },
-                { kind: "selected-source-text", summary: "The later source-authored selection." },
-                { kind: "personal-note", summary: "The later reason this mattered." },
+                { id: expect.any(Number), kind: "selected-source-text", text: "The first source-authored selection.", summary: "The first source-authored selection." },
+                { id: expect.any(Number), kind: "personal-note", text: "The first reason this mattered.", summary: "The first reason this mattered." },
+                { id: expect.any(Number), kind: "selected-source-text", text: "The later source-authored selection.", summary: "The later source-authored selection." },
+                { id: expect.any(Number), kind: "personal-note", text: "The later reason this mattered.", summary: "The later reason this mattered." },
             ],
             latestAttempt: expect.objectContaining({ kind: "refresh" }),
         }));
@@ -208,8 +208,8 @@ describe("URL Capture", () => {
                 sourcePreview: null,
                 evidenceCoverage: null,
                 captureContexts: [
-                    { kind: "selected-source-text", summary: "A memorable source-authored detail." },
-                    { kind: "personal-note", summary: "Use this in the retrieval design." },
+                    { id: expect.any(Number), kind: "selected-source-text", text: "A memorable source-authored detail.", summary: "A memorable source-authored detail." },
+                    { id: expect.any(Number), kind: "personal-note", text: "Use this in the retrieval design.", summary: "Use this in the retrieval design." },
                 ],
                 availability: "processing",
                 organizationCondition: "processing",

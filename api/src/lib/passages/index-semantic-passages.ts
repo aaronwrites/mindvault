@@ -13,12 +13,13 @@ export function createSemanticIndexingStageHandler(database: Database, embedding
         const [attempt] = await database.select({
             knowledgeItemId: processingAttempts.knowledgeItemId,
             sourceSnapshotId: processingAttempts.sourceSnapshotId,
+            kind: processingAttempts.kind,
         }).from(processingAttempts)
             .innerJoin(knowledgeItems, eq(knowledgeItems.id, processingAttempts.knowledgeItemId))
             .where(eq(processingAttempts.id, stage.processingAttemptId));
         if (!attempt) throw new Error("Semantic indexing could not find the Processing Attempt");
         const sourceSnapshotId = attempt.sourceSnapshotId;
-        if (!sourceSnapshotId) throw new Error("Semantic indexing could not find the Source Snapshot produced by this Processing Attempt");
+        if (!sourceSnapshotId && attempt.kind !== "context-update") throw new Error("Semantic indexing could not find the Source Snapshot produced by this Processing Attempt");
 
         const eligiblePassages = passagesEligibleForSemanticIndex({ ...attempt, sourceSnapshotId });
         const candidates = await database.select({
@@ -36,17 +37,22 @@ export function createSemanticIndexingStageHandler(database: Database, embedding
             if (hasCompatibleRepresentation(passage, embeddingProvider)) continue;
             const embedding = await embeddingProvider.embed(passage.text);
             validateEmbedding(embedding, embeddingProvider.representation);
-            await database.insert(passageEmbeddings).values({
-                passageId: passage.id,
-                embedding,
-                ...embeddingProvider.representation,
-            }).onConflictDoUpdate({
-                target: passageEmbeddings.passageId,
-                set: {
+            await database.transaction(async database => {
+                // The note may have changed while the provider computed this embedding.
+                const [current] = await database.select({ id: passages.id }).from(passages).where(eq(passages.id, passage.id)).for("key share");
+                if (!current) return;
+                await database.insert(passageEmbeddings).values({
+                    passageId: passage.id,
                     embedding,
                     ...embeddingProvider.representation,
-                    updatedAt: new Date(),
-                },
+                }).onConflictDoUpdate({
+                    target: passageEmbeddings.passageId,
+                    set: {
+                        embedding,
+                        ...embeddingProvider.representation,
+                        updatedAt: new Date(),
+                    },
+                });
             });
         }
 
@@ -89,7 +95,7 @@ function stableJson(value: unknown): string {
     return JSON.stringify(value);
 }
 
-export function passagesEligibleForSemanticIndex(attempt: { sourceSnapshotId: number; knowledgeItemId: number }): SQL {
+export function passagesEligibleForSemanticIndex(attempt: { sourceSnapshotId: number | null; knowledgeItemId: number }): SQL {
     return sql`(
         source_snapshot_id = ${attempt.sourceSnapshotId}
         OR capture_context_id IN (

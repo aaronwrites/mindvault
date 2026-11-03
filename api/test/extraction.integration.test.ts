@@ -410,11 +410,11 @@ describe("Extraction", () => {
         await harness.drainWorker();
 
         const item = await (await fetch(`${harness.apiBaseUrl}/knowledge-items/${secondCapture.knowledgeItemId}`)).json() as {
-            captureContexts: Array<{ kind: string; summary: string }>;
+            captureContexts: Array<{ id: number; kind: string; text: string; summary: string }>;
         };
         expect(item.captureContexts).toEqual([
-            { kind: "personal-note", summary: "Captured from the declared canonical address." },
-            { kind: "selected-source-text", summary: "Captured from the resolved address." },
+            { id: expect.any(Number), kind: "personal-note", text: "Captured from the declared canonical address.", summary: "Captured from the declared canonical address." },
+            { id: expect.any(Number), kind: "selected-source-text", text: "Captured from the resolved address.", summary: "Captured from the resolved address." },
         ]);
         const identity = await harness.database.pool.query<{
             sources: string; knowledge_items: string; attempts: string; original_url: string; final_url: string; canonical_url: string | null;

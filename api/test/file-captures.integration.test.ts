@@ -33,12 +33,12 @@ describe("bounded Original File Capture", () => {
         }));
         expect(second.body.captureId).not.toBe(first.body.captureId);
 
-        const item = await (await fetch(`${harness.apiBaseUrl}/knowledge-items/${first.body.knowledgeItemId}`)).json() as { availability: string; captureContexts: Array<{ kind: string; summary: string }> };
+        const item = await (await fetch(`${harness.apiBaseUrl}/knowledge-items/${first.body.knowledgeItemId}`)).json() as { availability: string; captureContexts: Array<{ id: number; kind: string; text: string; summary: string }> };
         expect(item).toEqual(expect.objectContaining({
             availability: "unsupported",
             captureContexts: [
-                { kind: "personal-note", summary: "First reason" },
-                { kind: "personal-note", summary: "Later reason" },
+                { id: expect.any(Number), kind: "personal-note", text: "First reason", summary: "First reason" },
+                { id: expect.any(Number), kind: "personal-note", text: "Later reason", summary: "Later reason" },
             ],
         }));
         const titleUrl = `${harness.apiBaseUrl}/knowledge-items/${first.body.knowledgeItemId}/title`;

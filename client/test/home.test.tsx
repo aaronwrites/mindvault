@@ -24,6 +24,7 @@ const { default: userEvent } = await import("@testing-library/user-event");
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 
+const maintainPersonalNote = mock<(id: number, change: { action: "add" | "edit" | "remove" | "retry"; noteId?: number; text?: string }) => Promise<KnowledgeItem>>();
 const updateKnowledgeItemTags = mock<(id: number, changes: { add: string[]; remove: string[] }) => Promise<KnowledgeItem>>();
 const updateKnowledgeItemTitle = mock<(id: number, customTitle: string | null) => Promise<KnowledgeItem>>();
 const getKnowledgeItem = mock<(id: number) => Promise<KnowledgeItem>>();
@@ -50,6 +51,7 @@ const permanentlyDeleteKnowledgeItem = mock<PermanentlyDeleteKnowledgeItem>();
 const searchKnowledgeItems = mock<(query: string) => Promise<RecallKnowledgeItem[]>>();
 const askVault = mock<(request: SynthesisRequest) => Promise<SynthesisResult>>();
 mock.module("@/lib/api", () => ({
+  maintainPersonalNote,
   updateKnowledgeItemTags,
   updateKnowledgeItemTitle,
   getKnowledgeItem,
@@ -85,7 +87,7 @@ const processingItem: KnowledgeItem = {
   sourcePreview: null,
   evidenceCoverage: null,
   captureContexts: [
-    { kind: "personal-note", summary: "Read this after the design review." },
+    { id: 1, kind: "personal-note", text: "Read this after the design review.", summary: "Read this after the design review." },
   ],
   availability: "processing",
   organizationCondition: "processing",
@@ -112,6 +114,7 @@ function renderHome() {
 
 beforeEach(() => {
   window.history.replaceState(null, "", "/");
+  maintainPersonalNote.mockReset();
   updateKnowledgeItemTags.mockReset();
   updateKnowledgeItemTitle.mockReset();
   getKnowledgeItem.mockReset();
@@ -501,7 +504,7 @@ test("a file saved through Add appears on the board with retained original acces
     const repeatedCapture: KnowledgeItem = {
       ...processingItem,
       captureContexts: [
-        { kind: "personal-note", summary: "Keep the latest Capture Context." },
+        { id: 2, kind: "personal-note", text: "Keep the latest Capture Context.", summary: "Keep the latest Capture Context." },
       ],
     };
     getKnowledgeItems.mockImplementationOnce(
@@ -1341,4 +1344,93 @@ test("tag corrections update existing Recall cards while preserving matching exc
   expect(await screen.findByText("PostgreSQL")).toBeTruthy();
   expect(screen.queryByText("Databases")).toBeNull();
   expect(screen.getByText("The matching source evidence.")).toBeTruthy();
+});
+
+
+test("details edits full independent notes, retains failed drafts, and keeps selected source text read-only", async () => {
+  const fullText = "A long personal note. " .repeat(30) + "Final meaning.";
+  const note = { id: 71, kind: "personal-note", text: fullText, summary: "A long personal note…" };
+  const second = { id: 72, kind: "personal-note", text: "Another reason.", summary: "Another reason." };
+  const selection = { id: 73, kind: "selected-source-text", text: "The source’s own words.", summary: "The source’s own words." };
+  let item = { ...readyItem, captureContexts: [note, second, selection] };
+  getKnowledgeItems.mockResolvedValue([item]); getKnowledgeItem.mockResolvedValue(item);
+  maintainPersonalNote.mockRejectedValueOnce(new Error("Unavailable"));
+  maintainPersonalNote.mockImplementationOnce(async () => {
+    item = { ...item, captureContexts: [{ ...note, text: "Changed meaning." }, second, selection] };
+    getKnowledgeItems.mockResolvedValue([item]); getKnowledgeItem.mockResolvedValue(item);
+    return item;
+  });
+  const user = userSetup(); renderHome(); await openCard();
+  const dialog = screen.getByRole("dialog");
+  expect(within(dialog).getByText(fullText)).toBeTruthy();
+  expect(within(dialog).getAllByRole("button", { name: "Edit note" })).toHaveLength(2);
+  expect(within(dialog).getByRole("region", { name: "Selected text" }).textContent).toContain(selection.text);
+  await user.click(within(dialog).getAllByRole("button", { name: "Edit note" })[0]!);
+  const input = within(dialog).getByRole("textbox", { name: "Personal note" });
+  expect((input as HTMLTextAreaElement).value).toBe(fullText);
+  await user.clear(input); await user.click(within(dialog).getByRole("button", { name: "Save note" }));
+  expect(within(dialog).getByRole("alert").textContent).toContain("1–50,000");
+  await user.type(input, "Changed meaning."); await user.click(within(dialog).getByRole("button", { name: "Save note" }));
+  await waitFor(() => expect(within(dialog).getByRole("alert").textContent).toContain("try again"));
+  expect((input as HTMLTextAreaElement).value).toBe("Changed meaning.");
+  await user.click(within(dialog).getByRole("button", { name: "Save note" }));
+  await within(dialog).findByText("Note saved.");
+  expect(maintainPersonalNote).toHaveBeenLastCalledWith(item.id, { action: "edit", noteId: 71, text: "Changed meaning." });
+  expect(within(dialog).getByText(second.text)).toBeTruthy();
+  maintainPersonalNote.mockImplementationOnce(async () => {
+    item = { ...item, captureContexts: [second, selection] };
+    getKnowledgeItems.mockResolvedValue([item]); getKnowledgeItem.mockResolvedValue(item); return item;
+  });
+  await user.click(within(dialog).getAllByRole("button", { name: "Remove note" })[0]!);
+  await waitFor(() => expect(within(dialog).queryByText("Changed meaning.")).toBeNull());
+  expect(maintainPersonalNote).toHaveBeenLastCalledWith(item.id, { action: "remove", noteId: 71 });
+  await user.click(within(dialog).getByRole("button", { name: "Add note" }));
+  await user.type(within(dialog).getByRole("textbox", { name: "Personal note" }), "A new reason.");
+  maintainPersonalNote.mockImplementationOnce(async () => {
+    item = { ...item, captureContexts: [...item.captureContexts, { id: 74, kind: "personal-note", text: "A new reason.", summary: "A new reason." }] };
+    getKnowledgeItems.mockResolvedValue([item]); getKnowledgeItem.mockResolvedValue(item); return item;
+  });
+  await user.click(within(dialog).getByRole("button", { name: "Save note" }));
+  await within(dialog).findByText("A new reason.");
+  expect(maintainPersonalNote).toHaveBeenLastCalledWith(item.id, { action: "add", text: "A new reason." });
+});
+
+test("removing a note clears its cached Recall excerpt and preserves the open details", async () => {
+  const note = { id: 81, kind: "personal-note", text: "Obsolete private memory.", summary: "Obsolete private memory." };
+  const item = { ...readyItem, captureContexts: [note] };
+  getKnowledgeItems.mockResolvedValue([item]); getKnowledgeItem.mockResolvedValue(item);
+  searchKnowledgeItems.mockResolvedValue([matchingItem(item, note.text)]);
+  maintainPersonalNote.mockImplementation(async () => {
+    const updated = { ...item, captureContexts: [] };
+    getKnowledgeItems.mockResolvedValue([updated]); getKnowledgeItem.mockResolvedValue(updated);
+    searchKnowledgeItems.mockResolvedValue([]);
+    return updated;
+  });
+  const user = userSetup(); renderHome();
+  await user.type(screen.getByLabelText("Search your saves"), "private{Enter}");
+  await screen.findByText(note.text); await openCard();
+  const dialog = screen.getByRole("dialog");
+  await user.click(within(dialog).getByRole("button", { name: "Remove note" }));
+  await within(dialog).findByText("Note removed.");
+  await user.click(within(dialog).getByRole("button", { name: "Close" }));
+  await waitFor(() => expect(screen.queryByText(note.text)).toBeNull());
+  expect((screen.getByLabelText("Search your saves") as HTMLInputElement).value).toBe("private");
+});
+
+
+test("note search failures are retryable without implying that an unsupported original was read", async () => {
+  const item: KnowledgeItem = { ...readyItem, source: { ...readyItem.source, filename: "reference.txt", kind: "text", mediaType: "text/plain", originalFileActions: { download: "/knowledge-items/1/original-file/download" } }, availability: "ready", organizationCondition: "processing", latestAttempt: { ...readyItem.latestAttempt!, status: "failed" }, noteIndexing: "incomplete", captureContexts: [{ id: 99, kind: "personal-note", text: "My searchable note.", summary: "My searchable note." }] };
+  getKnowledgeItems.mockResolvedValue([item]); getKnowledgeItem.mockResolvedValue(item);
+  maintainPersonalNote.mockImplementation(async () => {
+    const updated = { ...item, noteIndexing: "complete" as const };
+    getKnowledgeItems.mockResolvedValue([updated]); getKnowledgeItem.mockResolvedValue(updated); return updated;
+  });
+  const user = userSetup(); renderHome(); await user.click(await screen.findByRole("button", { name: "View reference.txt" }));
+  const dialog = screen.getByRole("dialog");
+  expect(within(dialog).getByText("Your notes are searchable, but we can’t read the original content yet.")).toBeTruthy();
+  await user.click(within(dialog).getByRole("button", { name: "Retry note search" }));
+  await waitFor(() => expect(within(dialog).queryByRole("button", { name: "Retry note search" })).toBeNull());
+  expect(maintainPersonalNote).toHaveBeenLastCalledWith(item.id, { action: "retry" });
+  expect(within(dialog).getByText("My searchable note.")).toBeTruthy();
+  expect(screen.queryByLabelText("Processing saved content")).toBeNull();
 });

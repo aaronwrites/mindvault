@@ -65,7 +65,8 @@ export type KnowledgeItemView = {
     } | null;
     evidenceCoverage: EvidenceCoverage | null;
     extractionCoverage?: PdfExtractionCoverage | null;
-    captureContexts: Array<{ kind: string; summary: string }>;
+    noteIndexing?: "processing" | "complete" | "incomplete";
+    captureContexts: Array<{ id: number; kind: string; text: string; summary: string }>;
     availability: KnowledgeItemAvailability;
     organizationCondition: "processing" | "complete" | "incomplete";
     recognitionSummary: string | null;
@@ -122,7 +123,7 @@ async function presentKnowledgeItems(
     const currentSnapshotIds = rows.flatMap(row => row.source.currentSnapshotId === null ? [] : [row.source.currentSnapshotId]);
     const [contextRows, attemptRows, summaryRows, topicTagRows, previewRows, previewMediaRows, currentSnapshotRows, extractedPreviewRows, deletionRows] = [
         await database
-            .select({ knowledgeItemId: captures.knowledgeItemId, kind: captureContexts.kind, text: captureContexts.text })
+            .select({ id: captureContexts.id, knowledgeItemId: captures.knowledgeItemId, kind: captureContexts.kind, text: captureContexts.text })
             .from(captureContexts)
             .innerJoin(captures, eq(captureContexts.captureId, captures.id))
             .where(inArray(captures.knowledgeItemId, itemIds))
@@ -154,10 +155,10 @@ async function presentKnowledgeItems(
             .where(and(inArray(originalFileOperations.originalFileSourceId, rows.map(row => row.source.id)), eq(originalFileOperations.kind, "delete"))),
     ];
 
-    const contextsByItem = new Map<number, Array<{ kind: string; summary: string }>>();
+    const contextsByItem = new Map<number, Array<{ id: number; kind: string; text: string; summary: string }>>();
     for (const context of contextRows) {
         const contexts = contextsByItem.get(context.knowledgeItemId) ?? [];
-        contexts.push({ kind: context.kind, summary: summarize(context.text) });
+        contexts.push({ id: context.id, kind: context.kind, text: context.text, summary: summarize(context.text) });
         contextsByItem.set(context.knowledgeItemId, contexts);
     }
     const filenameRows = await database.select({ knowledgeItemId: captures.knowledgeItemId, filename: captures.submittedFilename })
@@ -167,8 +168,21 @@ async function presentKnowledgeItems(
 
     const latestAttempts = new Map<number, typeof processingAttempts.$inferSelect>();
     for (const attempt of attemptRows) {
+        // Context-only indexing must not disguise failed or unsupported Source processing.
+        if (attempt.kind === "context-update") continue;
         if (!latestAttempts.has(attempt.knowledgeItemId)) latestAttempts.set(attempt.knowledgeItemId, attempt);
     }
+    const indexedContextIds = await indexedCaptureContextIds(database, itemIds, embeddingRepresentation);
+    const itemsWithIndexedContext = new Set(contextRows.filter(context => indexedContextIds.has(context.id)).map(context => context.knowledgeItemId));
+    const noteAttempts = new Map<number, typeof processingAttempts.$inferSelect>();
+    for (const attempt of attemptRows) if (attempt.kind === "context-update" && !noteAttempts.has(attempt.knowledgeItemId)) noteAttempts.set(attempt.knowledgeItemId, attempt);
+    const noteStatuses = await latestAttemptStatuses(database, noteAttempts);
+    const noteIndexingByItem = new Map([...noteAttempts.values()].map(attempt => {
+        const status = noteStatuses.get(attempt.id)?.status;
+        const notesIndexed = contextRows.filter(context => context.knowledgeItemId === attempt.knowledgeItemId && context.kind === "personal-note").every(context => indexedContextIds.has(context.id));
+        const condition: NonNullable<KnowledgeItemView["noteIndexing"]> = notesIndexed ? "complete" : status === "failed" ? "incomplete" : "processing";
+        return [attempt.knowledgeItemId, condition];
+    }));
     const summariesByItem = new Map(summaryRows.map(summary => [summary.knowledgeItemId, summary]));
     const previewsBySnapshot = new Map(previewRows.map(preview => [preview.sourceSnapshotId, preview]));
     const mediaBySnapshot = new Map(previewMediaRows.map(media => [media.sourceSnapshotId, media]));
@@ -199,7 +213,7 @@ async function presentKnowledgeItems(
         topicTagsByItem.set(correction.knowledgeItemId, [...tags].sort());
     }
 
-    const availabilityByItem = await availabilityByKnowledgeItem(database, rows, latestAttempts, embeddingRepresentation);
+    const availabilityByItem = await availabilityByKnowledgeItem(database, rows, latestAttempts, embeddingRepresentation, itemsWithIndexedContext);
     const displayedLatestAttemptStatuses = await latestAttemptStatuses(database, latestAttempts);
     const organizationConditions = await organizationConditionsByKnowledgeItem(database, rows, attemptRows, latestAttempts, generatedTopicTagsByItem);
 
@@ -239,6 +253,7 @@ async function presentKnowledgeItems(
                 : coverageBySnapshot.get(source.currentSnapshotId) ?? null,
             ...(pdfEvidence ? { extractionCoverage: pdfExtractionCoverage(pdfEvidence) } : {}),
             captureContexts: contextsByItem.get(knowledgeItem.id) ?? [],
+            ...(noteIndexingByItem.has(knowledgeItem.id) ? { noteIndexing: noteIndexingByItem.get(knowledgeItem.id)! } : {}),
             availability: availabilityByItem.get(knowledgeItem.id) ?? "processing",
             organizationCondition: source.provenanceKind === "original-file" && source.sourceKind !== "pdf" ? "complete" : organizationConditions.get(knowledgeItem.id) ?? "processing",
             recognitionSummary: summariesByItem.get(knowledgeItem.id)?.text ?? null,
@@ -354,11 +369,32 @@ async function latestAttemptStatuses(
     }));
 }
 
+async function indexedCaptureContextIds(database: Database, itemIds: number[], embeddingRepresentation: EmbeddingProvider["representation"]): Promise<Set<number>> {
+    const indexedContexts = await database.execute(sql`
+        SELECT context.id
+        FROM captures c JOIN capture_contexts context ON context.capture_id = c.id
+        WHERE c.knowledge_item_id IN (${sql.join(itemIds.map(id => sql`${id}`), sql`, `)})
+          AND EXISTS (SELECT 1 FROM passages p WHERE p.capture_context_id = context.id)
+          AND NOT EXISTS (
+              SELECT 1 FROM passages p LEFT JOIN passage_embeddings e ON e.passage_id = p.id
+              WHERE p.capture_context_id = context.id AND (
+                  p.lexical_search IS NULL OR e.passage_id IS NULL
+                  OR e.provider IS DISTINCT FROM ${embeddingRepresentation.provider}
+                  OR e.model IS DISTINCT FROM ${embeddingRepresentation.model}
+                  OR e.dimensions IS DISTINCT FROM ${embeddingRepresentation.dimensions}
+                  OR e.metadata IS DISTINCT FROM ${JSON.stringify(embeddingRepresentation.metadata)}::jsonb
+              )
+          )
+    `);
+    return new Set(indexedContexts.rows.map(row => Number(row.id)));
+}
+
 async function availabilityByKnowledgeItem(
     database: Database,
     items: Array<{ knowledgeItem: typeof knowledgeItems.$inferSelect; source: typeof sources.$inferSelect; webpageSource: typeof webpageSources.$inferSelect | null; originalFile: typeof originalFiles.$inferSelect | null }>,
     latestAttempts: Map<number, typeof processingAttempts.$inferSelect>,
     embeddingRepresentation: EmbeddingProvider["representation"],
+    itemsWithIndexedContext: Set<number>,
 ): Promise<Map<number, KnowledgeItemAvailability>> {
     const sourceIds = items.map(item => item.source.id);
     const snapshotRows = await database
@@ -405,7 +441,7 @@ async function availabilityByKnowledgeItem(
         .map(stage => stage.processingAttemptId));
 
     return new Map(items.map(({ knowledgeItem, source }) => {
-        const hasTrustworthyRepresentation = snapshotRows
+        const hasTrustworthyRepresentation = itemsWithIndexedContext.has(knowledgeItem.id) || snapshotRows
             .filter(snapshot => snapshot.sourceId === source.id)
             .some(snapshot => {
                 const passagesForSnapshot = passagesBySnapshot.get(snapshot.id) ?? [];
@@ -413,10 +449,10 @@ async function availabilityByKnowledgeItem(
                     && passagesForSnapshot.every(passage => passage.lexicalSearch !== null && indexedPassageIds.has(passage.id));
             });
         const latestAttempt = latestAttempts.get(knowledgeItem.id);
-        const availability: KnowledgeItemAvailability = source.provenanceKind === "original-file" && (source.sourceKind !== "pdf" || !latestAttempt)
-            ? "unsupported"
-            : hasTrustworthyRepresentation
+        const availability: KnowledgeItemAvailability = hasTrustworthyRepresentation
             ? "ready"
+            : source.provenanceKind === "original-file" && (source.sourceKind !== "pdf" || !latestAttempt)
+            ? "unsupported"
             : latestAttempt?.status === "unsupported"
                 ? "unsupported"
                 : latestAttempt?.status === "failed" || (latestAttempt !== undefined && failedAttemptIds.has(latestAttempt.id))

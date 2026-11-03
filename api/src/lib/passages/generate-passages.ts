@@ -12,33 +12,38 @@ export function createPassageGenerationStageHandler(database: Database) {
         const [attempt] = await database.select({
             knowledgeItemId: processingAttempts.knowledgeItemId,
             sourceSnapshotId: processingAttempts.sourceSnapshotId,
+            kind: processingAttempts.kind,
         }).from(processingAttempts)
             .innerJoin(knowledgeItems, eq(knowledgeItems.id, processingAttempts.knowledgeItemId))
             .innerJoin(sources, eq(sources.id, knowledgeItems.sourceId))
             .where(eq(processingAttempts.id, stage.processingAttemptId));
-        if (!attempt?.sourceSnapshotId) throw new Error("Passage generation could not find the Source Snapshot produced by this Processing Attempt");
+        if (!attempt || (!attempt.sourceSnapshotId && attempt.kind !== "context-update")) throw new Error("Passage generation could not find the Source Snapshot produced by this Processing Attempt");
 
-        const [snapshot] = await database.select({ id: sourceSnapshots.id, evidenceText: sourceSnapshots.evidenceText, pdfEvidence: sourceSnapshots.pdfEvidence })
+        const [snapshot] = !attempt.sourceSnapshotId ? [] : await database.select({ id: sourceSnapshots.id, evidenceText: sourceSnapshots.evidenceText, pdfEvidence: sourceSnapshots.pdfEvidence })
             .from(sourceSnapshots)
             .where(eq(sourceSnapshots.id, attempt.sourceSnapshotId));
-        if (!snapshot) throw new Error("Passage generation could not find the Source Snapshot content");
+        if (attempt.sourceSnapshotId && !snapshot) throw new Error("Passage generation could not find the Source Snapshot content");
 
-        const contexts = await database.select({ id: captureContexts.id, kind: captureContexts.kind, text: captureContexts.text })
-            .from(captureContexts)
-            .innerJoin(captures, eq(captures.id, captureContexts.captureId))
-            .where(eq(captures.knowledgeItemId, attempt.knowledgeItemId))
-            .orderBy(captureContexts.id);
+        await database.transaction(async database => {
+            await database.select({ id: knowledgeItems.id }).from(knowledgeItems)
+                .where(eq(knowledgeItems.id, attempt.knowledgeItemId)).for("no key update");
+            const contexts = await database.select({ id: captureContexts.id, kind: captureContexts.kind, text: captureContexts.text })
+                .from(captureContexts)
+                .innerJoin(captures, eq(captures.id, captureContexts.captureId))
+                .where(eq(captures.knowledgeItemId, attempt.knowledgeItemId))
+                .orderBy(captureContexts.id);
 
-        const generatedPassages = [
-            ...(snapshot.pdfEvidence
-                ? snapshot.pdfEvidence.pages.flatMap(page => createPassageTexts(page.text).map(text => ({ text, pageNumber: page.pageNumber })))
-                    .map((passage, ordinal) => ({ ...passage, ordinal, sourceSnapshotId: snapshot.id, captureContextId: null, origin: "source-snapshot" }))
-                : passagesForSourceSnapshot(snapshot.id, snapshot.evidenceText)),
-            ...contexts.flatMap(context => passagesForCaptureContext(context.id, captureContextKindFor(context.kind), context.text)),
-        ];
-        if (generatedPassages.length === 0) return;
+            const generatedPassages = [
+                ...(!snapshot ? [] : snapshot.pdfEvidence
+                    ? snapshot.pdfEvidence.pages.flatMap(page => createPassageTexts(page.text).map(text => ({ text, pageNumber: page.pageNumber })))
+                        .map((passage, ordinal) => ({ ...passage, ordinal, sourceSnapshotId: snapshot.id, captureContextId: null, origin: "source-snapshot" }))
+                    : passagesForSourceSnapshot(snapshot.id, snapshot.evidenceText)),
+                ...contexts.flatMap(context => passagesForCaptureContext(context.id, captureContextKindFor(context.kind), context.text)),
+            ];
+            if (generatedPassages.length === 0) return;
 
-        await database.insert(passages).values(generatedPassages).onConflictDoNothing();
+            await database.insert(passages).values(generatedPassages).onConflictDoNothing();
+        });
     };
 }
 

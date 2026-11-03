@@ -34,7 +34,8 @@ export type KnowledgeItem = {
   } | null;
   evidenceCoverage: EvidenceCoverage | null;
   extractionCoverage?: { pageCount: number; pages: Array<{ pageNumber: number; outcome: "extracted" | "blank" | "needs-ocr" | "failed" | "unreadable" | "unprocessed"; reason: string | null }> } | null;
-  captureContexts: Array<{ kind: string; summary: string }>;
+  noteIndexing?: "processing" | "complete" | "incomplete";
+  captureContexts: Array<{ id: number; kind: string; text: string; summary: string }>;
   availability: KnowledgeItemAvailability;
   organizationCondition: "processing" | "complete" | "incomplete";
   recognitionSummary: string | null;

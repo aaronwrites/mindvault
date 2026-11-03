@@ -1,3 +1,4 @@
+import { ItemNotesEditor } from "@/components/item-notes-editor";
 import { ItemTitleEditor } from "@/components/item-title-editor";
 import { useState } from "react";
 import { PdfExtractionCoverage } from "@/components/pdf-extraction-coverage";
@@ -52,7 +53,7 @@ export function KnowledgeItemDetails({ knowledgeItem: item, ...actions }: { know
       {item.extractionCoverage && <p className="text-sm text-muted-foreground">This preview uses available PDF text. It may omit unread pages and does not interpret diagrams or charts. See Details for coverage.</p>}
     </section>
     <ItemTagsEditor item={item} />
-    {item.captureContexts.length > 0 && <section aria-label="Saved notes and selections" className="space-y-2">{item.captureContexts.map((context, index) => <p key={index} className="text-sm"><span className="font-medium">{context.kind === "personal-note" ? "Your note" : "Selected text"}: </span>{context.summary}</p>)}</section>}
+    <ItemNotesEditor item={item} />
     <details open={expanded} onToggle={event => setExpanded(event.currentTarget.open)} className="space-y-3 border-t pt-4">
       <summary className="cursor-pointer font-medium">Details</summary>
       <p className="text-sm text-muted-foreground">Saved {new Date(item.createdAt).toLocaleString()}</p>
@@ -60,6 +61,7 @@ export function KnowledgeItemDetails({ knowledgeItem: item, ...actions }: { know
       <PdfExtractionCoverage coverage={item.extractionCoverage} />
       {processing && <p role="status" className="text-sm">{item.availability === "ready" ? "Updating in the background. Your saved content is still searchable." : "Your save is safe. We’re preparing it for search."}</p>}
       {item.availability === "needs-attention" && <p className="text-sm">{recovery}</p>}
+      {item.availability === "ready" && ((file && source.kind !== "pdf") || item.latestAttempt?.status === "unsupported") && <p className="text-sm">Your notes are searchable, but we can’t read the original content yet.</p>}
       {item.availability === "unsupported" && <p className="text-sm">{file && source.kind === "pdf" ? "This saved PDF has not been processed yet. Choose Process PDF to make its text searchable." : source.kind === "pdf" ? "This PDF link is safely saved. Upload a copy of the PDF to make its text searchable." : "This is safely saved, but we can’t read this type of content yet."}</p>}
       {item.availability === "ready" && failed && <p className="text-sm">The latest update didn’t finish. Previously saved content is still searchable. You can try again.</p>}
       {item.organizationCondition === "incomplete" && <p className="text-sm">Automatic tagging didn’t finish. Available content is still searchable.</p>}

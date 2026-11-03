@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, ne } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as schema from "../../db/schema";
 import { extractedSources, knowledgeItems, processingAttempts, processingStages, sources } from "../../db/schema";
@@ -9,7 +9,7 @@ type Database = NodePgDatabase<typeof schema>;
 export async function createProcessingAttempt(
     database: Database,
     knowledgeItemId: number,
-    kind: "initial-capture" | "refresh" | "manual-retry",
+    kind: "initial-capture" | "refresh" | "manual-retry" | "context-update",
     completedStageKinds: ReadonlySet<ProcessingStageKind> = new Set(),
     sourceSnapshotId?: number,
 ): Promise<number> {
@@ -31,7 +31,7 @@ export async function createProcessingAttempt(
     return attempt.id;
 }
 
-export async function createManualRetryProcessingAttempt(database: Database, knowledgeItemId: number): Promise<number | "not-found" | "not-actionable"> {
+export async function createManualRetryProcessingAttempt(database: Database, knowledgeItemId: number, contextOnly = false): Promise<number | "not-found" | "not-actionable"> {
     return database.transaction(async transaction => {
         const [knowledgeItem] = await transaction.select({ id: knowledgeItems.id })
             .from(knowledgeItems)
@@ -40,7 +40,7 @@ export async function createManualRetryProcessingAttempt(database: Database, kno
 
         const [failedAttempt] = await transaction.select()
             .from(processingAttempts)
-            .where(eq(processingAttempts.knowledgeItemId, knowledgeItem.id))
+            .where(and(eq(processingAttempts.knowledgeItemId, knowledgeItem.id), contextOnly ? eq(processingAttempts.kind, "context-update") : ne(processingAttempts.kind, "context-update")))
             .orderBy(desc(processingAttempts.createdAt), desc(processingAttempts.id))
             .limit(1);
         if (!failedAttempt || failedAttempt.status !== "failed") return "not-actionable";
@@ -51,7 +51,7 @@ export async function createManualRetryProcessingAttempt(database: Database, kno
         const completedStageKinds = new Set(previousStages
             .filter(stage => stage.status === "completed")
             .map(stage => stage.kind as ProcessingStageKind));
-        const retryAttemptId = await createProcessingAttempt(transaction, knowledgeItem.id, "manual-retry", completedStageKinds, failedAttempt.sourceSnapshotId ?? undefined);
+        const retryAttemptId = await createProcessingAttempt(transaction, knowledgeItem.id, failedAttempt.kind === "context-update" ? "context-update" : "manual-retry", completedStageKinds, failedAttempt.sourceSnapshotId ?? undefined);
 
         if (completedStageKinds.has("extraction") && !completedStageKinds.has("snapshot-persistence")) {
             const [extractedSource] = await transaction.select()

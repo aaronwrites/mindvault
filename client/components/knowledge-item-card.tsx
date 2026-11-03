@@ -12,11 +12,12 @@ export function knowledgeItemTitle(item: KnowledgeItem) {
 }
 
 export function isItemProcessing(item: KnowledgeItem) {
-  return item.availability === "processing" || (item.availability === "ready" && item.organizationCondition === "processing") || item.latestAttempt?.status === "pending" || item.latestAttempt?.status === "running";
+  return item.availability === "processing" || item.noteIndexing === "processing" || item.latestAttempt?.status === "pending" || item.latestAttempt?.status === "running";
 }
 
 export function itemHasLimitations(item: KnowledgeItem) {
   return item.availability === "needs-attention" || item.availability === "unsupported" ||
+    item.noteIndexing === "incomplete" || (item.source.filename !== undefined && item.source.kind !== "pdf") || item.latestAttempt?.status === "unsupported" ||
     item.organizationCondition === "incomplete" || item.latestAttempt?.status === "failed" ||
     Boolean(item.latestAttempt?.warnings?.length) || item.evidenceCoverage === "metadata-only" ||
     // PDF text extraction never establishes understanding of visual relationships.

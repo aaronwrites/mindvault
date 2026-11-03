@@ -213,3 +213,15 @@ export async function updateKnowledgeItemTags(id: number, changes: { add: string
   if (!response.ok) throw new Error("Couldn’t save the tags. Please try again.");
   return response.json();
 }
+
+export type PersonalNoteChange = { action: "add"; text: string } | { action: "edit"; noteId: number; text: string } | { action: "remove"; noteId: number } | { action: "retry" };
+
+export async function maintainPersonalNote(id: number, change: PersonalNoteChange): Promise<KnowledgeItem> {
+  const response = await fetch(`${API_URL}/knowledge-items/${id}/notes${change.action === "add" ? "" : change.action === "retry" ? "/retry" : `/${change.noteId}`}`, {
+    method: change.action === "add" || change.action === "retry" ? "POST" : change.action === "edit" ? "PATCH" : "DELETE",
+    ...(change.action === "remove" || change.action === "retry" ? {} : { headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: change.text }) }),
+  });
+  if (!response.ok) throw new Error("Couldn’t save the note change. Please try again.");
+  const result = await response.json();
+  return change.action === "retry" ? result.knowledgeItem : result;
+}

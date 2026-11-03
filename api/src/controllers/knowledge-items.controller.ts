@@ -1,13 +1,13 @@
 import { findOrCreateTopicTag } from "../lib/topic-tags/generate-topic-tags";
 import { displayTopicTagName, normalizeTopicTagAlias } from "../lib/topic-tags/normalize-topic-tag";
 import { and, eq } from "drizzle-orm";
-import { updateTagsSchema, updateTitleSchema } from "../schemas/knowledge-item";
+import { personalNoteSchema, updateTagsSchema, updateTitleSchema } from "../schemas/knowledge-item";
 import type { Request, Response } from "express";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as schema from "../db/schema";
 import { getKnowledgeItem, listKnowledgeItems } from "../lib/knowledge-items/read-knowledge-items";
 import { restoreKnowledgeItem, trashKnowledgeItem } from "../lib/knowledge-items/trash-knowledge-item";
-import { createManualRetryProcessingAttempt, createRefreshProcessingAttempt } from "../lib/processing/create-processing-attempt";
+import { createProcessingAttempt, createManualRetryProcessingAttempt, createRefreshProcessingAttempt } from "../lib/processing/create-processing-attempt";
 import type { EmbeddingProvider } from "../lib/ai/providers";
 import { createOriginalFileAccess } from "../lib/original-files/create-original-file-access";
 import type { OriginalFileStorage } from "../lib/original-files/original-file-storage";
@@ -87,7 +87,7 @@ export function refreshKnowledgeItemController(database: NodePgDatabase<typeof s
     };
 }
 
-export function retryKnowledgeItemController(database: NodePgDatabase<typeof schema>, embeddingRepresentation: EmbeddingProvider["representation"]) {
+export function retryKnowledgeItemController(database: NodePgDatabase<typeof schema>, embeddingRepresentation: EmbeddingProvider["representation"], contextOnly = false) {
     return async (req: Request, res: Response) => {
         const id = Number(req.params.id);
         if (!Number.isSafeInteger(id) || id < 1) return res.status(404).json({ error: "Knowledge Item not found" });
@@ -96,7 +96,7 @@ export function retryKnowledgeItemController(database: NodePgDatabase<typeof sch
         if (!existingItem) return res.status(404).json({ error: "Knowledge Item not found" });
 
         try {
-            const processingAttemptId = await createManualRetryProcessingAttempt(database, id);
+            const processingAttemptId = await createManualRetryProcessingAttempt(database, id, contextOnly);
             if (processingAttemptId === "not-found") return res.status(404).json({ error: "Knowledge Item not found" });
             if (processingAttemptId === "not-actionable") {
                 return res.status(409).json({ error: "This Knowledge Item has no failed retrieval work to retry" });
@@ -166,6 +166,42 @@ export function updateKnowledgeItemTagsController(database: NodePgDatabase<typeo
             return true;
         });
         if (!found) return res.status(404).json({ error: "Knowledge Item not found" });
+        return res.json(await getKnowledgeItem(database, id, embeddingRepresentation));
+    };
+}
+
+export function maintainPersonalNoteController(database: NodePgDatabase<typeof schema>, embeddingRepresentation: EmbeddingProvider["representation"], action: "add" | "edit" | "remove") {
+    return async (req: Request, res: Response) => {
+        const id = Number(req.params.id);
+        const noteId = Number(req.params.noteId);
+        if (!Number.isSafeInteger(id) || id < 1 || (action !== "add" && (!Number.isSafeInteger(noteId) || noteId < 1))) return res.status(404).json({ error: "Note not found" });
+        const parsed = personalNoteSchema.safeParse(req.body);
+        if (action !== "remove" && !parsed.success) return res.status(400).json({ error: "Use a note of 1–50,000 characters without control characters." });
+        const text = parsed.success ? parsed.data.text : "";
+        const found = await database.transaction(async transaction => {
+            // Passage generation takes the same lock before reading mutable Capture Context.
+            const [item] = await transaction.select().from(schema.knowledgeItems)
+                .where(and(eq(schema.knowledgeItems.id, id), eq(schema.knowledgeItems.lifecycleState, "active"))).for("no key update");
+            if (!item) return false;
+            if (action === "add") {
+                const [capture] = await transaction.select({ id: schema.captures.id }).from(schema.captures).where(eq(schema.captures.knowledgeItemId, id)).limit(1);
+                if (!capture) return false;
+                await transaction.insert(schema.captureContexts).values({ captureId: capture.id, kind: "personal-note", text });
+            } else {
+                const [note] = await transaction.select({ id: schema.captureContexts.id }).from(schema.captureContexts)
+                    .innerJoin(schema.captures, eq(schema.captures.id, schema.captureContexts.captureId))
+                    .where(and(eq(schema.captureContexts.id, noteId), eq(schema.captureContexts.kind, "personal-note"), eq(schema.captures.knowledgeItemId, id)));
+                if (!note) return false;
+                // Delete derived evidence in the same commit as the edit, including embeddings via cascade.
+                await transaction.delete(schema.passages).where(eq(schema.passages.captureContextId, noteId));
+                if (action === "remove") await transaction.delete(schema.captureContexts).where(eq(schema.captureContexts.id, noteId));
+                else await transaction.update(schema.captureContexts).set({ text }).where(eq(schema.captureContexts.id, noteId));
+            }
+            // Personal Notes use the established Passage/indexing queue independently of Source extraction.
+            await createProcessingAttempt(transaction, id, "context-update", new Set(["extraction", "snapshot-persistence", "snapshot-activation", "recognition-summary-generation", "topic-tag-generation"]));
+            return true;
+        });
+        if (!found) return res.status(404).json({ error: "Note not found" });
         return res.json(await getKnowledgeItem(database, id, embeddingRepresentation));
     };
 }
