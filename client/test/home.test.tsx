@@ -151,15 +151,15 @@ describe("collection-wide Synthesis", () => {
     renderHome();
 
     await user.click(screen.getByRole("button", { name: "Ask" }));
-    expect(await screen.findByText("Questions, matching evidence, and current-session context are processed locally by Ollama. Original Files are not sent to the models.")).toBeTruthy();
-    await user.type(await screen.findByLabelText("Ask a question about your captured knowledge"), "How do read models stay current?");
+    expect(await screen.findByText("Questions, matching evidence, and current-session context are processed locally by Ollama. Original files are not sent to the models.")).toBeTruthy();
+    await user.type(await screen.findByLabelText("Ask a question about your saves"), "How do read models stay current?");
     await user.click(screen.getByRole("button", { name: "Ask your vault" }));
     await waitFor(() => expect(askVault.mock.calls[0]?.[0]).toEqual({ question: "How do read models stay current?", conversation: [] }));
     expect(await screen.findByText(initialAnswer.answer)).toBeTruthy();
-    expect(screen.getByText("Based on source-provided metadata only.")).toBeTruthy();
+    expect(screen.getByText("Based only on the website’s description, not the full content.")).toBeTruthy();
     expect(screen.getByRole("button", { name: "View PostgreSQL replication overview" }).textContent).toContain("PostgreSQL replication overview");
 
-    const question = screen.getByLabelText("Ask a question about your captured knowledge");
+    const question = screen.getByLabelText("Ask a question about your saves");
     await user.type(question, "What does it apply?");
     await user.click(screen.getByRole("button", { name: "Ask your vault" }));
     await waitFor(() => expect(askVault.mock.calls[1]?.[0]).toEqual({
@@ -215,7 +215,7 @@ test("Synthesis shows distinct PDF page citations and keeps evidence visible aft
   const user = userEvent.setup({ document: dom.window.document });
   renderHome();
   await user.click(screen.getByRole("button", { name: "Ask" }));
-  const question = await screen.findByLabelText("Ask a question about your captured knowledge");
+  const question = await screen.findByLabelText("Ask a question about your saves");
   await user.type(question, "How do I recover?");
   await user.click(screen.getByRole("button", { name: "Ask your vault" }));
   expect(await screen.findByText("Replay archived WAL.")).toBeTruthy();
@@ -274,7 +274,7 @@ test("provides accessible loading, empty, and board error states", async () => {
   unmount();
   getKnowledgeItems.mockRejectedValueOnce(new Error("MindVault is unavailable."));
   renderHome();
-  expect((await screen.findByRole("alert")).textContent).toContain("MindVault is unavailable.");
+  expect((await screen.findByRole("alert")).textContent).toContain("Couldn’t load your saves. Please try again.");
 });
 
 test("loads details on demand and offers recovery from a loading failure", async () => {
@@ -568,7 +568,7 @@ test("a file saved through Add appears on the board with retained original acces
     await user.click(screen.getByRole("button", { name: "Search" }));
 
     expect(await screen.findByText(/The service reported the error message EADDRINUSE/)).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Open original Source" }).getAttribute("href")).toBe(processingItem.source.submittedUrl);
+    expect(screen.getByRole("button", { name: "Open original" }).getAttribute("href")).toBe(processingItem.source.submittedUrl);
   });
 
   test("presents the shared Source Preview while keeping Recall evidence prominent", async () => {
@@ -618,13 +618,13 @@ test("a file saved through Add appears on the board with retained original acces
     expect(await screen.findByRole("heading", { name: "Trustworthy preview facts" })).toBeTruthy();
     expect(screen.getByRole("img", { name: "A durable knowledge card" }).getAttribute("src")).toBe("/source-preview-media/5");
     expect(screen.getByText("MindVault Journal")).toBeTruthy();
-    expect(screen.getByText("Source-provided details")).toBeTruthy();
+    expect(screen.getByText("Original details")).toBeTruthy();
     expect(screen.getByText("A source-provided description for recognizing this article.")).toBeTruthy();
     expect(screen.getByText(/Ada Lovelace/)).toBeTruthy();
     expect(screen.getByText("Grounded Source text explains why this Knowledge Item matched.")).toBeTruthy();
-    expect(screen.getByLabelText("Generated Recognition Summary").textContent).toContain("Generated context for recognition.");
-    expect(screen.getByRole("list", { name: "Generated Topic Tags" }).textContent).toContain("durable capture");
-    expect(screen.getByRole("button", { name: "Open original Source" }).getAttribute("href")).toBe("https://archive.example.com/original-article");
+    expect(screen.getByLabelText("Generated preview").textContent).toContain("Generated context for recognition.");
+    expect(screen.getByRole("list", { name: "Tags" }).textContent).toContain("durable capture");
+    expect(screen.getByRole("button", { name: "Open original" }).getAttribute("href")).toBe("https://archive.example.com/original-article");
   });
 
   test("keeps Recall understandable when no preview image was retained", async () => {
@@ -869,7 +869,7 @@ test("Recall excerpt and provenance clicks open details while PDF links keep the
   expect(onOpen).not.toHaveBeenCalled();
   await user.click(view.getByText("Matching evidence to revisit."));
   expect(onOpen).toHaveBeenLastCalledWith(7);
-  await user.click(view.getByText("Source Snapshot excerpt"));
+  await user.click(view.getByText("Saved text"));
   expect(onOpen).toHaveBeenCalledTimes(2);
   await user.click(view.getByRole("button", { name: "View example.com" }));
   expect(onOpen).toHaveBeenCalledTimes(3);
@@ -1018,7 +1018,7 @@ test("removal clears earlier answers and ignores in-flight answers based on remo
   askVault.mockResolvedValueOnce(answer).mockImplementationOnce(() => new Promise(resolve => { finishAnswer = resolve; })).mockResolvedValueOnce({ ...answer, answer: "Fresh answer." });
   const user = userSetup(); renderHome();
   await user.click(screen.getByRole("button", { name: "Ask" }));
-  const input = screen.getByLabelText("Ask a question about your captured knowledge");
+  const input = screen.getByLabelText("Ask a question about your saves");
   await user.type(input, "first question"); await user.click(screen.getByRole("button", { name: "Ask your vault" }));
   await screen.findByText(answer.answer);
   await user.type(input, "follow up"); await user.click(screen.getByRole("button", { name: "Ask your vault" }));
@@ -1053,7 +1053,7 @@ test("Ask opens only on request, closes by keyboard or touch, and preserves sear
   searchKnowledgeItems.mockResolvedValue([]);
   const user = userSetup(); renderHome();
   expect(screen.queryByRole("dialog")).toBeNull();
-  expect(Boolean(screen.queryByLabelText("Ask a question about your captured knowledge"))).toBe(false);
+  expect(Boolean(screen.queryByLabelText("Ask a question about your saves"))).toBe(false);
   await user.type(screen.getByLabelText("Search your saves"), "replication{Enter}");
   await screen.findByText(/No matches here/);
   expect(askVault).not.toHaveBeenCalled();
@@ -1066,7 +1066,7 @@ test("Ask opens only on request, closes by keyboard or touch, and preserves sear
   await waitFor(() => expect(document.activeElement).toBe(ask));
   expect((screen.getByLabelText("Search your saves") as HTMLInputElement).value).toBe("replication");
   await user.click(ask);
-  expect((await screen.findByRole("textbox", { name: "Ask a question about your captured knowledge" }) as HTMLTextAreaElement).value).toBe("Unfinished question");
+  expect((await screen.findByRole("textbox", { name: "Ask a question about your saves" }) as HTMLTextAreaElement).value).toBe("Unfinished question");
   await user.click(screen.getByRole("button", { name: "Close" }));
   await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   expect(askVault).not.toHaveBeenCalled();
@@ -1081,7 +1081,7 @@ test("Ask keeps pending requests across closing, offers retry after failure, and
   await user.click(screen.getByRole("button", { name: "Ask" }));
   await user.type(screen.getByRole("textbox"), "How does this work?");
   await user.click(screen.getByRole("button", { name: "Ask your vault" }));
-  expect(screen.getByRole("status").textContent).toContain("Finding relevant captured evidence");
+  expect(screen.getByRole("status").textContent).toContain("Finding relevant saved information");
   expect((screen.getByRole("textbox") as HTMLTextAreaElement).disabled).toBe(true);
   await user.keyboard("{Escape}");
   await waitFor(() => expect(Boolean(screen.queryByRole("dialog"))).toBe(false));
@@ -1141,4 +1141,63 @@ test("a citation outside filtered board results opens details and returns to the
   await waitFor(() => expect(Boolean(screen.queryByRole("dialog"))).toBe(false));
   expect((screen.getByLabelText("Search your saves") as HTMLInputElement).value).toBe("unrelated");
   expect(screen.getByText(/No matches here/)).toBeTruthy();
+});
+
+test("board loading failures use safe everyday copy and recover without reloading the page", async () => {
+  getKnowledgeItems.mockRejectedValueOnce(new Error("SQL connection diagnostic"));
+  const user = userSetup(); renderHome();
+  expect(await screen.findByText("Couldn’t load your saves. Please try again.")).toBeTruthy();
+  expect(screen.queryByText(/SQL connection diagnostic/)).toBeNull();
+  getKnowledgeItems.mockResolvedValue([readyItem]);
+  await user.click(screen.getByRole("button", { name: "Try loading saves again" }));
+  expect(await screen.findByRole("button", { name: "View example.com" })).toBeTruthy();
+});
+
+test("a failed refresh stays inside its own details and never leaks onto another save or the board", async () => {
+  getKnowledgeItems.mockResolvedValue([readyItem, fileItem]);
+  getKnowledgeItem.mockImplementation(async id => id === 9 ? fileItem : readyItem);
+  refreshKnowledgeItem.mockRejectedValueOnce(new Error("Internal processing diagnostic"));
+  const user = userSetup(); renderHome(); await openCard();
+  await user.click(screen.getByRole("button", { name: "Refresh" }));
+  expect(await within(screen.getByRole("dialog")).findByText("Couldn’t update this save. Please try again.")).toBeTruthy();
+  expect(screen.queryByText(/Internal processing diagnostic/)).toBeNull();
+  await user.keyboard("{Escape}");
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  expect(screen.queryByText("Couldn’t update this save. Please try again.")).toBeNull();
+  await openCard("proposal.pdf");
+  expect(screen.queryByText("Couldn’t update this save. Please try again.")).toBeNull();
+});
+
+test("partial batch saves remain accessible across unavailable search and Ask, and retry submits only the failed file", async () => {
+  const second = { ...fileItem, id: 10, source: { ...fileItem.source, id: 10, filename: "second.pdf" } };
+  const response = (knowledgeItem: KnowledgeItem): CaptureResponse => ({ captureId: knowledgeItem.id, sourceId: knowledgeItem.source.id,
+    knowledgeItemId: knowledgeItem.id, processingAttemptId: null, availability: "ready", organizationCondition: "complete", knowledgeItem });
+  getKnowledgeItems.mockResolvedValue([]);
+  createOriginalFileCapture.mockResolvedValueOnce(response(fileItem)).mockRejectedValueOnce(new Error("Storage diagnostic")).mockResolvedValueOnce(response(second));
+  searchKnowledgeItems.mockRejectedValue(new Error("Search diagnostic"));
+  askVault.mockRejectedValue(new Error("Model diagnostic"));
+  getKnowledgeItem.mockResolvedValue(fileItem);
+  const user = userSetup(); renderHome();
+  await screen.findByText(/Your vault is empty/);
+  const firstFile = new File(["first"], "proposal.pdf", { type: "application/pdf" });
+  const secondFile = new File(["second"], "second.pdf", { type: "application/pdf" });
+  fireEvent.drop(document.body, { dataTransfer: { files: [firstFile, secondFile], types: ["Files"] } });
+  expect(await screen.findByRole("button", { name: "View proposal.pdf" })).toBeTruthy();
+  const retry = await screen.findByRole("button", { name: "Retry second.pdf" });
+  await user.type(screen.getByLabelText("Search your saves"), "recovery{Enter}");
+  await screen.findByText("Couldn’t search your saves. Please try again.");
+  await user.click(screen.getByRole("button", { name: /^Ask$/ }));
+  await user.type(screen.getByRole("textbox"), "How do I recover?");
+  await user.click(screen.getByRole("button", { name: "Ask your vault" }));
+  await screen.findByText("Answer generation is temporarily unavailable. Please try again.");
+  await user.keyboard("{Escape}");
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  await user.click(screen.getByRole("button", { name: "Clear search" }));
+  await user.click(retry);
+  expect(await screen.findByRole("button", { name: "View second.pdf" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "View proposal.pdf" })).toBeTruthy();
+  expect(createOriginalFileCapture.mock.calls.map(call => call[0].file)).toEqual([firstFile, secondFile, secondFile]);
+  await openCard("proposal.pdf");
+  expect(within(screen.getByRole("dialog")).getByRole("button", { name: "Open original" }).getAttribute("href")).toContain("/knowledge-items/9/original-file/open");
+  expect(screen.queryByText(/Storage diagnostic|Search diagnostic|Model diagnostic/)).toBeNull();
 });

@@ -63,16 +63,20 @@ describe("permanent Knowledge Item deletion", () => {
     });
 
     test.skipIf(!process.env.TEST_DATABASE_URL)("keeps failed cleanup visible and allows manual recovery", async () => {
+        const clock = new ManualClock(new Date());
         const storage = new DeterministicOriginalFileStorageFake();
         harness = await createIntegrationHarness(
             database => createApp({ database: database.db, embeddingProvider: new DeterministicEmbeddingProvider(), originalFileStorage: storage }),
-            database => createOriginalFileOperationsWorker({ database: database.db, storage, maxAttempts: 1 }),
+            database => createOriginalFileOperationsWorker({ database: database.db, storage, maxAttempts: 1, clock }),
         );
         const capture = await captureFile("proposal.pdf", "%PDF- retained bytes");
         const knowledgeItemId = capture.knowledgeItemId!;
         await fetch(`${harness.apiBaseUrl}/knowledge-items/${knowledgeItemId}/trash`, { method: "POST" });
         await fetch(`${harness.apiBaseUrl}/knowledge-items/${knowledgeItemId}/permanent-delete`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ confirmation: "permanently-delete" }) });
         storage.setOutage(true);
+        // Database defaults use the PostgreSQL host clock. Make newly queued work
+        // eligible explicitly even when that host runs slightly ahead of the test runner.
+        clock.advance(60_000);
 
         await harness.drainWorker();
 

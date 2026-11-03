@@ -20,7 +20,7 @@ export function SynthesisForm({ onAsk, isAsking, question, onQuestionChange }: {
   return (
     <form onSubmit={submit} className="space-y-3">
       <Textarea
-        aria-label="Ask a question about your captured knowledge"
+        aria-label="Ask a question about your saves"
         maxLength={2_000}
         disabled={isAsking}
         value={question}

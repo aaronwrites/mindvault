@@ -30,6 +30,7 @@
   },
   "include": [
     "src",
+    "scripts",
     "test",
     "drizzle.config.ts"
   ]

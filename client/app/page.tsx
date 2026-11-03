@@ -62,7 +62,8 @@ export default function Home() {
   const knowledgeItems = knowledgeItemsQuery.data ?? [];
   function actionErrorForSelectedItem() {
     return [refreshMutation, retryMutation]
-      .find(mutation => mutation.variables === itemId && mutation.error)?.error?.message;
+      .find(mutation => mutation.variables === itemId && mutation.error)
+      ? "Couldn’t update this save. Please try again." : undefined;
   }
   const trashQuery = useQuery({ queryKey: knowledgeItemKeys.trash, queryFn: getTrashedKnowledgeItems, enabled: showTrash, refetchInterval: query => query.state.data?.some(item => item.lifecycleState === "pending-permanent-deletion") ? 2_000 : false });
   const trashedKnowledgeItems = trashQuery.data ?? [];
@@ -70,7 +71,7 @@ export default function Home() {
     ? permanentDeletionTarget.source.filename !== undefined
       ? originalFileTitle(permanentDeletionTarget.source.filename, permanentDeletionTarget.source.kind)
       : sourcePreviewTitle(permanentDeletionTarget.sourcePreview, permanentDeletionTarget.source.submittedUrl)
-    : "this Knowledge Item";
+    : "this save";
   async function updateKnowledgeItemAfterProcessingAttempt({ knowledgeItem }: { knowledgeItem: KnowledgeItem }) {
     queryClient.setQueryData(knowledgeItemKeys.detail(knowledgeItem.id), knowledgeItem);
     queryClient.setQueryData<KnowledgeItem[]>(
@@ -199,7 +200,7 @@ export default function Home() {
           Save it now. Find it when it matters.
         </h1>
         <p className="max-w-2xl text-lg leading-8 text-muted-foreground">
-          Capture useful knowledge without interrupting your flow.
+          Save useful information without interrupting your flow.
         </p>
       </header>
 
@@ -262,19 +263,9 @@ export default function Home() {
         {(boardQuery.error && (showTrash || !searchQuery)) && (
           <Alert variant="destructive">
             <AlertDescription>
-              {showTrash ? "Couldn’t load Trash. Please try again." : boardQuery.error?.message}
+              {showTrash ? "Couldn’t load Trash. Please try again." : "Couldn’t load your saves. Please try again."}
             </AlertDescription>
-            {showTrash && <Button variant="outline" onClick={() => void trashQuery.refetch()}>Try loading Trash again</Button>}
-          </Alert>
-        )}
-        {refreshMutation.error && (
-          <Alert variant="destructive">
-            <AlertDescription>{refreshMutation.error.message}</AlertDescription>
-          </Alert>
-        )}
-        {retryMutation.error && (
-          <Alert variant="destructive">
-            <AlertDescription>{retryMutation.error.message}</AlertDescription>
+            <Button variant="outline" onClick={() => void boardQuery.refetch()}>{showTrash ? "Try loading Trash again" : "Try loading saves again"}</Button>
           </Alert>
         )}
         {!showTrash && searchQuery && recallQuery.error && <Alert variant="destructive"><AlertDescription>Couldn’t search your saves. Please try again.</AlertDescription><Button variant="outline" onClick={() => void recallQuery.refetch()}>Try search again</Button></Alert>}
@@ -305,7 +296,7 @@ export default function Home() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete permanently?</AlertDialogTitle>
-            <AlertDialogDescription>This permanently removes “{permanentDeletionLabel}” and its retained provenance. This cannot be undone.</AlertDialogDescription>
+            <AlertDialogDescription>This permanently removes “{permanentDeletionLabel}” and its original content. This cannot be undone.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>

@@ -10,7 +10,7 @@ import type { RecallKnowledgeItem } from "@/lib/types";
 import { SourcePreviewFacts, SourcePreviewMedia, originalFileTitle, sourcePreviewTitle } from "@/components/source-preview";
 
 const originLabels = {
-  "source-snapshot": "Source Snapshot excerpt",
+  "source-snapshot": "Saved text",
   "selected-source-text": "Selected text",
   "personal-note": "Your note",
 } as const;
@@ -35,7 +35,7 @@ export function RecallResultCard({ result, onOpen, onTrash }: { result: RecallKn
           <Button
             variant="ghost"
             size="icon"
-            aria-label="Open original Source"
+            aria-label="Open original"
             render={<a href={result.source.originalFileActions?.open ? `${API_URL}${result.source.originalFileActions.open}` : result.excerpts[0]?.sourceSnapshot?.originalUrl ?? result.source.submittedUrl} target="_blank" rel="noreferrer" />}
             nativeButton={false}
           >
@@ -45,28 +45,28 @@ export function RecallResultCard({ result, onOpen, onTrash }: { result: RecallKn
       </CardHeader>
       <CardContent className="space-y-4">
         <section aria-label="Source preview" className="space-y-2">
-          <p className="text-xs font-medium text-muted-foreground">Source-provided details</p>
+          <p className="text-xs font-medium text-muted-foreground">Original details</p>
           {result.source.filename !== undefined ? <p>{result.source.filename} · {result.source.mediaType}</p> : <SourcePreviewFacts preview={result.sourcePreview} submittedUrl={result.source.submittedUrl} />}
         </section>
-        <section aria-label="Grounded matching excerpts" className="space-y-3">
+        <section aria-label="Matching excerpts" className="space-y-3">
           {result.excerpts.map((excerpt, index) => (
             <blockquote key={`${excerpt.origin}-${index}`} className="relative z-20 space-y-1 border-l-2 pl-3 text-sm">
               <p>{excerpt.text}</p>
               <PdfPageReference pageNumber={excerpt.pageNumber} pageLabel={excerpt.pageLabel} openOriginalFile={excerpt.openOriginalFile} />
               <PdfExtractionCoverage coverage={excerpt.sourceSnapshot?.extractionCoverage} />
-              <footer className="text-muted-foreground">{originLabels[excerpt.origin]}{excerpt.sourceSnapshot?.evidenceCoverage === "metadata-only" ? " · metadata-only evidence" : ""}</footer>
+              <footer className="text-muted-foreground">{originLabels[excerpt.origin]}{excerpt.sourceSnapshot?.evidenceCoverage === "metadata-only" ? " · website description only" : ""}</footer>
             </blockquote>
           ))}
         </section>
         {result.recognitionSummary && (
-          <section aria-label="Generated Recognition Summary" className="space-y-1">
+          <section aria-label="Generated preview" className="space-y-1">
             <p className="text-xs font-medium text-muted-foreground">Preview</p>
             <p className="text-sm text-muted-foreground">{result.recognitionSummary}</p>
           </section>
         )}
         <p className="break-all text-xs text-muted-foreground">{result.source.submittedUrl}</p>
         {result.topicTags.length > 0 && (
-          <ul className="flex flex-wrap gap-2" aria-label="Generated Topic Tags">
+          <ul className="flex flex-wrap gap-2" aria-label="Tags">
             {result.topicTags.map((tag) => <li key={tag}><Badge variant="secondary">{tag}</Badge></li>)}
           </ul>
         )}

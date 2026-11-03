@@ -31,11 +31,11 @@ export function AskPanel({ question, onQuestionChange, onAsk, isAsking, error, c
     <div className="shrink-0 space-y-2">
       <DialogTitle className="text-2xl">Ask your vault</DialogTitle>
       <DialogDescription>Ask about all your saves. Answers use only matching saved evidence, with links and excerpts to show where they came from.</DialogDescription>
-      <p className="text-xs text-muted-foreground">Questions, matching evidence, and current-session context are processed locally by Ollama. Original Files are not sent to the models.</p>
+      <p className="text-xs text-muted-foreground">Questions, matching evidence, and current-session context are processed locally by Ollama. Original files are not sent to the models.</p>
       <p className="text-xs text-muted-foreground">This conversation lasts for this session.</p>
     </div>
     <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain" aria-busy={isAsking}>
-      {isAsking && <Card role="status"><CardContent className="py-3 text-center text-muted-foreground">Finding relevant captured evidence…</CardContent></Card>}
+      {isAsking && <Card role="status"><CardContent className="py-3 text-center text-muted-foreground">Finding relevant saved information…</CardContent></Card>}
       {errorMessage && <Alert variant="destructive"><AlertDescription>{errorMessage}</AlertDescription></Alert>}
       {conversationTurns.length > 0 && <section aria-label="Current conversation" className="space-y-4">
         {conversationTurns.map((turn, index) => <Card key={`${turn.question}-${index}`}>
@@ -52,7 +52,7 @@ export function AskPanel({ question, onQuestionChange, onAsk, isAsking, error, c
                   <PdfExtractionCoverage coverage={citation.extractionCoverage} />
                   {citation.origin === "personal-note" && <p className="text-muted-foreground">Based on your personal note.</p>}
                   {citation.origin === "selected-source-text" && <p className="text-muted-foreground">Based on selected source text.</p>}
-                  {citation.evidenceCoverage === "metadata-only" && <p className="text-muted-foreground">Based on source-provided metadata only.</p>}
+                  {citation.evidenceCoverage === "metadata-only" && <p className="text-muted-foreground">Based only on the website’s description, not the full content.</p>}
                 </li>)}
               </ul>
             </section>}
