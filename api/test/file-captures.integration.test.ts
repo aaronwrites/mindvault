@@ -41,6 +41,10 @@ describe("bounded Original File Capture", () => {
                 { kind: "personal-note", summary: "Later reason" },
             ],
         }));
+        const titleUrl = `${harness.apiBaseUrl}/knowledge-items/${first.body.knowledgeItemId}/title`;
+        const updateTitle = (customTitle: string | null) => fetch(titleUrl, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ customTitle }) });
+        expect(await (await updateTitle("My file title")).json()).toEqual(expect.objectContaining({ title: "My file title", customTitle: "My file title", source: expect.objectContaining({ filename: "renamed.txt" }) }));
+        expect(await (await updateTitle(null)).json()).toEqual(expect.objectContaining({ title: "renamed.txt", customTitle: null }));
         expect(storage.uploadedFileCount).toBe(1);
     });
 

@@ -3,6 +3,8 @@ export type KnowledgeItemAvailability =
 export type EvidenceCoverage = "primary-content" | "metadata-only";
 
 export type KnowledgeItem = {
+  title?: string;
+  customTitle?: string | null;
   id: number;
   createdAt: string;
   lifecycleState: "active" | "trashed" | "pending-permanent-deletion";

@@ -193,3 +193,13 @@ export async function getKnowledgeItem(id: number): Promise<KnowledgeItem> {
   if (!response.ok) throw new Error("Could not load saved details. Please try again.");
   return response.json();
 }
+
+export async function updateKnowledgeItemTitle(id: number, customTitle: string | null): Promise<KnowledgeItem> {
+  const response = await fetch(`${API_URL}/knowledge-items/${id}/title`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ customTitle }),
+  });
+  if (!response.ok) throw new Error("Couldn’t save the title. Please try again.");
+  return response.json();
+}

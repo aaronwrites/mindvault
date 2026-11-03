@@ -39,9 +39,15 @@ export async function reconcileExtractedSourceIdentity(
     const [identifiedItem] = await transaction.select().from(knowledgeItems)
         .where(eq(knowledgeItems.sourceId, identifiedSource.id));
     const [sourceItem] = await transaction.select().from(knowledgeItems)
-        .where(eq(knowledgeItems.sourceId, source.id));
+        .where(eq(knowledgeItems.sourceId, source.id)).for("update");
     if (!identifiedItem || !sourceItem) throw new Error("Source identity reconciliation could not find its Knowledge Item");
 
+    // Keep the surviving item's deliberate title; otherwise carry over the alias edit.
+    // COALESCE observes a concurrent edit to the surviving row after acquiring its lock.
+    if (sourceItem.customTitle !== null) {
+        await transaction.update(knowledgeItems).set({ customTitle: sql`COALESCE(${knowledgeItems.customTitle}, ${sourceItem.customTitle})` })
+            .where(eq(knowledgeItems.id, identifiedItem.id));
+    }
     await transaction.update(captures).set({ sourceId: identifiedSource.id, knowledgeItemId: identifiedItem.id })
         .where(eq(captures.sourceId, source.id));
     await transaction.update(processingAttempts).set({ knowledgeItemId: identifiedItem.id })

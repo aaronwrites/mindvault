@@ -1,3 +1,4 @@
+import { ItemTitleEditor } from "@/components/item-title-editor";
 import { useState } from "react";
 import { PdfExtractionCoverage } from "@/components/pdf-extraction-coverage";
 import { Badge } from "@/components/ui/badge";
@@ -42,6 +43,7 @@ export function KnowledgeItemDetails({ knowledgeItem: item, ...actions }: { know
       {openUrl && <Button variant="outline" render={<a href={openUrl} target="_blank" rel="noopener noreferrer" />} nativeButton={false}>Open original</Button>}
       {source.originalFileActions && <Button variant="outline" aria-label={`Download original file: ${title}`} render={<a href={`${API_URL}${source.originalFileActions.download}`} target="_blank" rel="noopener noreferrer" />} nativeButton={false}>Download</Button>}
     </div>
+    {item.lifecycleState === "active" && <ItemTitleEditor item={item} />}
     <section aria-label="Preview" className="space-y-2">
       <h3 className="font-medium">Preview</h3>
       <p className="text-sm text-muted-foreground">{item.recognitionSummary ?? item.sourcePreview?.description ?? (processing ? "Your save is safe. A preview is being prepared." : "No text preview is available yet.")}</p>
@@ -54,7 +56,7 @@ export function KnowledgeItemDetails({ knowledgeItem: item, ...actions }: { know
     <details open={expanded} onToggle={event => setExpanded(event.currentTarget.open)} className="space-y-3 border-t pt-4">
       <summary className="cursor-pointer font-medium">Details</summary>
       <p className="text-sm text-muted-foreground">Saved {new Date(item.createdAt).toLocaleString()}</p>
-      {file ? <p className="break-words text-sm text-muted-foreground">{title} · {source.mediaType}{formatByteSize(source.byteSize) && ` · ${formatByteSize(source.byteSize)}`}</p> : <SourcePreviewFacts preview={item.sourcePreview} submittedUrl={source.submittedUrl} />}
+      {file ? <p className="break-words text-sm text-muted-foreground">{source.filename} · {source.mediaType}{formatByteSize(source.byteSize) && ` · ${formatByteSize(source.byteSize)}`}</p> : <SourcePreviewFacts preview={item.sourcePreview} submittedUrl={source.submittedUrl} />}
       <PdfExtractionCoverage coverage={item.extractionCoverage} />
       {processing && <p role="status" className="text-sm">{item.availability === "ready" ? "Updating in the background. Your saved content is still searchable." : "Your save is safe. We’re preparing it for search."}</p>}
       {item.availability === "needs-attention" && <p className="text-sm">{recovery}</p>}

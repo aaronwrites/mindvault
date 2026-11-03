@@ -16,7 +16,7 @@ const originLabels = {
 } as const;
 
 export function RecallResultCard({ result, onOpen, onTrash }: { result: RecallKnowledgeItem; onOpen?: (id: number) => void; onTrash?: (id: number, title: string) => void }) {
-  const title = result.source.filename !== undefined ? originalFileTitle(result.source.filename, result.source.kind) : sourcePreviewTitle(result.sourcePreview, result.source.submittedUrl);
+  const title = result.title ?? (result.source.filename !== undefined ? originalFileTitle(result.source.filename, result.source.kind) : sourcePreviewTitle(result.sourcePreview, result.source.submittedUrl));
   return (
     <Card className="group/card relative mb-4 break-inside-avoid" onClick={event => {
       // Let links and buttons perform their own actions; text above the

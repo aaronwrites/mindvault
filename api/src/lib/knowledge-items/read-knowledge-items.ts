@@ -33,6 +33,8 @@ type Database = NodePgDatabase<typeof schema>;
 export type KnowledgeItemAvailability = "processing" | "ready" | "unsupported" | "needs-attention";
 
 export type KnowledgeItemView = {
+    title: string;
+    customTitle: string | null;
     id: number;
     createdAt: string;
     lifecycleState: "active" | "trashed" | "pending-permanent-deletion";
@@ -195,7 +197,16 @@ async function presentKnowledgeItems(
         const accessActions = originalFile && knowledgeItem.lifecycleState !== "pending-permanent-deletion"
             ? originalFileActions(knowledgeItem.id, originalFile.storageState, originalFile.detectedSourceKind, originalFile.detectedMediaType)
             : undefined;
+        const sourcePreview = source.currentSnapshotId === null
+            ? extractedPreviewFor(extractedPreviewsBySource.get(source.id))
+            : previewFor(previewsBySnapshot.get(source.currentSnapshotId), mediaBySnapshot.get(source.currentSnapshotId));
+        const filename = filenamesByItem.get(knowledgeItem.id)?.split(/[\\/]/).at(-1)?.replace(/[\u0000-\u001F\u007F]/g, " ").replace(/\s+/g, " ").trim();
+        const sourceTitle = sourcePreview?.title ?? (originalFile
+            ? filename || `${source.sourceKind === "pdf" ? "PDF" : source.sourceKind} file`
+            : webpageSource ? new URL(webpageSource.submittedUrl).hostname : "Saved item");
         return {
+            title: knowledgeItem.customTitle ?? sourceTitle,
+            customTitle: knowledgeItem.customTitle,
             id: knowledgeItem.id,
             createdAt: toIsoString(knowledgeItem.createdAt),
             lifecycleState: knowledgeItem.lifecycleState as KnowledgeItemView["lifecycleState"],
@@ -210,9 +221,7 @@ async function presentKnowledgeItems(
                 ...(webpageSource ? { submittedUrl: webpageSource.submittedUrl, normalizedUrl: webpageSource.normalizedUrl } : {}),
                 ...(originalFile ? { filename: filenamesByItem.get(knowledgeItem.id) ?? null, mediaType: originalFile.detectedMediaType, byteSize: originalFile.byteSize, ...(accessActions ? { originalFileActions: accessActions } : {}) } : {}),
             },
-            sourcePreview: source.currentSnapshotId === null
-                ? extractedPreviewFor(extractedPreviewsBySource.get(source.id))
-                : previewFor(previewsBySnapshot.get(source.currentSnapshotId), mediaBySnapshot.get(source.currentSnapshotId)),
+            sourcePreview,
             evidenceCoverage: source.currentSnapshotId === null
                 ? null
                 : coverageBySnapshot.get(source.currentSnapshotId) ?? null,

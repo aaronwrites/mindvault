@@ -12,7 +12,7 @@ import type { SynthesisResult } from "@/lib/types";
 
 export type ConversationTurn = { question: string; result: SynthesisResult };
 
-export function AskPanel({ question, onQuestionChange, onAsk, isAsking, error, conversationTurns, openItem, children }: {
+export function AskPanel({ question, onQuestionChange, onAsk, isAsking, error, conversationTurns, openItem, titleForItem, children }: {
   question: string;
   onQuestionChange: (question: string) => void;
   onAsk: (question: string) => void;
@@ -20,6 +20,7 @@ export function AskPanel({ question, onQuestionChange, onAsk, isAsking, error, c
   error: Error | null;
   conversationTurns: ConversationTurn[];
   openItem: (id: number) => void;
+  titleForItem?: (id: number, fallback: string) => string;
   children: ReactNode;
 }) {
   const errorMessage = error
@@ -46,7 +47,7 @@ export function AskPanel({ question, onQuestionChange, onAsk, isAsking, error, c
               <p className="text-sm font-medium">Supporting saves</p>
               <ul className="space-y-3">
                 {turn.result.citations.map((citation, index) => <li key={`${citation.knowledgeItemId}-${citation.sourceSnapshotId ?? "context"}-${index}`} className="space-y-1 break-words text-sm">
-                  <Button variant="link" className="h-auto max-w-full justify-start whitespace-normal text-left" onClick={() => openItem(citation.knowledgeItemId)}>View {citation.title}</Button>
+                  <Button variant="link" className="h-auto max-w-full justify-start whitespace-normal text-left" onClick={() => openItem(citation.knowledgeItemId)}>View {titleForItem?.(citation.knowledgeItemId, citation.title) ?? citation.title}</Button>
                   <blockquote className="border-l-2 pl-3 text-muted-foreground">{citation.excerpt}</blockquote>
                   <PdfPageReference pageNumber={citation.pageNumber} pageLabel={citation.pageLabel} openOriginalFile={citation.openOriginalFile} />
                   <PdfExtractionCoverage coverage={citation.extractionCoverage} />

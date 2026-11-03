@@ -1,3 +1,5 @@
+import { and, eq } from "drizzle-orm";
+import { updateTitleSchema } from "../schemas/knowledge-item";
 import type { Request, Response } from "express";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as schema from "../db/schema";
@@ -120,5 +122,20 @@ export function accessOriginalFileController(database: NodePgDatabase<typeof sch
         if (result.outcome === "ready") return res.redirect(302, result.access.url);
         if (result.outcome === "provider-unavailable") return res.status(503).json({ error: "original-file-access-unavailable", retryable: true });
         return res.status(404).json({ error: result.outcome === "open-not-available" ? "Original File cannot be opened safely" : "Original File unavailable" });
+    };
+}
+
+export function updateKnowledgeItemTitleController(database: NodePgDatabase<typeof schema>, embeddingRepresentation: EmbeddingProvider["representation"]) {
+    return async (req: Request, res: Response) => {
+        const id = Number(req.params.id);
+        if (!Number.isSafeInteger(id) || id < 1) return res.status(404).json({ error: "Knowledge Item not found" });
+        const parsed = updateTitleSchema.safeParse(req.body);
+        if (!parsed.success) return res.status(400).json({ error: "Use a title of 1–500 characters without line breaks or control characters." });
+        const [updated] = await database.update(schema.knowledgeItems).set({ customTitle: parsed.data.customTitle })
+            .where(and(eq(schema.knowledgeItems.id, id), eq(schema.knowledgeItems.lifecycleState, "active"))).returning({ id: schema.knowledgeItems.id });
+        if (!updated) return res.status(404).json({ error: "Knowledge Item not found" });
+        const item = await getKnowledgeItem(database, id, embeddingRepresentation);
+        if (!item) return res.status(404).json({ error: "Knowledge Item not found" });
+        return res.json(item);
     };
 }

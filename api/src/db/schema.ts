@@ -88,6 +88,7 @@ export const originalFileOperations = pgTable("original_file_operations", {
 ]);
 
 export const knowledgeItems = pgTable("knowledge_items", {
+    customTitle: text("custom_title"),
     id: serial("id").primaryKey(),
     sourceId: integer("source_id").notNull().references(() => sources.id),
     lifecycleState: text("lifecycle_state").notNull().default("active"),

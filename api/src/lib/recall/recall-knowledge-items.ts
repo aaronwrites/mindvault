@@ -27,6 +27,7 @@ export type RecallKnowledgeItemResult = {
         origin: "source-snapshot" | "selected-source-text" | "personal-note";
         sourceSnapshot: {
             id: number;
+            title: string;
             originalUrl: string | null;
             finalUrl: string | null;
             canonicalUrl: string | null;
@@ -78,7 +79,7 @@ export async function recallKnowledgeItems(database: Database, query: string, em
         if (!view || view.availability !== "ready") return [];
         return [{
             id: view.id,
-            title: detailsByPassageId.get(match.passages[0]!.passageId)?.sourceSnapshotTitle ?? null,
+            title: view.title,
             source: view.source,
             sourcePreview: view.sourcePreview,
             recognitionSummary: view.recognitionSummary,
@@ -93,7 +94,7 @@ export async function recallKnowledgeItems(database: Database, query: string, em
                     ...(details.pageNumber && view.source.originalFileActions?.open ? { openOriginalFile: `${view.source.originalFileActions.open}?page=${details.pageNumber}` } : {}),
                     origin: passage.origin,
                     sourceSnapshot: details.sourceSnapshotId === null ? null : {
-                        id: details.sourceSnapshotId, originalUrl: details.originalUrl, finalUrl: details.finalUrl,
+                        id: details.sourceSnapshotId, title: details.sourceSnapshotTitle!, originalUrl: details.originalUrl, finalUrl: details.finalUrl,
                         canonicalUrl: details.canonicalUrl, extractedAt: toIsoString(details.extractedAt!),
                         evidenceCoverage: details.evidenceCoverage!,
                         ...(details.pdfEvidence ? { extractionCoverage: pdfExtractionCoverage(details.pdfEvidence) } : {}),

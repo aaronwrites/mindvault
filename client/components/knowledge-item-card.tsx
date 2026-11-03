@@ -6,9 +6,9 @@ import { SourcePreviewMedia, originalFileTitle, sourceKindLabel, sourcePreviewTi
 import type { KnowledgeItem } from "@/lib/types";
 
 export function knowledgeItemTitle(item: KnowledgeItem) {
-  return item.source.filename !== undefined
+  return item.title ?? item.customTitle ?? (item.source.filename !== undefined
     ? originalFileTitle(item.source.filename, item.source.kind)
-    : sourcePreviewTitle(item.sourcePreview, item.source.submittedUrl);
+    : sourcePreviewTitle(item.sourcePreview, item.source.submittedUrl));
 }
 
 export function isItemProcessing(item: KnowledgeItem) {

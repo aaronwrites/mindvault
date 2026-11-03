@@ -291,6 +291,10 @@ export default function Home() {
         error={synthesisMutation.error}
         conversationTurns={conversationTurns}
         openItem={openItem}
+        titleForItem={(id, fallback) => {
+          const item = queryClient.getQueryData<KnowledgeItem>(knowledgeItemKeys.detail(id)) ?? knowledgeItems.find(item => item.id === id);
+          return item ? knowledgeItemTitle(item) : fallback;
+        }}
       >{itemDetails}</AskPanel> : itemDetails}
       <AlertDialog open={permanentDeletionTarget !== null} onOpenChange={open => { if (!open) setPermanentDeletionTarget(null); }}>
         <AlertDialogContent>

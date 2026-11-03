@@ -24,6 +24,7 @@ const { default: userEvent } = await import("@testing-library/user-event");
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 
+const updateKnowledgeItemTitle = mock<(id: number, customTitle: string | null) => Promise<KnowledgeItem>>();
 const getKnowledgeItem = mock<(id: number) => Promise<KnowledgeItem>>();
 const getKnowledgeItems = mock<() => Promise<KnowledgeItem[]>>();
 const getTrashedKnowledgeItems = mock<() => Promise<KnowledgeItem[]>>();
@@ -48,6 +49,7 @@ const permanentlyDeleteKnowledgeItem = mock<PermanentlyDeleteKnowledgeItem>();
 const searchKnowledgeItems = mock<(query: string) => Promise<RecallKnowledgeItem[]>>();
 const askVault = mock<(request: SynthesisRequest) => Promise<SynthesisResult>>();
 mock.module("@/lib/api", () => ({
+  updateKnowledgeItemTitle,
   getKnowledgeItem,
   getKnowledgeItems,
   getTrashedKnowledgeItems,
@@ -108,6 +110,7 @@ function renderHome() {
 
 beforeEach(() => {
   window.history.replaceState(null, "", "/");
+  updateKnowledgeItemTitle.mockReset();
   getKnowledgeItem.mockReset();
   getKnowledgeItem.mockResolvedValue(processingItem);
   getKnowledgeItems.mockReset();
@@ -871,7 +874,7 @@ test("Recall excerpt and provenance clicks open details while PDF links keep the
   expect(onOpen).toHaveBeenLastCalledWith(7);
   await user.click(view.getByText("Saved text"));
   expect(onOpen).toHaveBeenCalledTimes(2);
-  await user.click(view.getByRole("button", { name: "View example.com" }));
+  await user.click(view.getByRole("button", { name: "View PDF evidence" }));
   expect(onOpen).toHaveBeenCalledTimes(3);
 });
 
@@ -1200,4 +1203,73 @@ test("partial batch saves remain accessible across unavailable search and Ask, a
   await openCard("proposal.pdf");
   expect(within(screen.getByRole("dialog")).getByRole("button", { name: "Open original" }).getAttribute("href")).toContain("/knowledge-items/9/original-file/open");
   expect(screen.queryByText(/Storage diagnostic|Search diagnostic|Model diagnostic/)).toBeNull();
+});
+
+
+test("renames a save in details, keeps the draft after errors, and resets its board title", async () => {
+  const item = { ...processingItem, availability: "ready" as const, organizationCondition: "complete" as const, latestAttempt: null, title: "Source title", customTitle: null };
+  getKnowledgeItems.mockResolvedValue([item]);
+  getKnowledgeItem.mockResolvedValue(item);
+  const renamed = { ...item, title: "My title", customTitle: "My title" };
+  updateKnowledgeItemTitle.mockRejectedValueOnce(new Error("offline"));
+  updateKnowledgeItemTitle.mockResolvedValueOnce(renamed).mockResolvedValueOnce(item);
+  const user = userEvent.setup({ document: dom.window.document });
+  renderHome();
+  await user.click(await screen.findByRole("button", { name: "View Source title" }));
+  const dialog = await screen.findByRole("dialog", { name: "Source title" });
+  await user.click(within(dialog).getByRole("button", { name: "Edit title" }));
+  const input = within(dialog).getByRole("textbox", { name: "Title" });
+  await user.clear(input);
+  await user.type(input, "   ");
+  await user.click(within(dialog).getByRole("button", { name: "Save title" }));
+  expect(updateKnowledgeItemTitle).not.toHaveBeenCalled();
+  expect(within(dialog).getByRole("alert").textContent).toContain("1–500");
+  await user.clear(input);
+  await user.type(input, "My title");
+  await user.click(within(dialog).getByRole("button", { name: "Save title" }));
+  await waitFor(() => expect(within(dialog).getByRole("alert").textContent).toContain("try again"));
+  expect((input as HTMLInputElement).value).toBe("My title");
+  await user.click(within(dialog).getByRole("button", { name: "Save title" }));
+  await screen.findByRole("dialog", { name: "My title" });
+  expect(screen.getAllByText("My title").some(node => node.tagName === "H3")).toBe(true);
+  expect(screen.getByText("Title saved.")).toBeTruthy();
+  await user.click(within(dialog).getByRole("button", { name: "Reset to source title" }));
+  await screen.findByRole("dialog", { name: "Source title" });
+  expect(updateKnowledgeItemTitle).toHaveBeenLastCalledWith(item.id, null);
+  expect(screen.getAllByText("Source title").some(node => node.tagName === "H3")).toBe(true);
+});
+
+
+test("title edits update Recall cards and existing citation labels without changing excerpts", async () => {
+  const item: KnowledgeItem = { ...readyItem, title: "Original title", customTitle: null };
+  const renamed = { ...item, title: "My reference", customTitle: "My reference" };
+  getKnowledgeItems.mockResolvedValue([item]);
+  getKnowledgeItem.mockResolvedValue(item);
+  searchKnowledgeItems.mockResolvedValue([{ ...matchingItem(item, "Source evidence stays intact."), title: "Original title" }]);
+  askVault.mockResolvedValue({ answer: "Grounded answer.", insufficientEvidence: false, citations: [{ knowledgeItemId: item.id, sourceSnapshotId: 1, title: "Original title", origin: "source-snapshot", originalUrl: item.source.submittedUrl, evidenceCoverage: "primary-content", excerpt: "Source evidence stays intact." }] });
+  updateKnowledgeItemTitle.mockImplementation(async () => {
+    getKnowledgeItems.mockResolvedValue([renamed]);
+    getKnowledgeItem.mockResolvedValue(renamed);
+    searchKnowledgeItems.mockResolvedValue([{ ...matchingItem(item, "Source evidence stays intact."), title: "My reference" }]);
+    return renamed;
+  });
+  const user = userSetup(); renderHome();
+  await user.type(screen.getByLabelText("Search your saves"), "evidence{Enter}");
+  await screen.findByText("Source evidence stays intact.");
+  await user.click(screen.getByRole("button", { name: "Ask" }));
+  await user.type(screen.getByLabelText("Ask a question about your saves"), "What does it say?");
+  await user.click(screen.getByRole("button", { name: "Ask your vault" }));
+  await user.click(await screen.findByRole("button", { name: "View Original title" }));
+  const dialog = await screen.findByRole("dialog", { name: "Original title" });
+  await user.click(within(dialog).getByRole("button", { name: "Edit title" }));
+  const input = within(dialog).getByRole("textbox", { name: "Title" });
+  await user.clear(input); await user.type(input, "My reference");
+  await user.click(within(dialog).getByRole("button", { name: "Save title" }));
+  await screen.findByRole("dialog", { name: "My reference" });
+  await user.click(within(dialog).getByRole("button", { name: "Close" }));
+  expect(await screen.findByRole("button", { name: "View My reference" })).toBeTruthy();
+  expect(screen.getAllByText("Source evidence stays intact.").length).toBeGreaterThan(0);
+  await user.click(screen.getByRole("button", { name: "Close" }));
+  expect(await screen.findByRole("heading", { name: "My reference", level: 3 })).toBeTruthy();
+  expect(screen.getAllByText("Source evidence stays intact.").length).toBeGreaterThan(0);
 });

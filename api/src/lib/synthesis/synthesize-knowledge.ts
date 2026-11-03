@@ -72,7 +72,10 @@ export async function synthesizeKnowledge(
 
     return {
         answer: [...pdfCoverageNotices(citedEvidence), generated.answer].join("\n\n"),
-        citations: citedEvidence.map(({ citationId: _citationId, text: excerpt, ...citation }) => ({ ...citation, excerpt })),
+        // Presentation titles never enter model evidence.
+        citations: citedEvidence.map(({ citationId: _citationId, text: excerpt, ...citation }) => ({
+            ...citation, title: recalled.find(item => item.id === citation.knowledgeItemId)?.title ?? citation.title, excerpt,
+        })),
         insufficientEvidence: false,
     };
 }
@@ -109,7 +112,7 @@ function evidenceFor(recalled: Awaited<ReturnType<typeof recallKnowledgeItems>>)
                 origin: excerpt.origin,
                 knowledgeItemId: result.id,
                 sourceSnapshotId: excerpt.sourceSnapshot?.id ?? null,
-                title: result.title ?? result.sourcePreview?.title ?? result.source.filename ?? result.source.submittedUrl ?? "Captured Knowledge Item",
+                title: excerpt.sourceSnapshot?.title ?? result.sourcePreview?.title ?? result.source.filename ?? result.source.submittedUrl ?? "Captured Knowledge Item",
                 text,
                 originalUrl: excerpt.sourceSnapshot?.originalUrl ?? result.source.submittedUrl ?? null,
                 pageNumber: excerpt.pageNumber,

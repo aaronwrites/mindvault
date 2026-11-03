@@ -196,6 +196,8 @@ describe("URL Capture", () => {
         expect(await listResponse.json()).toEqual([
             {
                 id: capture.knowledgeItemId,
+                title: "docs.example.com",
+                customTitle: null,
                 createdAt: expect.any(String),
                 source: {
                     id: capture.sourceId,
