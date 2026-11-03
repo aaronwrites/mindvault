@@ -1,6 +1,7 @@
 "use client";
 
 import { type FormEvent, type ReactNode, useEffect, useEffectEvent, useRef, useState } from "react";
+import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -177,17 +178,22 @@ export function UniversalCaptureArea({ children, onSaved, onDuplicate, disabled 
     return () => { for (const name of events) document.removeEventListener(name, handle); };
   }, []);
 
-  return <div className="relative min-h-64">
+  return <div className={disabled ? "relative min-h-64" : "relative min-h-64 rounded-xl border border-dashed border-border p-3 sm:p-4"}>
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button size="sm" variant="outline" />}>Add</DialogTrigger>
+      <div className="mb-3 flex flex-wrap items-center justify-end gap-x-3 gap-y-2">
+        {!disabled && <p className="mr-auto text-sm text-muted-foreground">Paste a link or drop files</p>}
+        <DialogTrigger render={<Button variant="outline" className="h-11 min-w-11" />}><Plus aria-hidden="true" />Add</DialogTrigger>
+      </div>
       <DialogContent>
-        <DialogHeader><DialogTitle>Add to your vault</DialogTitle><DialogDescription>Save a link or choose files. You can also paste a link or drop files onto the board.</DialogDescription></DialogHeader>
+        <DialogHeader><DialogTitle>Add to your vault</DialogTitle><DialogDescription>Save a link or choose files.{!disabled && " You can also paste a link or drop files onto the board."}</DialogDescription></DialogHeader>
         <form onSubmit={saveLink} className="space-y-3">
           <Label htmlFor="save-link">Link</Label>
           <Input id="save-link" type="url" required value={url} onChange={event => setUrl(event.target.value)} placeholder="https://example.com/article" />
           <Button type="submit">Save link</Button>
         </form>
-        <div className="space-y-3"><Label htmlFor="save-files">Choose files</Label><Input id="save-files" type="file" multiple onChange={event => {
+        <div className="space-y-3"><Label htmlFor="save-files">Choose files</Label>
+          <p id="file-support" className="text-sm text-muted-foreground">Text PDFs and scanned PDFs with printed English text can be searched. Other files are retained for opening or downloading; understanding their contents is not available yet. Executables and archives aren’t accepted.</p>
+          <Input id="save-files" type="file" multiple aria-describedby="file-support" onChange={event => {
           const files = Array.from(event.target.files ?? []);
           event.target.value = "";
           if (files.length) saveFiles(files);
@@ -195,7 +201,7 @@ export function UniversalCaptureArea({ children, onSaved, onDuplicate, disabled 
         {notice && <p role="alert">{notice}</p>}
       </DialogContent>
     </Dialog>
-    <div aria-live="polite" aria-atomic="false" className="my-3 space-y-2 text-sm">
+    <div aria-live="polite" aria-atomic="false" className={entries.length || (!open && notice) ? "my-3 space-y-2 text-sm" : "space-y-2 text-sm"}>
       {!open && notice && <p role="alert">{notice}</p>}
       {entries.map(entry => {
         const file = typeof entry.source !== "string";

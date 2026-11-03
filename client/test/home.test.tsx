@@ -187,7 +187,7 @@ describe("collection-wide Synthesis", () => {
   });
 });
 
-test("Recall discloses the cited PDF snapshot's extraction gaps", async () => {
+test("compact Recall cards keep evidence accessible without displaying PDF coverage in the overlay", async () => {
   const { RecallResultCard } = await import("@/components/recall-result-card");
   const result: RecallKnowledgeItem = {
     id: 31, title: "Printed recovery", source: { ...processingItem.source, filename: "scan.pdf" },
@@ -203,11 +203,10 @@ test("Recall discloses the cited PDF snapshot's extraction gaps", async () => {
     ranking: { score: 1, matchedPassageCount: 1 },
   };
   render(<RecallResultCard result={result} />);
-  expect(screen.getByText(/Incomplete extraction: page 2/)).toBeTruthy();
-  expect(screen.getByText(/visual relationships have not been interpreted/)).toBeTruthy();
-  expect(screen.getByRole("button", { name: "Open PDF at page 2" }).getAttribute("href")).toBe("http://localhost:4000/knowledge-items/31/original-file/open?page=2");
-  expect(screen.getByText(/printed label: 1/)).toBeTruthy();
-  expect(screen.getByText(/If your viewer/)).toBeTruthy();
+  expect(screen.getByRole("status").textContent).toBe("Ready");
+  expect(screen.getByRole("region", { name: "Matching excerpts" }).className).toBe("sr-only");
+  expect(screen.getByText("Restore the base backup.")).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "Open PDF at page 2" })).toBeNull();
 });
 
 
@@ -246,7 +245,7 @@ test("opens saved details with a keyboard, closes with Escape, and returns focus
   const user = userEvent.setup({ document: dom.window.document });
   renderHome();
   const card = await screen.findByRole("button", { name: "View example.com" });
-  expect(screen.queryByText("Ready")).toBeNull();
+  expect(screen.getByText("Ready")).toBeTruthy();
   card.focus();
   await user.keyboard("{Enter}");
   expect(await screen.findByRole("dialog")).toBeTruthy();
@@ -278,12 +277,34 @@ test("provides accessible loading, empty, and board error states", async () => {
   getKnowledgeItems.mockImplementationOnce(() => new Promise(resolve => { resolveItems = resolve; }));
   const { unmount } = renderHome();
   expect(screen.getByRole("status").textContent).toContain("Loading your saves");
+  expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("MindVault");
+  expect(screen.queryByLabelText("Save actions")).toBeNull();
   await act(async () => resolveItems([]));
   expect(await screen.findByText("Your vault is empty. Use Add to save a link or file.")).toBeTruthy();
+  expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Save it now. Find it when it matters.");
   unmount();
   getKnowledgeItems.mockRejectedValueOnce(new Error("MindVault is unavailable."));
   renderHome();
   expect((await screen.findByRole("alert")).textContent).toContain("Couldn’t load your saves. Please try again.");
+  expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("MindVault");
+});
+
+test("limits the first-use header to the unfiltered empty vault", async () => {
+  getKnowledgeItems.mockResolvedValue([]);
+  getTrashedKnowledgeItems.mockResolvedValue([]);
+  searchKnowledgeItems.mockResolvedValue([]);
+  const user = userSetup(); renderHome();
+  await screen.findByRole("heading", { level: 1, name: "Save it now. Find it when it matters." });
+  await user.click(screen.getByRole("button", { name: "Filter" }));
+  await user.click(screen.getByRole("radio", { name: "Files" }));
+  await screen.findByText("No saves match this filter.");
+  expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("MindVault");
+  await user.type(screen.getByLabelText("Search your saves"), "missing{Enter}");
+  await screen.findByText("No matches here. Try another idea or clear your filters.");
+  expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("MindVault");
+  await openTrash(user);
+  await screen.findByText("Trash is empty. Items you move here can be restored.");
+  expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("MindVault");
 });
 
 test("loads details on demand and offers recovery from a loading failure", async () => {
@@ -301,14 +322,15 @@ test("loads details on demand and offers recovery from a loading failure", async
   await waitFor(() => expect(screen.getByRole("region", { name: "Preview" }).textContent).toContain(readyItem.recognitionSummary!));
 });
 
-test("shows image previews and title fallbacks in newest-first order without success badges", async () => {
+test("shows image previews and title fallbacks in newest-first order with quiet availability labels", async () => {
   const newer = { ...readyItem, id: 2, createdAt: "2026-11-01T10:00:00Z", sourcePreview: { title: "Newer article", description: "Recognizable source facts", websiteName: "Example", author: null, publishedAt: null, contentType: "article", previewImageUrl: "/source-preview-media/2", previewImageAlt: "Article cover", faviconUrl: null } };
   getKnowledgeItems.mockResolvedValue([readyItem, newer]);
   renderHome();
   const cards = await screen.findAllByRole("button", { name: /^View (example.com|Newer article)$/ });
   expect(cards.map(card => card.getAttribute("aria-label"))).toEqual(["View Newer article", "View example.com"]);
+  expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("MindVault");
   expect(screen.getByRole("img", { name: "Article cover" }).getAttribute("src")).toBe("/source-preview-media/2");
-  expect(screen.queryByText("Ready")).toBeNull();
+  expect(screen.getAllByText("Ready")).toHaveLength(2);
   expect(screen.queryByLabelText("Processing saved content")).toBeNull();
   expect(screen.queryByLabelText("Details need attention or have limitations")).toBeNull();
 });
@@ -330,7 +352,7 @@ test("automatically discloses metadata limitations without presenting full-conte
   getKnowledgeItems.mockResolvedValue([metadata]);
   getKnowledgeItem.mockResolvedValue(metadata);
   renderHome();
-  expect(await screen.findByLabelText("Details need attention or have limitations")).toBeTruthy();
+  expect(await screen.findByRole("button", { name: "View example.com" })).toBeTruthy();
   await openCard();
   expect(document.querySelector("details")?.open).toBe(true);
   expect(screen.getByText(/Only the website’s description was available/)).toBeTruthy();
@@ -398,7 +420,7 @@ test("Back and explicit Close preserve search input and results and return focus
   const search = screen.getByLabelText("Search your saves");
   await user.type(search, "database"); await user.click(screen.getByRole("button", { name: "Search" }));
   expect(await screen.findByText("A matching database passage")).toBeTruthy();
-  const trigger = screen.getByRole("button", { name: "View details" });
+  const trigger = screen.getByRole("button", { name: "View Matching item" });
   await user.click(trigger);
   await screen.findByRole("dialog");
   expect(window.location.hash).toBe("#item=1");
@@ -538,7 +560,7 @@ test("a file saved through Add appears on the board with retained original acces
     expect(screen.getByLabelText("Processing saved content")).toBeTruthy();
     getKnowledgeItem.mockResolvedValue(repeatedCapture);
     await openCard();
-    expect(await screen.findByText("Keep the latest Capture Context.")).toBeTruthy();
+    expect(await within(screen.getByRole("dialog")).findByText("Keep the latest Capture Context.")).toBeTruthy();
   });
 
 
@@ -580,7 +602,7 @@ test("a file saved through Add appears on the board with retained original acces
     expect(screen.getByRole("button", { name: "Open original" }).getAttribute("href")).toBe(processingItem.source.submittedUrl);
   });
 
-  test("presents the shared Source Preview while keeping Recall evidence prominent", async () => {
+  test("uses compact search overlays and keeps matching evidence available to screen readers", async () => {
     getKnowledgeItems.mockResolvedValue([]);
     searchKnowledgeItems.mockResolvedValue([
       {
@@ -626,13 +648,12 @@ test("a file saved through Add appears on the board with retained original acces
 
     expect(await screen.findByRole("heading", { name: "Trustworthy preview facts" })).toBeTruthy();
     expect(screen.getByRole("img", { name: "A durable knowledge card" }).getAttribute("src")).toBe("/source-preview-media/5");
-    expect(screen.getByText("MindVault Journal")).toBeTruthy();
-    expect(screen.getByText("Original details")).toBeTruthy();
-    expect(screen.getByText("A source-provided description for recognizing this article.")).toBeTruthy();
-    expect(screen.getByText(/Ada Lovelace/)).toBeTruthy();
+    expect(screen.queryByText("Original details")).toBeNull();
+    expect(screen.queryByText("A source-provided description for recognizing this article.")).toBeNull();
     expect(screen.getByText("Grounded Source text explains why this Knowledge Item matched.")).toBeTruthy();
-    expect(screen.getByLabelText("Generated preview").textContent).toContain("Generated context for recognition.");
-    expect(screen.getByRole("list", { name: "Tags" }).textContent).toContain("durable capture");
+    expect(screen.queryByLabelText("Generated preview")).toBeNull();
+    expect(screen.queryByRole("list", { name: "Tags" })).toBeNull();
+    expect(screen.getByRole("region", { name: "Matching excerpts" }).className).toBe("sr-only");
     expect(screen.getByRole("button", { name: "Open original" }).getAttribute("href")).toBe("https://archive.example.com/original-article");
   });
 
@@ -858,7 +879,7 @@ test("an existing save restored through Add leaves Trash and reveals the active 
 });
 
 
-test("Recall excerpt and provenance clicks open details while PDF links keep their own action", async () => {
+test("compact Recall actions open the original separately from saved details", async () => {
   const { RecallResultCard } = await import("@/components/recall-result-card");
   const onOpen = mock<(id: number) => void>();
   const result: RecallKnowledgeItem = {
@@ -870,18 +891,15 @@ test("Recall excerpt and provenance clicks open details while PDF links keep the
         canonicalUrl: null, extractedAt: processingItem.createdAt, evidenceCoverage: "primary-content",
       }, ranking: { score: 1 } }],
   };
-  const view = render(<RecallResultCard result={result} onOpen={onOpen} />);
+  const view = render(<RecallResultCard result={result} onOpen={onOpen} onTrash={() => {}} />);
   const user = userEvent.setup({ document: globalThis.document });
-  const link = view.getByRole("button", { name: "Open PDF at page 2" });
+  const link = view.getByRole("button", { name: "Open original" });
   link.addEventListener("click", event => event.preventDefault(), { once: true });
   await user.click(link);
   expect(onOpen).not.toHaveBeenCalled();
-  await user.click(view.getByText("Matching evidence to revisit."));
-  expect(onOpen).toHaveBeenLastCalledWith(7);
-  await user.click(view.getByText("Saved text"));
-  expect(onOpen).toHaveBeenCalledTimes(2);
+  expect(view.getByRole("region", { name: "Matching excerpts" }).className).toBe("sr-only");
   await user.click(view.getByRole("button", { name: "View PDF evidence" }));
-  expect(onOpen).toHaveBeenCalledTimes(3);
+  expect(onOpen).toHaveBeenCalledTimes(1);
 });
 
 test("card keyboard actions remove without opening details and Undo restores that save", async () => {
@@ -962,10 +980,10 @@ test("permanent deletion is confirmed, retains pending feedback, and exposes cle
   expect(permanentlyDeleteKnowledgeItem).not.toHaveBeenCalled();
   await user.click(within(confirmation).getByRole("button", { name: "Delete permanently" }));
   await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-  expect(await screen.findByText("Deleting permanently…")).toBeTruthy();
+  expect(await screen.findByText("Deleting")).toBeTruthy();
   expect(permanentlyDeleteKnowledgeItem.mock.calls[0]?.[0]).toBe(9);
   getTrashedKnowledgeItems.mockResolvedValue([{ ...pending, deletion: { status: "failed", failureReason: "private storage credentials" } }]);
-  expect(await screen.findByText("Deletion didn’t finish. Open details to retry.", {}, { timeout: 4500 })).toBeTruthy();
+  expect(await screen.findByText("Deletion failed", {}, { timeout: 4500 })).toBeTruthy();
   await openCard("proposal.pdf");
   expect(screen.queryByRole("button", { name: "Restore" })).toBeNull();
   expect(screen.queryByText("private storage credentials")).toBeNull();
@@ -1304,7 +1322,7 @@ test("tag corrections validate, retain failed drafts, and update cards and detai
   await screen.findByText("Tags saved.");
   expect(updateKnowledgeItemTags).toHaveBeenLastCalledWith(item.id, { add: ["Deep Learning"], remove: ["Machine Learning"] });
   expect(within(dialog).queryByText("Machine Learning")).toBeNull();
-  expect(screen.getAllByText("Deep Learning").length).toBeGreaterThan(1);
+  expect(within(dialog).getByText("Deep Learning")).toBeTruthy();
   updateKnowledgeItemTags.mockResolvedValueOnce({ ...item, topicTags: ["Deep Learning"] });
   await user.click(within(dialog).getByRole("button", { name: "Remove Neural Networks" }));
   await waitFor(() => expect(within(dialog).queryByText("Neural Networks")).toBeNull());
@@ -1341,9 +1359,11 @@ test("tag corrections update existing Recall cards while preserving matching exc
   await user.click(within(dialog).getByRole("button", { name: "Save tag" }));
   await within(dialog).findByText("PostgreSQL");
   await user.click(within(dialog).getByRole("button", { name: "Close" }));
-  expect(await screen.findByText("PostgreSQL")).toBeTruthy();
+  expect(screen.queryByText("PostgreSQL")).toBeNull();
   expect(screen.queryByText("Databases")).toBeNull();
   expect(screen.getByText("The matching source evidence.")).toBeTruthy();
+  await openCard();
+  expect(await within(screen.getByRole("dialog")).findByText("PostgreSQL")).toBeTruthy();
 });
 
 

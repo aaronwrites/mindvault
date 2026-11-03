@@ -164,6 +164,8 @@ export default function Home() {
     .filter(item => showTrash || !lifecycle.removedIds.has(item.id))
     .filter(item => showTrash || sourceFilter === "all" || (sourceFilter === "files" ? item.source.filename !== undefined : item.source.filename === undefined));
   const activeItemCount = knowledgeItems.filter(item => !lifecycle.removedIds.has(item.id)).length;
+  const isFirstUseEmpty = knowledgeItemsQuery.isSuccess && knowledgeItems.length === 0
+    && !showTrash && !searchQuery && sourceFilter === "all" && lifecycle.notices.length === 0;
   const selectedNotice = lifecycle.notices.find(notice => notice.id === itemId);
   const selectedActionError = selectedNotice?.failed
     ? `Couldn’t ${lifecycleCopy[selectedNotice.operation].verb} this save${lifecycleCopy[selectedNotice.operation].suffix}. Please try again.`
@@ -191,20 +193,17 @@ export default function Home() {
   );
   return (
     <Dialog open={askOpen} onOpenChange={setAskOpen}>
-    <main className="mx-auto flex min-h-screen w-full max-w-7xl flex-col gap-8 px-6 py-12 sm:px-10 lg:py-20">
-      <header className="space-y-3">
-        <p className="text-sm font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-          MindVault
-        </p>
-        <h1 className="max-w-2xl text-4xl font-semibold tracking-tight sm:text-5xl">
-          Save it now. Find it when it matters.
+    <main className="mx-auto flex min-h-screen w-[75vw] max-w-none flex-col gap-6 py-6 sm:py-8">
+      <header className={isFirstUseEmpty ? "space-y-3 py-4" : undefined}>
+        <h1 className={isFirstUseEmpty ? "max-w-2xl text-4xl font-semibold tracking-tight text-balance sm:text-5xl" : "text-2xl font-semibold tracking-tight"}>
+          {isFirstUseEmpty ? "Save it now. Find it when it matters." : "MindVault"}
         </h1>
-        <p className="max-w-2xl text-lg leading-8 text-muted-foreground">
+        {isFirstUseEmpty && <p className="max-w-2xl text-lg leading-8 text-muted-foreground">
           Save useful information without interrupting your flow.
-        </p>
+        </p>}
       </header>
 
-      <div aria-label="Save actions" className="space-y-2">
+      {lifecycle.notices.length > 0 && <div aria-label="Save actions" className="space-y-2">
         {lifecycle.notices.map(notice => {
           const copy = lifecycleCopy[notice.operation];
           return <Alert key={notice.id} role={notice.failed ? "alert" : "status"} variant={notice.failed ? "destructive" : "default"}>
@@ -219,13 +218,15 @@ export default function Home() {
             </AlertDescription>
           </Alert>;
         })}
-      </div>
+      </div>}
       <UniversalCaptureArea onSaved={showCapturedItem} onDuplicate={revealDuplicate} disabled={showTrash}>
       <div className="mb-6 space-y-3">
-        {!showTrash && <div className="flex flex-wrap items-center gap-2">
-          <div className="min-w-0 flex-1"><SearchForm query={searchText} onQueryChange={setSearchText} onSearch={setSearchQuery} onClear={clearSearch} isSearching={recallQuery.isFetching} /></div>
-          <Button variant="outline" aria-expanded={filtersOpen} aria-controls="board-filters" onClick={() => setFiltersOpen(value => !value)}>Filter{sourceFilter !== "all" ? " · 1" : ""}</Button>
-          <DialogTrigger render={<Button variant="ghost" />}>Ask</DialogTrigger>
+        {!showTrash && <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
+          <div className="w-full min-w-0 flex-1"><SearchForm query={searchText} onQueryChange={setSearchText} onSearch={setSearchQuery} onClear={clearSearch} isSearching={recallQuery.isFetching} /></div>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" className="h-11 min-w-11" aria-expanded={filtersOpen} aria-controls="board-filters" onClick={() => setFiltersOpen(value => !value)}>Filter{sourceFilter !== "all" ? " · 1" : ""}</Button>
+            <DialogTrigger render={<Button variant="ghost" className="h-11 min-w-11" />}>Ask</DialogTrigger>
+          </div>
         </div>}
         {!showTrash && filtersOpen && <div id="board-filters" className="space-y-3 rounded-xl border p-4">
           <p className="text-sm text-muted-foreground">{searchQuery ? "Filter these search results by how you saved them. Search returns the most relevant matches, not every saved item." : "Filter your saves by how you saved them."}</p>
@@ -235,8 +236,8 @@ export default function Home() {
         </div>}
       </div>
       <section aria-labelledby="knowledge-items-heading" className="space-y-5">
-        <div>
-          <div>
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
             <h2
               id="knowledge-items-heading"
               tabIndex={-1}
@@ -247,11 +248,11 @@ export default function Home() {
             <p className="mt-1 text-sm text-muted-foreground">
               {showTrash ? `${trashedKnowledgeItems.length} ${trashedKnowledgeItems.length === 1 ? "item" : "items"} retained in Trash.` : searchQuery ? `Matches for “${searchQuery}”, ordered by relevance` : `${activeItemCount} ${activeItemCount === 1 ? "save" : "saves"}`}
             </p>
-            {showTrash ? <Button variant="outline" className="mt-3" onClick={() => setShowTrash(false)}>Back to saves</Button> : <DropdownMenu>
-              <DropdownMenuTrigger render={<Button variant="ghost" size="icon" aria-label="Board menu" />}><MoreHorizontal /></DropdownMenuTrigger>
+          </div>
+          {showTrash ? <Button variant="outline" onClick={() => setShowTrash(false)}>Back to saves</Button> : <DropdownMenu>
+              <DropdownMenuTrigger render={<Button variant="ghost" size="icon" className="size-11" aria-label="Board menu" />}><MoreHorizontal /></DropdownMenuTrigger>
               <DropdownMenuContent><DropdownMenuItem onClick={() => { closeItem(); setShowTrash(true); }}>View Trash</DropdownMenuItem></DropdownMenuContent>
             </DropdownMenu>}
-          </div>
         </div>
         {boardQuery.isPending && (
           <Card role="status">
@@ -277,7 +278,7 @@ export default function Home() {
         <div className="columns-1 gap-4 sm:columns-2 lg:columns-3 xl:columns-4">
           {visibleItems.map(knowledgeItem => (
             <div id={`knowledge-item-${knowledgeItem.id}`} key={knowledgeItem.id} tabIndex={-1} aria-label={highlightedItemId === knowledgeItem.id ? "Already saved item" : undefined} className={`break-inside-avoid rounded-2xl ${highlightedItemId === knowledgeItem.id ? "ring-2 ring-primary ring-offset-4" : ""}`}>
-              {"excerpts" in knowledgeItem ? <RecallResultCard result={knowledgeItem} onOpen={openItem} onTrash={(id, title) => void lifecycle.run("trash", id, title)} /> : <KnowledgeItemCard knowledgeItem={knowledgeItem} onOpen={openItem} onTrash={(id, title) => void lifecycle.run("trash", id, title)} />}
+              {"excerpts" in knowledgeItem ? <RecallResultCard result={knowledgeItem} knowledgeItem={knowledgeItems.find(item => item.id === knowledgeItem.id)} onOpen={openItem} onTrash={(id, title) => void lifecycle.run("trash", id, title)} /> : <KnowledgeItemCard knowledgeItem={knowledgeItem} onOpen={openItem} onTrash={(id, title) => void lifecycle.run("trash", id, title)} />}
             </div>
           ))}
         </div>

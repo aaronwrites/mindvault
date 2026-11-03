@@ -36,6 +36,17 @@ function setup(disabled = false) {
 beforeEach(() => { createCapture.mockReset(); createOriginalFileCapture.mockReset(); });
 afterEach(cleanup);
 
+test("capture shortcuts are discoverable before Add and file support is explained before choosing files", async () => {
+  const view = setup();
+  expect(view.getByText("Paste a link or drop files")).toBeTruthy();
+  await view.user.click(view.getByRole("button", { name: "Add" }));
+  const support = view.getByText(/Text PDFs and scanned PDFs with printed English text can be searched/);
+  expect(support.textContent).toContain("Other files are retained for opening or downloading");
+  expect(support.textContent).toContain("understanding their contents is not available yet");
+  expect(support.textContent).toContain("Executables and archives aren’t accepted");
+  expect(view.getByLabelText("Choose files").getAttribute("aria-describedby")).toBe(support.id);
+});
+
 test("Add saves a link without metadata and reports Saved only after durable success", async () => {
   let finish!: (value: CaptureResponse) => void;
   createCapture.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
@@ -158,6 +169,10 @@ test("paste works with page focus, ignores an open dialog, and disables shortcut
   expect(createCapture).toHaveBeenCalledTimes(1);
   expect(createOriginalFileCapture).not.toHaveBeenCalled();
   expect(trash.queryByText("Drop files to save")).toBeNull();
+  expect(trash.queryByText("Paste a link or drop files")).toBeNull();
+  await trash.user.click(trash.getByRole("button", { name: "Add" }));
+  expect(trash.getByRole("dialog")).toBeTruthy();
+  expect(trash.queryByText(/You can also paste a link or drop files/)).toBeNull();
 });
 
 test("pending files and links cannot be resubmitted, and cancelled drags clear the overlay", async () => {

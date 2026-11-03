@@ -1,8 +1,8 @@
-import { ItemQuickActions } from "@/components/item-quick-actions";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { SourcePreviewMedia, originalFileTitle, sourceKindLabel, sourcePreviewTitle } from "@/components/source-preview";
+import { ImageTitleCard } from "@/components/image-title-card";
+import { CardHoverSummary } from "@/components/card-hover-summary";
+import { originalFileTitle, sourcePreviewTitle } from "@/components/source-preview";
+import { knowledgeItemCardDescription } from "@/lib/knowledge-item-card-content";
+import { knowledgeItemCardStatus } from "@/lib/knowledge-item-status";
 import type { KnowledgeItem } from "@/lib/types";
 
 export function knowledgeItemTitle(item: KnowledgeItem) {
@@ -30,23 +30,12 @@ export function KnowledgeItemCard({ knowledgeItem: item, onOpen, onTrash }: {
   onTrash?: (id: number, title: string) => void;
 }) {
   const title = knowledgeItemTitle(item);
-  const processing = isItemProcessing(item);
-  const limited = itemHasLimitations(item);
+  const description = knowledgeItemCardDescription(item);
+  const status = knowledgeItemCardStatus(item);
   return (
-    <Card className="group/card relative mb-4 break-inside-avoid">
-      <Button variant="ghost" className="absolute inset-0 z-10 size-full rounded-[inherit]" aria-label={`View ${title}`} onClick={() => onOpen(item.id)} />
-      {item.sourcePreview?.previewImageUrl && <SourcePreviewMedia preview={item.sourcePreview} />}
-      <CardContent className="space-y-3">
-        {onTrash && item.lifecycleState === "active" && <ItemQuickActions item={item} title={title} onTrash={onTrash} />}
-        <div className="flex items-start justify-between gap-3">
-          <h3 className="break-words text-lg font-medium">{title}</h3>
-          {(processing || limited) && <span role="status" aria-label={processing ? "Processing saved content" : "Details need attention or have limitations"} className={`mt-2 size-2 shrink-0 rounded-full ${processing ? "bg-muted-foreground motion-safe:animate-pulse" : "bg-amber-600"}`} />}
-        </div>
-        {item.lifecycleState === "pending-permanent-deletion" && <p role="status" className="text-sm text-muted-foreground">{item.deletion?.status === "failed" ? "Deletion didn’t finish. Open details to retry." : "Deleting permanently…"}</p>}
-        {item.source.filename !== undefined && <p className="text-sm text-muted-foreground">{sourceKindLabel(item.source.kind)}</p>}
-        {(item.sourcePreview?.description || item.recognitionSummary) && <p className="line-clamp-4 text-sm text-muted-foreground">{item.sourcePreview?.description ?? item.recognitionSummary}</p>}
-        {item.topicTags.length > 0 && <div aria-label="Tags" className="flex flex-wrap gap-2">{item.topicTags.slice(0, 4).map(tag => <Badge key={tag} variant="secondary">{tag}</Badge>)}</div>}
-      </CardContent>
-    </Card>
+    <ImageTitleCard item={item} title={title} onOpen={onOpen} onTrash={item.lifecycleState === "active" ? onTrash : undefined}>
+      <CardHoverSummary status={item.lifecycleState === "pending-permanent-deletion" ? item.deletion?.status === "failed" ? "Deletion failed" : "Deleting" : status.label}
+        summary={description?.label === "TL;DR" ? description.text : null} />
+    </ImageTitleCard>
   );
 }

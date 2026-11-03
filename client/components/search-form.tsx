@@ -28,23 +28,28 @@ export function SearchForm({ query, onQueryChange, onSearch, onClear, isSearchin
   }
 
   return (
-    <form onSubmit={handleSubmit} role="search" className="flex gap-2" aria-busy={isSearching}>
-      <Input
-        aria-label="Search your saves"
-        value={query}
-        onChange={(event) => { onQueryChange(event.target.value); if (!event.target.value.trim()) onClear(); }}
-        placeholder="Search by meaning, e.g. container orchestration"
-        className="h-10" maxLength={500}
-      />
-      {query && (
-        <Button type="button" variant="outline" size="icon" onClick={clearSearch} aria-label="Clear search">
-          <X />
+    <form onSubmit={handleSubmit} role="search" className="space-y-1.5" aria-busy={isSearching}>
+      <div className="flex gap-2">
+        <div className="relative min-w-0 flex-1">
+          <Input
+            aria-label="Search your saves"
+            value={query}
+            onChange={(event) => { onQueryChange(event.target.value); if (!event.target.value.trim()) onClear(); }}
+            placeholder="Search by meaning"
+            className="h-11 pr-11" maxLength={500}
+          />
+          {query && (
+            <Button type="button" variant="ghost" size="icon" className="absolute right-0 top-0 size-11" onClick={clearSearch} aria-label="Clear search">
+              <X />
+            </Button>
+          )}
+        </div>
+        <Button type="submit" className="h-11 w-11 shrink-0 sm:w-32" disabled={!query.trim()}>
+          <Search />
+          <span className="sr-only sm:not-sr-only">{isSearching ? "Searching…" : "Search"}</span>
         </Button>
-      )}
-      <Button type="submit" disabled={!query.trim()}>
-        <Search />
-        {isSearching ? "Searching…" : "Search"}
-      </Button>
+      </div>
+      <p className="text-sm text-muted-foreground">Try “container orchestration”.</p>
     </form>
   );
 }
