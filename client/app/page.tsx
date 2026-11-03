@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { CaptureForm } from "@/components/capture-form";
+import { UniversalCaptureArea } from "@/components/universal-capture-area";
 import { KnowledgeItemDialog } from "@/components/knowledge-item-dialog";
 import { useItemNavigation } from "@/lib/use-item-navigation";
 import { KnowledgeItemCard, isItemProcessing } from "@/components/knowledge-item-card";
@@ -14,20 +14,28 @@ import { PdfExtractionCoverage } from "@/components/pdf-extraction-coverage";
 import { SynthesisForm } from "@/components/synthesis-form";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { askVault, getKnowledgeItems, getTrashedKnowledgeItems, knowledgeItemKeys, permanentlyDeleteKnowledgeItem, recallKeys, refreshKnowledgeItem, restoreKnowledgeItem, retryKnowledgeItem, searchKnowledgeItems, trashKnowledgeItem } from "@/lib/api";
-import type { KnowledgeItem, SynthesisResult } from "@/lib/types";
+import type { KnowledgeItem, RecallKnowledgeItem, SynthesisResult } from "@/lib/types";
 
 type ConversationTurn = {
   question: string;
   result: SynthesisResult;
 };
 
+function newestFirst(a: KnowledgeItem, b: KnowledgeItem) { return Date.parse(b.createdAt) - Date.parse(a.createdAt); }
+
 export default function Home() {
   const queryClient = useQueryClient();
   const { itemId, openItem, closeItem, returnFocus } = useItemNavigation();
   const [searchQuery, setSearchQuery] = useState("");
+  const [searchText, setSearchText] = useState("");
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [sourceFilter, setSourceFilter] = useState("all");
+  const [highlightedItemId, setHighlightedItemId] = useState<number | null>(null);
   const [showTrash, setShowTrash] = useState(false);
   const [permanentDeletionTarget, setPermanentDeletionTarget] = useState<KnowledgeItem | null>(null);
   const [synthesisQuestion, setSynthesisQuestion] = useState("");
@@ -85,6 +93,8 @@ export default function Home() {
     mutationFn: trashKnowledgeItem,
     onSuccess: async (_, id) => {
       closeItem(id);
+      await queryClient.cancelQueries({ queryKey: recallKeys.all });
+      queryClient.setQueriesData<RecallKnowledgeItem[]>({ queryKey: recallKeys.all }, current => current?.filter(item => item.id !== id));
       queryClient.setQueryData<KnowledgeItem[]>(knowledgeItemKeys.all, current => (current ?? []).filter(item => item.id !== id));
       await Promise.all([queryClient.invalidateQueries({ queryKey: knowledgeItemKeys.trash }), queryClient.invalidateQueries({ queryKey: recallKeys.all })]);
     },
@@ -109,7 +119,8 @@ export default function Home() {
   const recallQuery = useQuery({
     queryKey: recallKeys.search(searchQuery),
     queryFn: () => searchKnowledgeItems(searchQuery),
-    enabled: Boolean(searchQuery),
+    enabled: Boolean(searchQuery) && !showTrash,
+    retry: false,
   });
   const synthesisMutation = useMutation({
     mutationFn: askVault,
@@ -126,7 +137,8 @@ export default function Home() {
     });
   }
   async function showCapturedItem(knowledgeItem: KnowledgeItem) {
-    await queryClient.cancelQueries({ queryKey: knowledgeItemKeys.all });
+    await queryClient.cancelQueries({ queryKey: knowledgeItemKeys.all, exact: true });
+    queryClient.setQueryData(knowledgeItemKeys.detail(knowledgeItem.id), knowledgeItem);
     queryClient.setQueryData<KnowledgeItem[]>(
       knowledgeItemKeys.all,
       (current) => [
@@ -135,6 +147,27 @@ export default function Home() {
       ],
     );
   }
+  function clearSearch() { setSearchQuery(""); setSearchText(""); }
+  async function revealDuplicate(knowledgeItem: KnowledgeItem) {
+    await showCapturedItem(knowledgeItem);
+    queryClient.setQueryData<KnowledgeItem[]>(knowledgeItemKeys.trash, current => current?.filter(item => item.id !== knowledgeItem.id));
+    clearSearch();
+    setShowTrash(false);
+    setSourceFilter("all");
+    setHighlightedItemId(knowledgeItem.id);
+  }
+  useEffect(() => {
+    if (highlightedItemId === null) return;
+    const card = document.getElementById(`knowledge-item-${highlightedItemId}`);
+    card?.scrollIntoView?.({ block: "nearest", behavior: "instant" });
+    card?.focus({ preventScroll: true });
+    const timer = setTimeout(() => setHighlightedItemId(null), 4_000);
+    return () => clearTimeout(timer);
+  }, [highlightedItemId]);
+  const boardQuery = showTrash ? trashQuery : searchQuery ? recallQuery : knowledgeItemsQuery;
+  const visibleItems = (showTrash ? [...trashedKnowledgeItems].sort(newestFirst)
+    : searchQuery ? recallQuery.data ?? [] : [...knowledgeItems].sort(newestFirst))
+    .filter(item => showTrash || sourceFilter === "all" || (sourceFilter === "files" ? item.source.filename !== undefined : item.source.filename === undefined));
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-7xl flex-col gap-8 px-6 py-12 sm:px-10 lg:py-20">
       <header className="space-y-3">
@@ -147,13 +180,22 @@ export default function Home() {
         <p className="max-w-2xl text-lg leading-8 text-muted-foreground">
           Capture useful knowledge without interrupting your flow.
         </p>
-        <nav aria-label="Your vault" className="flex flex-wrap gap-2">
-          <Button variant="outline" render={<a href="#capture-heading" />} nativeButton={false}>Save something</Button>
-          <Button variant="ghost" render={<a href="#recall-heading" />} nativeButton={false}>Find a save</Button>
-          <Button variant="ghost" render={<a href="#synthesis-heading" />} nativeButton={false}>Ask</Button>
-        </nav>
       </header>
 
+      <UniversalCaptureArea onSaved={showCapturedItem} onDuplicate={revealDuplicate} disabled={showTrash}>
+      <div className="mb-6 space-y-3">
+        {!showTrash && <div className="flex flex-wrap items-center gap-2">
+          <div className="min-w-0 flex-1"><SearchForm query={searchText} onQueryChange={setSearchText} onSearch={setSearchQuery} onClear={clearSearch} isSearching={recallQuery.isFetching} /></div>
+          <Button variant="outline" aria-expanded={filtersOpen} aria-controls="board-filters" onClick={() => setFiltersOpen(value => !value)}>Filter{sourceFilter !== "all" ? " · 1" : ""}</Button>
+          <Button variant="ghost" render={<a href="#synthesis-heading" />} nativeButton={false}>Ask</Button>
+        </div>}
+        {!showTrash && filtersOpen && <div id="board-filters" className="space-y-3 rounded-xl border p-4">
+          <p className="text-sm text-muted-foreground">{searchQuery ? "Filter these search results by how you saved them. Search returns the most relevant matches, not every saved item." : "Filter your saves by how you saved them."}</p>
+          <RadioGroup aria-label="Saved as" value={sourceFilter} onValueChange={value => setSourceFilter(String(value))} className="flex flex-wrap gap-5">
+            {[["all", "All saves"], ["links", "Links"], ["files", "Files"]].map(([value, label]) => <div key={value} className="flex items-center gap-2"><RadioGroupItem id={`filter-${value}`} value={value} /><Label htmlFor={`filter-${value}`}>{label}</Label></div>)}
+          </RadioGroup>
+        </div>}
+      </div>
       <section aria-labelledby="knowledge-items-heading" className="space-y-5">
         <div>
           <div>
@@ -161,25 +203,25 @@ export default function Home() {
               id="knowledge-items-heading"
               className="text-2xl font-semibold tracking-tight"
             >
-              {showTrash ? "Trash" : "Your saves"}
+              {showTrash ? "Trash" : searchQuery ? "Search results" : "Your saves"}
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              {showTrash ? `${trashedKnowledgeItems.length} ${trashedKnowledgeItems.length === 1 ? "item" : "items"} retained in Trash.` : `${knowledgeItems.length} ${knowledgeItems.length === 1 ? "item" : "items"} captured`}
+              {showTrash ? `${trashedKnowledgeItems.length} ${trashedKnowledgeItems.length === 1 ? "item" : "items"} retained in Trash.` : searchQuery ? `Matches for “${searchQuery}”, ordered by relevance` : `${knowledgeItems.length} ${knowledgeItems.length === 1 ? "save" : "saves"}`}
             </p>
             <Button variant="outline" className="mt-3" onClick={() => setShowTrash(value => !value)}>{showTrash ? "Back to saves" : "View Trash"}</Button>
           </div>
         </div>
-        {(showTrash ? trashQuery.isPending : knowledgeItemsQuery.isPending) && (
+        {boardQuery.isPending && (
           <Card role="status">
             <CardContent className="py-3 text-center text-muted-foreground">
-              Loading your saves…
+              {searchQuery && !showTrash ? "Searching your saves…" : "Loading your saves…"}
             </CardContent>
           </Card>
         )}
-        {(showTrash ? trashQuery.error : knowledgeItemsQuery.error) && (
+        {(boardQuery.error && (showTrash || !searchQuery)) && (
           <Alert variant="destructive">
             <AlertDescription>
-              {(showTrash ? trashQuery.error : knowledgeItemsQuery.error)?.message}
+              {boardQuery.error?.message}
             </AlertDescription>
           </Alert>
         )}
@@ -196,41 +238,21 @@ export default function Home() {
         {trashMutation.error && <Alert variant="destructive"><AlertDescription>{trashMutation.error.message}</AlertDescription></Alert>}
         {restoreMutation.error && <Alert variant="destructive"><AlertDescription>{restoreMutation.error.message}</AlertDescription></Alert>}
         {permanentlyDeleteMutation.error && <Alert variant="destructive"><AlertDescription>{permanentlyDeleteMutation.error.message}</AlertDescription></Alert>}
-        {!(showTrash ? trashQuery.isPending : knowledgeItemsQuery.isPending) &&
-          !(showTrash ? trashQuery.error : knowledgeItemsQuery.error) &&
-          (showTrash ? trashedKnowledgeItems : knowledgeItems).length === 0 && (
-            <Card>
-              <CardContent className="py-3 text-center text-muted-foreground">
-                {showTrash ? "Trash is empty. Items you move here can be restored." : "Your vault is empty. Save a link or file below."}
-              </CardContent>
-            </Card>
-          )}
+        {!showTrash && searchQuery && recallQuery.error && <Alert variant="destructive"><AlertDescription>Couldn’t search your saves. Please try again.</AlertDescription><Button variant="outline" onClick={() => void recallQuery.refetch()}>Try search again</Button></Alert>}
+        {!boardQuery.isPending &&
+          !boardQuery.error &&
+          visibleItems.length === 0 && <Card><CardContent className="py-3 text-center text-muted-foreground">
+            {showTrash ? "Trash is empty. Items you move here can be restored." : searchQuery ? "No matches here. Try another idea or clear your filters." : sourceFilter !== "all" ? "No saves match this filter." : "Your vault is empty. Use Add to save a link or file."}
+          </CardContent></Card>}
         <div className="columns-1 gap-4 sm:columns-2 lg:columns-3 xl:columns-4">
-          {[...(showTrash ? trashedKnowledgeItems : knowledgeItems)].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)).map((knowledgeItem) => (
-            <div id={`knowledge-item-${knowledgeItem.id}`} key={knowledgeItem.id} className="break-inside-avoid">
-            <KnowledgeItemCard
-              knowledgeItem={knowledgeItem}
-              onOpen={openItem}
-            />
+          {visibleItems.map(knowledgeItem => (
+            <div id={`knowledge-item-${knowledgeItem.id}`} key={knowledgeItem.id} tabIndex={-1} aria-label={highlightedItemId === knowledgeItem.id ? "Already saved item" : undefined} className={`break-inside-avoid rounded-2xl ${highlightedItemId === knowledgeItem.id ? "ring-2 ring-primary ring-offset-4" : ""}`}>
+              {"excerpts" in knowledgeItem ? <RecallResultCard result={knowledgeItem} onOpen={openItem} /> : <KnowledgeItemCard knowledgeItem={knowledgeItem} onOpen={openItem} />}
             </div>
           ))}
         </div>
       </section>
-      {!showTrash && <section aria-labelledby="recall-heading" className="space-y-4">
-        <div>
-          <h2 id="recall-heading" className="text-2xl font-semibold tracking-tight">Find something you saved</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Search by meaning or exact language such as an error message, command, or identifier.</p>
-        </div>
-        <SearchForm onSearch={setSearchQuery} onClear={() => setSearchQuery("")} isSearching={recallQuery.isFetching} />
-        {searchQuery && recallQuery.isPending && <Card role="status"><CardContent className="py-3 text-center text-muted-foreground">Searching your captured knowledge…</CardContent></Card>}
-        {searchQuery && recallQuery.error && <Alert variant="destructive"><AlertDescription>{recallQuery.error.message}</AlertDescription></Alert>}
-        {searchQuery && !recallQuery.isPending && !recallQuery.error && recallQuery.data?.length === 0 && (
-          <Card><CardContent className="py-3 text-center text-muted-foreground">No Ready Knowledge Items matched that recall. Try a related idea or the exact wording you remember.</CardContent></Card>
-        )}
-        {recallQuery.data && recallQuery.data.length > 0 && (
-          <div className="grid gap-4 md:grid-cols-2">{recallQuery.data.map(result => <RecallResultCard key={result.id} result={result} onOpen={openItem} />)}</div>
-        )}
-      </section>}
+      </UniversalCaptureArea>
       {!showTrash && <section aria-labelledby="synthesis-heading" className="space-y-4">
         <div>
           <h2 id="synthesis-heading" className="text-2xl font-semibold tracking-tight">Ask your vault</h2>
@@ -263,7 +285,6 @@ export default function Home() {
           </Card>)}
         </section>}
       </section>}
-      {!showTrash && <CaptureForm onCaptured={showCapturedItem} />}
       <KnowledgeItemDialog
         itemId={itemId}
         trashedItem={trashedKnowledgeItems.find(item => item.id === itemId)}

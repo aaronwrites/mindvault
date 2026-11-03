@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { RecallKnowledgeItem } from "@/lib/types";
-import { SourcePreviewFacts, SourcePreviewMedia, sourcePreviewTitle } from "@/components/source-preview";
+import { SourcePreviewFacts, SourcePreviewMedia, originalFileTitle, sourcePreviewTitle } from "@/components/source-preview";
 
 const originLabels = {
   "source-snapshot": "Source Snapshot excerpt",
@@ -15,13 +15,20 @@ const originLabels = {
 } as const;
 
 export function RecallResultCard({ result, onOpen }: { result: RecallKnowledgeItem; onOpen?: (id: number) => void }) {
+  const title = result.source.filename !== undefined ? originalFileTitle(result.source.filename, result.source.kind) : sourcePreviewTitle(result.sourcePreview, result.source.submittedUrl);
   return (
-    <Card className="h-full">
+    <Card className="relative mb-4 break-inside-avoid" onClick={event => {
+      // Let links and buttons perform their own actions; text above the
+      // full-card button should still open the same details.
+      if (event.target instanceof Element && !event.target.closest('a, button, input, textarea, select, [role="button"]')) {
+        onOpen?.(result.id);
+      }
+    }}>
+      {onOpen && <Button variant="ghost" className="absolute inset-0 z-10 size-full rounded-[inherit]" aria-label={`View ${title}`} onClick={() => onOpen(result.id)} />}
       <SourcePreviewMedia preview={result.sourcePreview} />
       <CardHeader>
-        <Badge variant="outline" className="w-fit">Grounded match</Badge>
-        <CardTitle><h3>{result.source.filename ?? sourcePreviewTitle(result.sourcePreview, result.source.submittedUrl)}</h3></CardTitle>
-        <CardAction>
+        <CardTitle><h3 className="break-words text-lg font-medium">{title}</h3></CardTitle>
+        <CardAction className="relative z-20">
           {onOpen && <Button variant="outline" onClick={() => onOpen(result.id)}>View details</Button>}
           <Button
             variant="ghost"
@@ -41,7 +48,7 @@ export function RecallResultCard({ result, onOpen }: { result: RecallKnowledgeIt
         </section>
         <section aria-label="Grounded matching excerpts" className="space-y-3">
           {result.excerpts.map((excerpt, index) => (
-            <blockquote key={`${excerpt.origin}-${index}`} className="space-y-1 border-l-2 pl-3 text-sm">
+            <blockquote key={`${excerpt.origin}-${index}`} className="relative z-20 space-y-1 border-l-2 pl-3 text-sm">
               <p>{excerpt.text}</p>
               <PdfPageReference pageNumber={excerpt.pageNumber} pageLabel={excerpt.pageLabel} openOriginalFile={excerpt.openOriginalFile} />
               <PdfExtractionCoverage coverage={excerpt.sourceSnapshot?.extractionCoverage} />

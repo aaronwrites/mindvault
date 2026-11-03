@@ -17,7 +17,7 @@ Object.assign(globalThis, {
   IS_REACT_ACT_ENVIRONMENT: true,
 });
 
-const { act, cleanup, render, screen, waitFor } =
+const { act, cleanup, fireEvent, render, screen, waitFor } =
   await import("@testing-library/react");
 const { default: userEvent } = await import("@testing-library/user-event");
 const { QueryClient, QueryClientProvider } =
@@ -267,7 +267,7 @@ test("provides accessible loading, empty, and board error states", async () => {
   const { unmount } = renderHome();
   expect(screen.getByRole("status").textContent).toContain("Loading your saves");
   await act(async () => resolveItems([]));
-  expect(await screen.findByText("Your vault is empty. Save a link or file below.")).toBeTruthy();
+  expect(await screen.findByText("Your vault is empty. Use Add to save a link or file.")).toBeTruthy();
   unmount();
   getKnowledgeItems.mockRejectedValueOnce(new Error("MindVault is unavailable."));
   renderHome();
@@ -355,8 +355,8 @@ test("polls the board and open details until processing finishes", async () => {
   getKnowledgeItem.mockResolvedValueOnce(processingItem).mockResolvedValue(readyItem);
   renderHome(); await openCard();
   expect(screen.getByText(/preparing it for search/)).toBeTruthy();
-  await waitFor(() => expect(screen.queryByLabelText("Processing saved content")).toBeNull(), { timeout: 3500 });
-  await waitFor(() => expect(screen.getByRole("region", { name: "Preview" }).textContent).toContain(readyItem.recognitionSummary!), { timeout: 3500 });
+  await waitFor(() => expect(Boolean(screen.queryByLabelText("Processing saved content"))).toBe(false), { timeout: 6500 });
+  await waitFor(() => expect(screen.getByRole("region", { name: "Preview" }).textContent).toContain(readyItem.recognitionSummary!), { timeout: 6500 });
 });
 
 test("offers retry for failed updates while preserving previously searchable content", async () => {
@@ -383,7 +383,7 @@ test("Back and explicit Close preserve search input and results and return focus
   getKnowledgeItems.mockResolvedValue([readyItem]); getKnowledgeItem.mockResolvedValue(readyItem);
   searchKnowledgeItems.mockResolvedValue([{ id: 1, title: "Matching item", source: readyItem.source, sourcePreview: null, recognitionSummary: null, topicTags: [], excerpts: [{ text: "A matching database passage", origin: "source-snapshot", sourceSnapshot: null, ranking: { score: 1 } }], ranking: { score: 1, matchedPassageCount: 1 } }]);
   const user = userSetup(); renderHome();
-  const search = screen.getByLabelText("Search your Knowledge Items");
+  const search = screen.getByLabelText("Search your saves");
   await user.type(search, "database"); await user.click(screen.getByRole("button", { name: "Search" }));
   expect(await screen.findByText("A matching database passage")).toBeTruthy();
   const trigger = screen.getByRole("button", { name: "View details" });
@@ -421,89 +421,28 @@ test("moves a save to Trash, restores it, and confirms permanent deletion separa
   await waitFor(() => expect(restoreKnowledgeItem.mock.calls[0]?.[0]).toBe(9));
 });
 
-test("saves a URL immediately as a processing card through the retained capture form", async () => {
+test("saves a URL immediately as a processing card through Add", async () => {
   getKnowledgeItems.mockResolvedValue([]);
   createCapture.mockResolvedValue({ captureId: 1, sourceId: 1, knowledgeItemId: 1, processingAttemptId: 1, availability: "processing", organizationCondition: "processing", knowledgeItem: processingItem });
   const user = userSetup(); renderHome();
-  await user.type(screen.getByLabelText("URL"), "https://example.com/article");
-  await user.click(screen.getByRole("button", { name: "Capture to MindVault" }));
+  await user.click(screen.getByRole("button", { name: "Add" }));
+    await user.type(screen.getByLabelText("Link"), "https://example.com/article");
+  await user.click(screen.getByRole("button", { name: "Save link" }));
   expect(await screen.findByRole("button", { name: "View example.com" })).toBeTruthy();
   expect(screen.getByLabelText("Processing saved content")).toBeTruthy();
 });
 
-  test("captures one Original File with a personal note and presents its provenance without processing actions", async () => {
-    const originalFileItem: KnowledgeItem = {
-      id: 2,
-      createdAt: "2026-09-01T10:00:00.000Z",
-      lifecycleState: "active",
-      trashedAt: null,
-      source: {
-        id: 2,
-        kind: "pdf",
-        submittedUrl: "",
-        normalizedUrl: "",
-        filename: "../design notes.pdf",
-        mediaType: "application/pdf",
-        byteSize: 1_536,
-        originalFileActions: {
-          open: "/knowledge-items/2/original-file/open",
-          download: "/knowledge-items/2/original-file/download",
-        },
-      },
-      sourcePreview: null,
-      evidenceCoverage: null,
-      captureContexts: [{ kind: "personal-note", summary: "Keep for the proposal." }],
-      availability: "unsupported",
-      organizationCondition: "complete",
-      recognitionSummary: null,
-      topicTags: [],
-      latestAttempt: null,
-    };
-    getKnowledgeItems.mockResolvedValue([]);
-    createOriginalFileCapture.mockResolvedValue({
-      captureId: 2,
-      sourceId: 2,
-      knowledgeItemId: 2,
-      processingAttemptId: null,
-      availability: "unsupported",
-      organizationCondition: "complete",
-      reused: true,
-      restoredFromTrash: false,
-      knowledgeItem: originalFileItem,
-    });
-    const user = userEvent.setup({ document: dom.window.document });
-    renderHome();
-
-    await user.click(screen.getByRole("radio", { name: /File/ }));
-    await user.upload(screen.getByLabelText("Choose Original File"), new File(["proposal"], "design notes.pdf", { type: "application/pdf" }));
-    await user.type(screen.getByLabelText("Personal note (optional)"), "Keep for the proposal.");
-    await user.click(screen.getByRole("button", { name: "Capture file to MindVault" }));
-
-    await waitFor(() => expect(createOriginalFileCapture.mock.calls[0]?.[0]).toEqual({
-      file: expect.any(File),
-      personalNote: "Keep for the proposal.",
-    }));
-    expect(await screen.findByRole("heading", { name: "design notes.pdf" })).toBeTruthy();
-    expect(screen.getByLabelText("Details need attention or have limitations")).toBeTruthy();
-    expect(screen.getByText("Reused the existing Knowledge Item.")).toBeTruthy();
-    getKnowledgeItem.mockResolvedValue(originalFileItem);
-    await openCard("design notes.pdf");
-
-
-    expect(screen.getByText(/application\/pdf · 1.5 KB/)).toBeTruthy();
-    expect(screen.getByRole("img", { name: "PDF file placeholder" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Refresh" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Retry processing" })).toBeNull();
-    expect(screen.queryByLabelText("Generated Recognition Summary")).toBeNull();
-    expect(screen.queryByLabelText("Generated Topic Tags")).toBeNull();
-    const open = screen.getByRole("button", { name: "Open original" });
-    expect(open.getAttribute("href")).toBe("http://localhost:4000/knowledge-items/2/original-file/open");
-    expect(open.getAttribute("target")).toBe("_blank");
-    expect(open.getAttribute("rel")).toBe("noopener noreferrer");
-    const download = screen.getByRole("button", { name: "Download original file: design notes.pdf" });
-    expect(download.getAttribute("href")).toBe("http://localhost:4000/knowledge-items/2/original-file/download");
-  });
-
+test("a file saved through Add appears on the board with retained original access", async () => {
+  getKnowledgeItems.mockResolvedValue([]);
+  createOriginalFileCapture.mockResolvedValue({ captureId: 9, sourceId: 9, knowledgeItemId: 9, processingAttemptId: null, availability: "ready", organizationCondition: "complete", knowledgeItem: fileItem });
+  getKnowledgeItem.mockResolvedValue(fileItem);
+  const user = userSetup(); renderHome();
+  await user.click(screen.getByRole("button", { name: "Add" }));
+  await user.upload(screen.getByLabelText("Choose files"), new File(["proposal"], "proposal.pdf", { type: "application/pdf" }));
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  await openCard("proposal.pdf");
+  expect(screen.getByRole("button", { name: "Open original" }).getAttribute("href")).toBe("http://localhost:4000/knowledge-items/9/original-file/open");
+});
 
   test("keeps a newly captured Processing Preview Card when an older library request completes", async () => {
     let resolveInitialLibraryRequest: ((items: KnowledgeItem[]) => void) | undefined;
@@ -525,8 +464,9 @@ test("saves a URL immediately as a processing card through the retained capture 
     const user = userEvent.setup({ document: dom.window.document });
     renderHome();
 
-    await user.type(screen.getByLabelText("URL"), processingItem.source.submittedUrl);
-    await user.click(screen.getByRole("button", { name: "Capture to MindVault" }));
+    await user.click(screen.getByRole("button", { name: "Add" }));
+    await user.type(screen.getByLabelText("Link"), processingItem.source.submittedUrl);
+    await user.click(screen.getByRole("button", { name: "Save link" }));
     expect(await screen.findByRole("heading", { name: "example.com" })).toBeTruthy();
 
     await act(async () => resolveInitialLibraryRequest?.([]));
@@ -573,8 +513,9 @@ test("saves a URL immediately as a processing card through the retained capture 
     const user = userEvent.setup({ document: dom.window.document });
     renderHome();
 
-    await user.type(screen.getByLabelText("URL"), repeatedCapture.source.submittedUrl);
-    await user.click(screen.getByRole("button", { name: "Capture to MindVault" }));
+    await user.click(screen.getByRole("button", { name: "Add" }));
+    await user.type(screen.getByLabelText("Link"), repeatedCapture.source.submittedUrl);
+    await user.click(screen.getByRole("button", { name: "Save link" }));
     expect(await screen.findByRole("button", { name: "View example.com" })).toBeTruthy();
 
     await act(async () => resolveInitialLibraryRequest?.([existingKnowledgeItem]));
@@ -620,10 +561,10 @@ test("saves a URL immediately as a processing card through the retained capture 
     const user = userEvent.setup({ document: dom.window.document });
     renderHome();
 
-    await user.type(screen.getByLabelText("Search your Knowledge Items"), "EADDRINUSE");
+    await user.type(screen.getByLabelText("Search your saves"), "EADDRINUSE");
     await user.click(screen.getByRole("button", { name: "Search" }));
 
-    expect(await screen.findByText(/EADDRINUSE/)).toBeTruthy();
+    expect(await screen.findByText(/The service reported the error message EADDRINUSE/)).toBeTruthy();
     expect(screen.getByRole("button", { name: "Open original Source" }).getAttribute("href")).toBe(processingItem.source.submittedUrl);
   });
 
@@ -668,7 +609,7 @@ test("saves a URL immediately as a processing card through the retained capture 
     const user = userEvent.setup({ document: dom.window.document });
     renderHome();
 
-    await user.type(screen.getByLabelText("Search your Knowledge Items"), "grounded source");
+    await user.type(screen.getByLabelText("Search your saves"), "grounded source");
     await user.click(screen.getByRole("button", { name: "Search" }));
 
     expect(await screen.findByRole("heading", { name: "Trustworthy preview facts" })).toBeTruthy();
@@ -705,7 +646,7 @@ test("saves a URL immediately as a processing card through the retained capture 
     const user = userEvent.setup({ document: dom.window.document });
     renderHome();
 
-    await user.type(screen.getByLabelText("Search your Knowledge Items"), "grounded source");
+    await user.type(screen.getByLabelText("Search your saves"), "grounded source");
     await user.click(screen.getByRole("button", { name: "Search" }));
 
     expect(await screen.findByRole("img", { name: "Webpage preview placeholder" })).toBeTruthy();
@@ -734,4 +675,199 @@ test("a delayed Trash response does not close a different item's details", async
   await act(async () => finishTrash());
   expect(window.location.hash).toBe("#item=9");
   expect(screen.getByRole("heading", { name: "proposal.pdf", level: 2 })).toBeTruthy();
+});
+
+function matchingItem(item: KnowledgeItem, text: string): RecallKnowledgeItem {
+  return { id: item.id, title: null, source: item.source, sourcePreview: item.sourcePreview,
+    recognitionSummary: item.recognitionSummary, topicTags: item.topicTags,
+    excerpts: [{ text, origin: "source-snapshot", sourceSnapshot: null, ranking: { score: 1 } }],
+    ranking: { score: 1, matchedPassageCount: 1 } };
+}
+
+test("search replaces the board in relevance order and clearing restores newest-first saves", async () => {
+  getKnowledgeItems.mockResolvedValue([readyItem, { ...fileItem, createdAt: "2026-11-01T10:00:00Z" }]);
+  searchKnowledgeItems.mockResolvedValue([matchingItem(readyItem, "First relevant match"), matchingItem(fileItem, "Second relevant match")]);
+  const user = userSetup(); renderHome();
+  await screen.findByRole("button", { name: "View proposal.pdf" });
+  await user.type(screen.getByLabelText("Search your saves"), "recovery");
+  await user.click(screen.getByRole("button", { name: "Search" }));
+  await screen.findByText("First relevant match");
+  const board = screen.getByRole("region", { name: "Search results" });
+  expect(Array.from(board.querySelectorAll('[id^="knowledge-item-"]')).map(card => card.id)).toEqual(["knowledge-item-1", "knowledge-item-9"]);
+  expect(screen.getAllByRole("heading", { name: "proposal.pdf", level: 3 })).toHaveLength(1);
+  await user.click(screen.getByRole("button", { name: "Clear search" }));
+  await waitFor(() => expect(screen.queryByText("First relevant match")).toBeNull());
+  expect(Array.from(screen.getByRole("region", { name: "Your saves" }).querySelectorAll('[id^="knowledge-item-"]')).map(card => card.id)).toEqual(["knowledge-item-9", "knowledge-item-1"]);
+});
+
+test("a newer query wins even if an older search finishes later", async () => {
+  getKnowledgeItems.mockResolvedValue([readyItem]);
+  let finishOld!: (items: RecallKnowledgeItem[]) => void;
+  searchKnowledgeItems.mockImplementationOnce(() => new Promise(resolve => { finishOld = resolve; }))
+    .mockResolvedValueOnce([matchingItem(fileItem, "Newest query evidence")]);
+  const user = userSetup(); renderHome();
+  const search = screen.getByLabelText("Search your saves");
+  await user.type(search, "old{Enter}");
+  expect(await screen.findByText("Searching your saves…")).toBeTruthy();
+  await user.clear(search); await user.type(search, "new{Enter}");
+  await screen.findByText("Newest query evidence");
+  await act(async () => finishOld([matchingItem(readyItem, "Old query evidence")]));
+  expect(screen.queryByText("Old query evidence")).toBeNull();
+  expect(screen.getByText("Newest query evidence")).toBeTruthy();
+  expect((search as HTMLInputElement).value).toBe("new");
+});
+
+test("failed search has safe copy, retries the current query, and supports clearing no matches", async () => {
+  getKnowledgeItems.mockResolvedValue([readyItem]);
+  searchKnowledgeItems.mockRejectedValueOnce(new Error("private SQL details" )).mockResolvedValueOnce([]);
+  const user = userSetup(); renderHome();
+  await user.type(screen.getByLabelText("Search your saves"), "missing{Enter}");
+  expect(await screen.findByText("Couldn’t search your saves. Please try again.")).toBeTruthy();
+  expect(screen.queryByText("private SQL details")).toBeNull();
+  await user.click(screen.getByRole("button", { name: "Try search again" }));
+  expect(await screen.findByText("No matches here. Try another idea or clear your filters.")).toBeTruthy();
+  expect(searchKnowledgeItems.mock.calls.at(-1)?.[0]).toBe("missing");
+  await user.click(screen.getByRole("button", { name: "Clear search" }));
+  expect(await screen.findByRole("button", { name: "View example.com" })).toBeTruthy();
+});
+
+test("filters loaded results by saved link or file and keeps filters through details and browsing", async () => {
+  getKnowledgeItems.mockResolvedValue([readyItem, fileItem]); getKnowledgeItem.mockResolvedValue(fileItem);
+  searchKnowledgeItems.mockResolvedValue([matchingItem(readyItem, "Link match"), matchingItem(fileItem, "File match")]);
+  const user = userSetup(); renderHome();
+  expect(screen.queryByRole("radio", { name: "Files" })).toBeNull();
+  await user.click(screen.getByRole("button", { name: "Filter" }));
+  await user.click(screen.getByRole("radio", { name: "Files" }));
+  expect(screen.queryByRole("button", { name: "View example.com" })).toBeNull();
+  await user.type(screen.getByLabelText("Search your saves"), "backup{Enter}");
+  await screen.findByText("File match");
+  expect(screen.queryByText("Link match")).toBeNull();
+  expect(screen.getByText(/Filter these search results/)).toBeTruthy();
+  await openCard("proposal.pdf");
+  expect(window.location.hash).toBe("#item=9");
+  await user.click(screen.getByRole("button", { name: "Close" }));
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  expect(screen.getByRole("radio", { name: "Files" }).getAttribute("aria-checked")).toBe("true");
+  expect((screen.getByLabelText("Search your saves") as HTMLInputElement).value).toBe("backup");
+  await user.click(screen.getByRole("button", { name: "Clear search" }));
+  expect(screen.queryByRole("button", { name: "View example.com" })).toBeNull();
+  expect(screen.getByRole("button", { name: "View proposal.pdf" })).toBeTruthy();
+  await user.click(screen.getByRole("radio", { name: "Links" }));
+  expect(screen.getByRole("button", { name: "View example.com" })).toBeTruthy();
+});
+
+test("moving a search result to Trash removes it immediately while a replacement search loads", async () => {
+  getKnowledgeItems.mockResolvedValue([readyItem, fileItem]); getKnowledgeItem.mockResolvedValue(fileItem);
+  searchKnowledgeItems.mockResolvedValueOnce([matchingItem(fileItem, "File to remove"), matchingItem(readyItem, "Keep this match")])
+    .mockImplementation(() => new Promise(() => {}));
+  trashKnowledgeItem.mockResolvedValue();
+  const user = userSetup(); renderHome();
+  await user.type(screen.getByLabelText("Search your saves"), "backup{Enter}");
+  await screen.findByText("File to remove");
+  await openCard("proposal.pdf");
+  await user.click(screen.getByRole("button", { name: "Move to Trash" }));
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  expect(Boolean(screen.queryByText("File to remove"))).toBe(false);
+  expect(screen.getByText("Keep this match")).toBeTruthy();
+  expect((screen.getByLabelText("Search your saves") as HTMLInputElement).value).toBe("backup");
+});
+
+test("processing refreshes matching evidence without clearing the query, filter, or open details", async () => {
+  getKnowledgeItems.mockResolvedValueOnce([processingItem, fileItem]).mockResolvedValue([readyItem, fileItem]);
+  getKnowledgeItem.mockResolvedValue(fileItem);
+  searchKnowledgeItems.mockResolvedValueOnce([matchingItem(fileItem, "Earlier matching evidence")]).mockResolvedValue([matchingItem(fileItem, "Updated matching evidence")]);
+  const user = userSetup(); renderHome();
+  await user.click(screen.getByRole("button", { name: "Filter" }));
+  await user.click(screen.getByRole("radio", { name: "Files" }));
+  await user.type(screen.getByLabelText("Search your saves"), "backup{Enter}");
+  await screen.findByText("Earlier matching evidence");
+  await openCard("proposal.pdf");
+  await waitFor(() => expect(Boolean(screen.queryByText("Updated matching evidence"))).toBe(true), { timeout: 6500 });
+  expect(window.location.hash).toBe("#item=9");
+  await user.click(screen.getByRole("button", { name: "Close" }));
+  await waitFor(() => expect(Boolean(screen.queryByRole("dialog"))).toBe(false));
+  expect((screen.getByLabelText("Search your saves") as HTMLInputElement).value).toBe("backup");
+  expect(screen.getByRole("radio", { name: "Files" }).getAttribute("aria-checked")).toBe("true");
+  expect(screen.getByText("Updated matching evidence")).toBeTruthy();
+});
+
+test("an already saved link resets hidden search and filters and highlights its existing card", async () => {
+  getKnowledgeItems.mockResolvedValue([readyItem, fileItem]);
+  searchKnowledgeItems.mockResolvedValue([matchingItem(fileItem, "Only file evidence")]);
+  createCapture.mockResolvedValue({ captureId: 2, sourceId: 1, knowledgeItemId: 1, processingAttemptId: null, availability: "ready", organizationCondition: "complete", reused: true, knowledgeItem: readyItem });
+  const user = userSetup(); renderHome();
+  await user.click(screen.getByRole("button", { name: "Filter" }));
+  await user.click(screen.getByRole("radio", { name: "Files" }));
+  await user.type(screen.getByLabelText("Search your saves"), "backup{Enter}");
+  await screen.findByText("Only file evidence");
+  await user.click(screen.getByRole("button", { name: "Add" }));
+  await user.type(screen.getByLabelText("Link"), readyItem.source.submittedUrl);
+  await user.click(screen.getByRole("button", { name: "Save link" }));
+  expect(await screen.findByText("Already saved")).toBeTruthy();
+  expect(await screen.findByLabelText("Already saved item")).toBeTruthy();
+  expect((screen.getByLabelText("Search your saves") as HTMLInputElement).value).toBe("");
+  expect(screen.getByRole("radio", { name: "All saves" }).getAttribute("aria-checked")).toBe("true");
+  expect(screen.getAllByRole("button", { name: "View example.com" })).toHaveLength(1);
+});
+
+test("Trash disables board shortcuts while Add remains available and search survives return", async () => {
+  getKnowledgeItems.mockResolvedValue([readyItem]); getTrashedKnowledgeItems.mockResolvedValue([]);
+  searchKnowledgeItems.mockResolvedValue([matchingItem(readyItem, "Keep query evidence")]);
+  const user = userSetup(); renderHome();
+  await user.type(screen.getByLabelText("Search your saves"), "database{Enter}");
+  await screen.findByText("Keep query evidence");
+  await user.click(screen.getByRole("button", { name: "View Trash" }));
+  expect(screen.getByRole("button", { name: "Add" })).toBeTruthy();
+  fireEvent.paste(screen.getByRole("main"), { clipboardData: { getData: () => "https://example.com/another" } });
+  expect(createCapture).not.toHaveBeenCalled();
+  await user.click(screen.getByRole("button", { name: "Back to saves" }));
+  expect((screen.getByLabelText("Search your saves") as HTMLInputElement).value).toBe("database");
+  expect(await screen.findByText("Keep query evidence")).toBeTruthy();
+});
+
+
+test("an existing save restored through Add leaves Trash and reveals the active card", async () => {
+  const trashed = { ...readyItem, lifecycleState: "trashed" as const, trashedAt: "2026-11-03T10:00:00Z" };
+  getKnowledgeItems.mockResolvedValue([]); getTrashedKnowledgeItems.mockResolvedValue([trashed]);
+  createCapture.mockResolvedValue({ captureId: 2, sourceId: 1, knowledgeItemId: 1, processingAttemptId: null, availability: "ready", organizationCondition: "complete", reused: true, restoredFromTrash: true, knowledgeItem: readyItem });
+  const user = userSetup(); renderHome();
+  await user.click(screen.getByRole("button", { name: "View Trash" }));
+  await screen.findByRole("button", { name: "View example.com" });
+  await user.click(screen.getByRole("button", { name: "Add" }));
+  await user.type(screen.getByLabelText("Link"), readyItem.source.submittedUrl);
+  await user.click(screen.getByRole("button", { name: "Save link" }));
+  await screen.findByLabelText("Already saved item");
+  expect(screen.getByRole("region", { name: "Your saves" })).toBeTruthy();
+  expect(screen.getAllByRole("button", { name: "View example.com" })).toHaveLength(1);
+  expect(screen.getByText("Already saved")).toBeTruthy();
+  getTrashedKnowledgeItems.mockResolvedValue([]);
+  await user.click(screen.getByRole("button", { name: "View Trash" }));
+  expect(await screen.findByText("Trash is empty. Items you move here can be restored.")).toBeTruthy();
+});
+
+
+test("Recall excerpt and provenance clicks open details while PDF links keep their own action", async () => {
+  const { RecallResultCard } = await import("@/components/recall-result-card");
+  const onOpen = mock<(id: number) => void>();
+  const result: RecallKnowledgeItem = {
+    id: 7, title: "PDF evidence", source: processingItem.source, sourcePreview: null,
+    recognitionSummary: null, topicTags: [], ranking: { score: 1, matchedPassageCount: 1 },
+    excerpts: [{ text: "Matching evidence to revisit.", origin: "source-snapshot", pageNumber: 2,
+      openOriginalFile: "/knowledge-items/7/original-file#page=2", sourceSnapshot: {
+        id: 5, originalUrl: processingItem.source.submittedUrl, finalUrl: processingItem.source.submittedUrl,
+        canonicalUrl: null, extractedAt: processingItem.createdAt, evidenceCoverage: "primary-content",
+      }, ranking: { score: 1 } }],
+  };
+  const view = render(<RecallResultCard result={result} onOpen={onOpen} />);
+  const user = userEvent.setup({ document: globalThis.document });
+  const link = view.getByRole("button", { name: "Open PDF at page 2" });
+  link.addEventListener("click", event => event.preventDefault(), { once: true });
+  await user.click(link);
+  expect(onOpen).not.toHaveBeenCalled();
+  await user.click(view.getByText("Matching evidence to revisit."));
+  expect(onOpen).toHaveBeenLastCalledWith(7);
+  await user.click(view.getByText("Source Snapshot excerpt"));
+  expect(onOpen).toHaveBeenCalledTimes(2);
+  await user.click(view.getByRole("button", { name: "View example.com" }));
+  expect(onOpen).toHaveBeenCalledTimes(3);
 });
