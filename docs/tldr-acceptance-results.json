@@ -1,0 +1,393 @@
+{
+  "models": {
+    "generation": {
+      "model": "gemma3:latest",
+      "digest": "a2af6cc3eb7fa8be8504abaf9b04e88f17a119ec3f04a3addf55f92841195f5a"
+    },
+    "embedding": {
+      "model": "nomic-embed-text:latest",
+      "digest": "0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f"
+    }
+  },
+  "web-processing": {
+    "processingMs": 1479,
+    "item": {
+      "title": "Primary article",
+      "customTitle": null,
+      "id": 1,
+      "createdAt": "2026-11-03T09:24:29.967Z",
+      "lifecycleState": "active",
+      "trashedAt": null,
+      "deletion": null,
+      "source": {
+        "id": 1,
+        "kind": "public-textual-web",
+        "submittedUrl": "http://127.0.0.1:49952/articles/primary-text",
+        "normalizedUrl": "http://127.0.0.1:49952/articles/primary-text"
+      },
+      "sourcePreview": {
+        "title": "Primary article",
+        "description": null,
+        "websiteName": null,
+        "author": null,
+        "publishedAt": null,
+        "contentType": null,
+        "previewImageUrl": null,
+        "previewImageAlt": null,
+        "previewImagePresentation": null,
+        "faviconUrl": "http://127.0.0.1:49952/favicon.ico"
+      },
+      "evidenceCoverage": "primary-content",
+      "captureContexts": [],
+      "availability": "ready",
+      "organizationCondition": "complete",
+      "recognitionSummary": "This fixture explains how Extraction keeps meaningful primary text while discarding repeated page chrome and navigation. Processing Attempts make failures visible without losing the user's Capture.",
+      "recognitionSummaryProvenance": {
+        "contract": "tldr-v1",
+        "sourceSnapshotId": 1,
+        "isCurrent": true,
+        "evidenceCoverage": "primary-content",
+        "extractionCoverage": null
+      },
+      "topicTags": [
+        "Testing"
+      ],
+      "latestAttempt": {
+        "id": 1,
+        "kind": "initial-capture",
+        "status": "completed",
+        "createdAt": "2026-11-03T09:24:29.967Z"
+      }
+    }
+  },
+  "web-retention": {
+    "processingMs": 1379,
+    "item": {
+      "title": "Retained knowledge",
+      "customTitle": null,
+      "id": 2,
+      "createdAt": "2026-11-03T09:24:31.678Z",
+      "lifecycleState": "active",
+      "trashedAt": null,
+      "deletion": null,
+      "source": {
+        "id": 2,
+        "kind": "public-textual-web",
+        "submittedUrl": "http://127.0.0.1:49952/articles/semantic-retention",
+        "normalizedUrl": "http://127.0.0.1:49952/articles/semantic-retention"
+      },
+      "sourcePreview": {
+        "title": "Retained knowledge",
+        "description": null,
+        "websiteName": null,
+        "author": null,
+        "publishedAt": null,
+        "contentType": null,
+        "previewImageUrl": null,
+        "previewImageAlt": null,
+        "previewImagePresentation": null,
+        "faviconUrl": "http://127.0.0.1:49952/favicon.ico"
+      },
+      "evidenceCoverage": "primary-content",
+      "captureContexts": [],
+      "availability": "ready",
+      "organizationCondition": "complete",
+      "recognitionSummary": "MindVault preserves useful article text in a durable Source Snapshot so the knowledge remains available when the original website changes or disappears. This fixture supplies enough meaningful primary text for trustworthy conceptual retrieval after a public article is no longer available at its original address.",
+      "recognitionSummaryProvenance": {
+        "contract": "tldr-v1",
+        "sourceSnapshotId": 2,
+        "isCurrent": true,
+        "evidenceCoverage": "primary-content",
+        "extractionCoverage": null
+      },
+      "topicTags": [
+        "Testing"
+      ],
+      "latestAttempt": {
+        "id": 2,
+        "kind": "initial-capture",
+        "status": "completed",
+        "createdAt": "2026-11-03T09:24:31.678Z"
+      }
+    }
+  },
+  "metadata-preview": {
+    "processingMs": 1624,
+    "item": {
+      "title": "Practical but short title",
+      "customTitle": null,
+      "id": 3,
+      "createdAt": "2026-11-03T09:24:33.276Z",
+      "lifecycleState": "active",
+      "trashedAt": null,
+      "deletion": null,
+      "source": {
+        "id": 3,
+        "kind": "public-textual-web",
+        "submittedUrl": "http://127.0.0.1:49952/metadata/description-only",
+        "normalizedUrl": "http://127.0.0.1:49952/metadata/description-only"
+      },
+      "sourcePreview": {
+        "title": "Practical but short title",
+        "description": "A guide to recovering a PostgreSQL database after an accidental schema migration.",
+        "websiteName": null,
+        "author": null,
+        "publishedAt": null,
+        "contentType": null,
+        "previewImageUrl": null,
+        "previewImageAlt": null,
+        "previewImagePresentation": null,
+        "faviconUrl": "http://127.0.0.1:49952/favicon.ico"
+      },
+      "evidenceCoverage": "metadata-only",
+      "captureContexts": [],
+      "availability": "ready",
+      "organizationCondition": "complete",
+      "recognitionSummary": "A page about recovering a PostgreSQL database after an accidental schema migration.",
+      "recognitionSummaryProvenance": {
+        "contract": "preview-v1",
+        "sourceSnapshotId": 3,
+        "isCurrent": true,
+        "evidenceCoverage": "metadata-only",
+        "extractionCoverage": null
+      },
+      "topicTags": [
+        "Testing"
+      ],
+      "latestAttempt": {
+        "id": 3,
+        "kind": "initial-capture",
+        "status": "completed",
+        "createdAt": "2026-11-03T09:24:33.276Z"
+      }
+    }
+  },
+  "full-pdf": {
+    "processingMs": 1819,
+    "item": {
+      "title": "selectable.pdf",
+      "customTitle": null,
+      "id": 4,
+      "createdAt": "2026-11-03T09:24:35.168Z",
+      "lifecycleState": "active",
+      "trashedAt": null,
+      "deletion": null,
+      "source": {
+        "id": 4,
+        "kind": "pdf",
+        "filename": "selectable.pdf",
+        "mediaType": "application/pdf",
+        "byteSize": 2194,
+        "originalFileActions": {
+          "download": "/knowledge-items/4/original-file/download",
+          "open": "/knowledge-items/4/original-file/open"
+        }
+      },
+      "sourcePreview": {
+        "title": "selectable.pdf",
+        "description": null,
+        "websiteName": null,
+        "author": null,
+        "publishedAt": null,
+        "contentType": "application/pdf",
+        "previewImageUrl": null,
+        "previewImageAlt": null,
+        "previewImagePresentation": null,
+        "faviconUrl": null
+      },
+      "evidenceCoverage": "primary-content",
+      "extractionCoverage": {
+        "pageCount": 2,
+        "pages": [
+          {
+            "method": "native",
+            "reason": null,
+            "outcome": "extracted",
+            "pageLabel": "i",
+            "pageNumber": 1
+          },
+          {
+            "method": "native",
+            "reason": null,
+            "outcome": "extracted",
+            "pageLabel": "1",
+            "pageNumber": 2
+          }
+        ]
+      },
+      "captureContexts": [
+        {
+          "id": 1,
+          "kind": "personal-note",
+          "text": "A flying purple database uses MAGIC_RECOVERY_AUTOMATION. This is my note, not a source claim.",
+          "summary": "A flying purple database uses MAGIC_RECOVERY_AUTOMATION. This is my note, not a source claim."
+        }
+      ],
+      "availability": "ready",
+      "organizationCondition": "complete",
+      "recognitionSummary": "The WAL_RECOVERY_TARGET identifier selects the recovery destination. Physical page two - printed page 1 Point-in-time recovery replays archived WAL to restore an earlier state.",
+      "recognitionSummaryProvenance": {
+        "contract": "tldr-v1",
+        "sourceSnapshotId": 4,
+        "isCurrent": true,
+        "evidenceCoverage": "primary-content",
+        "extractionCoverage": {
+          "pageCount": 2,
+          "pages": [
+            {
+              "method": "native",
+              "reason": null,
+              "outcome": "extracted",
+              "pageLabel": "i",
+              "pageNumber": 1
+            },
+            {
+              "method": "native",
+              "reason": null,
+              "outcome": "extracted",
+              "pageLabel": "1",
+              "pageNumber": 2
+            }
+          ]
+        }
+      },
+      "topicTags": [
+        "Testing"
+      ],
+      "latestAttempt": {
+        "id": 4,
+        "kind": "initial-capture",
+        "status": "completed",
+        "createdAt": "2026-11-03T09:24:35.168Z"
+      }
+    }
+  },
+  "partial-pdf": {
+    "processingMs": 2669,
+    "item": {
+      "title": "mixed.pdf",
+      "customTitle": null,
+      "id": 5,
+      "createdAt": "2026-11-03T09:24:37.265Z",
+      "lifecycleState": "active",
+      "trashedAt": null,
+      "deletion": null,
+      "source": {
+        "id": 5,
+        "kind": "pdf",
+        "filename": "mixed.pdf",
+        "mediaType": "application/pdf",
+        "byteSize": 41171,
+        "originalFileActions": {
+          "download": "/knowledge-items/5/original-file/download",
+          "open": "/knowledge-items/5/original-file/open"
+        }
+      },
+      "sourcePreview": {
+        "title": "mixed.pdf",
+        "description": null,
+        "websiteName": null,
+        "author": null,
+        "publishedAt": null,
+        "contentType": "application/pdf",
+        "previewImageUrl": null,
+        "previewImageAlt": null,
+        "previewImagePresentation": null,
+        "faviconUrl": null
+      },
+      "evidenceCoverage": "primary-content",
+      "extractionCoverage": {
+        "pageCount": 4,
+        "pages": [
+          {
+            "method": "native",
+            "reason": null,
+            "outcome": "extracted",
+            "pageLabel": null,
+            "pageNumber": 1
+          },
+          {
+            "method": "ocr",
+            "reason": null,
+            "outcome": "extracted",
+            "pageLabel": null,
+            "pageNumber": 2
+          },
+          {
+            "method": "ocr",
+            "reason": "No trustworthy printed English text from local OCR; visual content has not been interpreted",
+            "outcome": "unreadable",
+            "pageLabel": null,
+            "pageNumber": 3
+          },
+          {
+            "method": "none",
+            "reason": null,
+            "outcome": "blank",
+            "pageLabel": null,
+            "pageNumber": 4
+          }
+        ]
+      },
+      "captureContexts": [
+        {
+          "id": 2,
+          "kind": "personal-note",
+          "text": "A flying purple database uses MAGIC_RECOVERY_AUTOMATION. This is my note, not a source claim.",
+          "summary": "A flying purple database uses MAGIC_RECOVERY_AUTOMATION. This is my note, not a source claim."
+        }
+      ],
+      "availability": "ready",
+      "organizationCondition": "complete",
+      "recognitionSummary": "From partially extracted PDF text: PostgreSQL recovery field guide Write-ahead logging keeps committed transactions durable after a crash. PostgreSQL printed recovery checklist Restore the base backup before replaying archived WAL.",
+      "recognitionSummaryProvenance": {
+        "contract": "tldr-v1",
+        "sourceSnapshotId": 5,
+        "isCurrent": true,
+        "evidenceCoverage": "primary-content",
+        "extractionCoverage": {
+          "pageCount": 4,
+          "pages": [
+            {
+              "method": "native",
+              "reason": null,
+              "outcome": "extracted",
+              "pageLabel": null,
+              "pageNumber": 1
+            },
+            {
+              "method": "ocr",
+              "reason": null,
+              "outcome": "extracted",
+              "pageLabel": null,
+              "pageNumber": 2
+            },
+            {
+              "method": "ocr",
+              "reason": "No trustworthy printed English text from local OCR; visual content has not been interpreted",
+              "outcome": "unreadable",
+              "pageLabel": null,
+              "pageNumber": 3
+            },
+            {
+              "method": "none",
+              "reason": null,
+              "outcome": "blank",
+              "pageLabel": null,
+              "pageNumber": 4
+            }
+          ]
+        }
+      },
+      "topicTags": [
+        "Testing"
+      ],
+      "latestAttempt": {
+        "id": 5,
+        "kind": "initial-capture",
+        "status": "completed",
+        "createdAt": "2026-11-03T09:24:37.265Z"
+      }
+    }
+  }
+}

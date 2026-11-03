@@ -12,7 +12,7 @@ export function limitGenerationInput(prompt: string, closingInstructions = "", o
     if (promptBudget < encoder.encode(OMITTED_CONTENT_NOTICE).byteLength) throw new Error("Generation instructions exceed the input budget");
     if (encoder.encode(prompt).byteLength <= promptBudget) return prompt + closingInstructions;
 
-    if (options.requireComplete) throw new Error("PDF evidence exceeds the generation input limit; whole-document enrichment was not generated");
+    if (options.requireComplete) throw new Error("Source evidence exceeds the generation input limit; whole-document enrichment was not generated");
 
     const contentBudget = promptBudget - encoder.encode(OMITTED_CONTENT_NOTICE).byteLength;
     let bytes = 0;

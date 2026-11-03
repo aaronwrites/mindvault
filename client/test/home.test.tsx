@@ -1434,3 +1434,57 @@ test("note search failures are retryable without implying that an unsupported or
   expect(within(dialog).getByText("My searchable note.")).toBeTruthy();
   expect(screen.queryByLabelText("Processing saved content")).toBeNull();
 });
+
+
+test("labels only a current primary-content summary generated under the TL;DR contract as TL;DR", async () => {
+  const item = { ...readyItem, evidenceCoverage: "primary-content" as const, recognitionSummary: "A snapshot retains article text when the website disappears.",
+    recognitionSummaryProvenance: { contract: "tldr-v1", sourceSnapshotId: 1, isCurrent: true, evidenceCoverage: "primary-content" as const, extractionCoverage: null } };
+  getKnowledgeItems.mockResolvedValue([item]);
+  getKnowledgeItem.mockResolvedValue(item);
+  renderHome();
+  await openCard();
+  expect((await screen.findByRole("region", { name: "TL;DR" })).textContent).toContain(item.recognitionSummary);
+});
+
+for (const evidence of ["legacy", "metadata", "earlier version"] as const) {
+  test(`keeps ${evidence} generated text labeled Preview`, async () => {
+    const item: KnowledgeItem = { ...readyItem, recognitionSummaryProvenance: {
+      contract: evidence === "legacy" ? null : evidence === "metadata" ? "preview-v1" : "tldr-v1",
+      sourceSnapshotId: 1, isCurrent: evidence !== "earlier version",
+      evidenceCoverage: evidence === "metadata" ? "metadata-only" : "primary-content", extractionCoverage: null,
+    }, evidenceCoverage: evidence === "metadata" ? "metadata-only" : "primary-content" };
+    getKnowledgeItems.mockResolvedValue([item]); getKnowledgeItem.mockResolvedValue(item);
+    renderHome(); await openCard();
+    expect(screen.getByRole("region", { name: "Preview" }).textContent).toContain(item.recognitionSummary!);
+    expect(screen.queryByRole("heading", { name: "TL;DR" })).toBeNull();
+    if (evidence === "earlier version") expect(screen.getByText(/earlier saved version/)).toBeTruthy();
+    if (evidence === "metadata") expect(screen.getByText(/does not describe the full page content/)).toBeTruthy();
+  });
+}
+
+test("discloses unread pages and visual limitations alongside a partial PDF TL;DR", async () => {
+  const coverage: NonNullable<KnowledgeItem["extractionCoverage"]> = { pageCount: 2, pages: [
+    { pageNumber: 1, outcome: "extracted", reason: null }, { pageNumber: 2, outcome: "unreadable", reason: "No readable text" },
+  ] };
+  const item: KnowledgeItem = { ...fileItem, evidenceCoverage: "primary-content", extractionCoverage: coverage,
+    recognitionSummary: "From partially extracted PDF text: Restore a base backup before replaying WAL.",
+    recognitionSummaryProvenance: { contract: "tldr-v1", sourceSnapshotId: 1, isCurrent: true, evidenceCoverage: "primary-content", extractionCoverage: coverage } };
+  getKnowledgeItems.mockResolvedValue([item]); getKnowledgeItem.mockResolvedValue(item);
+  renderHome(); await openCard("proposal.pdf");
+  expect(screen.getByRole("region", { name: "TL;DR" }).textContent).toContain("does not interpret diagrams or charts");
+  expect(screen.getByText(/Incomplete extraction: page 2/)).toBeTruthy();
+  expect(document.querySelector("details")?.open).toBe(true);
+});
+
+test("updates an open Preview to TL;DR after background regeneration without saving again", async () => {
+  const updating: KnowledgeItem = { ...readyItem, latestAttempt: { ...processingItem.latestAttempt!, kind: "refresh", status: "running" } };
+  const completed: KnowledgeItem = { ...readyItem, recognitionSummary: "Snapshots preserve text when the original website disappears.",
+    recognitionSummaryProvenance: { contract: "tldr-v1", sourceSnapshotId: 1, isCurrent: true, evidenceCoverage: "primary-content", extractionCoverage: null } };
+  getKnowledgeItems.mockResolvedValue([updating]);
+  getKnowledgeItem.mockResolvedValueOnce(updating).mockResolvedValue(completed);
+  renderHome(); await openCard();
+  expect(screen.getByRole("heading", { name: "Preview" })).toBeTruthy();
+  await waitFor(() => expect(screen.getByRole("region", { name: "TL;DR" }).textContent).toContain(completed.recognitionSummary!), { timeout: 6500 });
+  expect(createCapture).not.toHaveBeenCalled();
+  expect(createOriginalFileCapture).not.toHaveBeenCalled();
+}, 10_000);

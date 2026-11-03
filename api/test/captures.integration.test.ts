@@ -214,6 +214,7 @@ describe("URL Capture", () => {
                 availability: "processing",
                 organizationCondition: "processing",
                 recognitionSummary: null,
+                recognitionSummaryProvenance: null,
                 topicTags: [],
                 lifecycleState: "active",
                 trashedAt: null,

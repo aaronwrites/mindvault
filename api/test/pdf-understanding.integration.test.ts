@@ -152,6 +152,7 @@ test("native evidence preserves distinct gaps and blank pages", async () => {
     await harness!.drainWorker();
     const item = await readItem(captured.knowledgeItemId);
     expect(item.availability).toBe("ready");
+    expect(item.recognitionSummaryProvenance).toMatchObject({ contract: "tldr-v1", isCurrent: true, evidenceCoverage: "primary-content", extractionCoverage: item.extractionCoverage });
     expect(item.extractionCoverage).toMatchObject({ pageCount: 3, pages: [
         { pageNumber: 1, method: "native", outcome: "extracted" },
         { pageNumber: 2, method: "ocr", outcome: "unreadable" },
@@ -166,7 +167,7 @@ test("a PDF beyond the generation budget stays searchable and discloses failed e
     expect(item.availability).toBe("ready");
     expect(item.organizationCondition).toBe("incomplete");
     expect(item.recognitionSummary).toBeNull();
-    expect(item.latestAttempt.warnings).toContain("PDF evidence exceeds the generation input limit; whole-document enrichment was not generated");
+    expect(item.latestAttempt.warnings).toContain("Source evidence exceeds the generation input limit; whole-document enrichment was not generated");
     expect((await search("WAL_RECOVERY_TARGET"))[0].id).toBe(captured.knowledgeItemId);
 });
 

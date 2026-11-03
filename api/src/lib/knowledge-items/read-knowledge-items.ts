@@ -70,6 +70,13 @@ export type KnowledgeItemView = {
     availability: KnowledgeItemAvailability;
     organizationCondition: "processing" | "complete" | "incomplete";
     recognitionSummary: string | null;
+    recognitionSummaryProvenance: {
+        contract: string | null;
+        sourceSnapshotId: number;
+        isCurrent: boolean;
+        evidenceCoverage: EvidenceCoverage;
+        extractionCoverage: PdfExtractionCoverage | null;
+    } | null;
     topicTags: string[];
     latestAttempt: {
         id: number;
@@ -133,8 +140,9 @@ async function presentKnowledgeItems(
             .from(processingAttempts)
             .where(inArray(processingAttempts.knowledgeItemId, itemIds))
             .orderBy(desc(processingAttempts.createdAt), desc(processingAttempts.id)),
-        await database.select({ knowledgeItemId: recognitionSummaries.knowledgeItemId, sourceSnapshotId: recognitionSummaries.sourceSnapshotId, text: recognitionSummaries.text })
+        await database.select({ knowledgeItemId: recognitionSummaries.knowledgeItemId, sourceSnapshotId: recognitionSummaries.sourceSnapshotId, text: recognitionSummaries.text, contract: recognitionSummaries.generationContract, evidenceCoverage: sourceSnapshots.evidenceCoverage, pdfEvidence: sourceSnapshots.pdfEvidence })
             .from(recognitionSummaries)
+            .innerJoin(sourceSnapshots, eq(sourceSnapshots.id, recognitionSummaries.sourceSnapshotId))
             .where(inArray(recognitionSummaries.knowledgeItemId, itemIds)),
         await database.select({ knowledgeItemId: knowledgeItemTopicTags.knowledgeItemId, sourceSnapshotId: knowledgeItemTopicTags.sourceSnapshotId, canonicalName: topicTags.canonicalName })
             .from(knowledgeItemTopicTags)
@@ -218,6 +226,7 @@ async function presentKnowledgeItems(
     const organizationConditions = await organizationConditionsByKnowledgeItem(database, rows, attemptRows, latestAttempts, generatedTopicTagsByItem);
 
     return rows.map(({ knowledgeItem, source, webpageSource, originalFile }) => {
+        const summary = summariesByItem.get(knowledgeItem.id);
         const latestAttempt = latestAttempts.get(knowledgeItem.id);
         const pdfEvidence = source.currentSnapshotId ? pdfEvidenceBySnapshot.get(source.currentSnapshotId) : null;
         const accessActions = originalFile && knowledgeItem.lifecycleState !== "pending-permanent-deletion"
@@ -257,6 +266,13 @@ async function presentKnowledgeItems(
             availability: availabilityByItem.get(knowledgeItem.id) ?? "processing",
             organizationCondition: source.provenanceKind === "original-file" && source.sourceKind !== "pdf" ? "complete" : organizationConditions.get(knowledgeItem.id) ?? "processing",
             recognitionSummary: summariesByItem.get(knowledgeItem.id)?.text ?? null,
+            recognitionSummaryProvenance: summary ? {
+                contract: summary.contract,
+                sourceSnapshotId: summary.sourceSnapshotId,
+                isCurrent: summary.sourceSnapshotId === source.currentSnapshotId,
+                evidenceCoverage: summary.evidenceCoverage,
+                extractionCoverage: summary.pdfEvidence ? pdfExtractionCoverage(summary.pdfEvidence) : null,
+            } : null,
             topicTags: topicTagsByItem.get(knowledgeItem.id) ?? [],
             latestAttempt: latestAttempt ? {
                 id: latestAttempt.id,

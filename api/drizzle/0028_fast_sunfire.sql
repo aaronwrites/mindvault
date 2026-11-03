@@ -1,0 +1,1 @@
+ALTER TABLE "recognition_summaries" ADD COLUMN "generation_contract" text;

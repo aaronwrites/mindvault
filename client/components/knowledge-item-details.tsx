@@ -36,6 +36,10 @@ export function KnowledgeItemDetails({ knowledgeItem: item, ...actions }: { know
     : /authenticat|sign.in|http (401|403)/.test(failureReason)
       ? "The website requires sign-in or blocks access. Try saving a PDF copy of the content instead."
       : "We couldn’t prepare this for search. Try processing it again.";
+  const provenance = item.recognitionSummaryProvenance;
+  const tldr = Boolean(item.recognitionSummary && provenance?.contract === "tldr-v1" && provenance.isCurrent && provenance.evidenceCoverage === "primary-content");
+  const summaryLabel = tldr ? "TL;DR" : "Preview";
+  const summaryCoverage = provenance?.extractionCoverage ?? item.extractionCoverage;
   const title = knowledgeItemTitle(item);
   const openUrl = file ? source.originalFileActions?.open && `${API_URL}${source.originalFileActions.open}` : source.submittedUrl;
   return <div className="space-y-6">
@@ -45,12 +49,14 @@ export function KnowledgeItemDetails({ knowledgeItem: item, ...actions }: { know
       {source.originalFileActions && <Button variant="outline" aria-label={`Download original file: ${title}`} render={<a href={`${API_URL}${source.originalFileActions.download}`} target="_blank" rel="noopener noreferrer" />} nativeButton={false}>Download</Button>}
     </div>
     {item.lifecycleState === "active" && <ItemTitleEditor item={item} />}
-    <section aria-label="Preview" className="space-y-2">
-      <h3 className="font-medium">Preview</h3>
+    <section aria-label={summaryLabel} className="space-y-2">
+      <h3 className="font-medium">{summaryLabel}</h3>
       <p className="text-sm text-muted-foreground">{item.recognitionSummary ?? item.sourcePreview?.description ?? (processing ? "Your save is safe. A preview is being prepared." : "No text preview is available yet.")}</p>
-      {item.recognitionSummary && <p className="text-xs text-muted-foreground">Generated description of available information.</p>}
+      {item.recognitionSummary && <p className="text-xs text-muted-foreground">{tldr ? "Generated from available source text." : "Generated description; a verified summary of the current content is not available yet."}</p>}
+      {item.recognitionSummary && provenance && !provenance.isCurrent && <p className="text-sm text-muted-foreground">This preview describes an earlier saved version. The latest content is still searchable.</p>}
       {item.evidenceCoverage === "metadata-only" && <p className="text-sm text-muted-foreground">Only the website’s description was available. This preview does not describe the full page content.</p>}
-      {item.extractionCoverage && <p className="text-sm text-muted-foreground">This preview uses available PDF text. It may omit unread pages and does not interpret diagrams or charts. See Details for coverage.</p>}
+      {summaryCoverage && <p className="text-sm text-muted-foreground">{summaryLabel} uses available PDF text. It may omit unread pages and does not interpret diagrams or charts. See Details for coverage.</p>}
+      {provenance && !provenance.isCurrent && provenance.extractionCoverage && <PdfExtractionCoverage coverage={provenance.extractionCoverage} />}
     </section>
     <ItemTagsEditor item={item} />
     <ItemNotesEditor item={item} />

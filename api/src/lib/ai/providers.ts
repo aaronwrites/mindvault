@@ -10,7 +10,7 @@ export class GenerationInputLimitError extends Error {
     }
 }
 
-/** Primary PDF text is separate from titles, filenames and Capture Context. */
+/** Primary Source text is separate from titles, filenames and Capture Context. */
 export type SummaryGrounding = { sourceText: string; extractionDisclosure: string; partial: boolean };
 
 export interface TextGenerationProvider {

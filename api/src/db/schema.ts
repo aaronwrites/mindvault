@@ -196,6 +196,7 @@ export const recognitionSummaries = pgTable("recognition_summaries", {
     knowledgeItemId: integer("knowledge_item_id").primaryKey().references(() => knowledgeItems.id, { onDelete: "cascade" }),
     sourceSnapshotId: integer("source_snapshot_id").notNull().references(() => sourceSnapshots.id, { onDelete: "cascade" }),
     text: text("text").notNull(),
+    generationContract: text("generation_contract"),
     generatedAt: timestamp("generated_at").notNull().defaultNow(),
 });
 

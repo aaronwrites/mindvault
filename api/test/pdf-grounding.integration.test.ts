@@ -9,7 +9,8 @@ import { createIntegrationHarness, type IntegrationHarness } from "./support/int
 let harness: IntegrationHarness | undefined;
 afterEach(async () => { await harness?.cleanup(); harness = undefined; });
 
-test("rejected PDF summary claims remain a warning while primary evidence stays Ready", async () => {
+for (const pdf of [true, false]) {
+test(`rejected ${pdf ? "PDF" : "webpage"} summary claims remain a warning while primary evidence stays Ready`, async () => {
     const storage = new DeterministicOriginalFileStorageFake();
     const embeddings = new DeterministicEmbeddingProvider();
     const auditTexts: string[] = [];
@@ -19,7 +20,7 @@ test("rejected PDF summary claims remain a warning while primary evidence stays 
     } });
     harness = await createIntegrationHarness(
         database => createApp({ database: database.db, originalFileStorage: storage, embeddingProvider: embeddings }),
-        database => createArticleProcessingWorker({ database: database.db, originalFileStorage: () => storage,
+        (database, server) => createArticleProcessingWorker({ database: database.db, originalFileStorage: () => storage, sourceFetchOptions: server.safeFetchDependencies(),
             embeddingProvider: embeddings, summaryProvider: { generate(prompt, grounding) {
                 if (grounding) auditTexts.push(grounding.sourceText);
                 return providers.summaryProvider.generate(prompt, grounding);
@@ -29,20 +30,27 @@ test("rejected PDF summary claims remain a warning while primary evidence stays 
     const form = new FormData();
     form.set("file", new Blob([await Bun.file(new URL("fixtures/pdf/selectable.pdf", import.meta.url)).arrayBuffer()]), "invented-workflow.pdf");
     form.set("personalNote", "invented-workflow is why I saved this.");
-    const captured = await fetch(`${harness.apiBaseUrl}/captures/file`, { method: "POST", body: form });
+    const captured = pdf
+        ? await fetch(`${harness.apiBaseUrl}/captures/file`, { method: "POST", body: form })
+        : await fetch(`${harness.apiBaseUrl}/captures`, { method: "POST", headers: { "content-type": "application/json" },
+            body: JSON.stringify({ url: harness.sourceServer.fetchUrl("/articles/primary-text"), personalNote: "invented-workflow is why I saved this." }) });
     expect(captured.status).toBe(201);
     const { knowledgeItemId } = await captured.json() as { knowledgeItemId: number };
     await harness.drainWorker();
     const item = await fetch(`${harness.apiBaseUrl}/knowledge-items/${knowledgeItemId}`).then(response => response.json()) as any;
     expect(auditTexts).toHaveLength(1);
     for (const text of auditTexts) {
-        expect(text).toContain("WAL_RECOVERY_TARGET");
+        expect(text).toContain(pdf ? "WAL_RECOVERY_TARGET" : "Durable Capture stores a Source");
         expect(text).not.toContain("invented-workflow");
     }
     expect(item.availability).toBe("ready");
     expect(item.recognitionSummary).toBeNull();
+    expect(item.recognitionSummaryProvenance).toBeNull();
     expect(JSON.stringify(item)).toContain("grounding failed after one correction");
-    const recalled = await fetch(`${harness.apiBaseUrl}/search?q=WAL_RECOVERY_TARGET`).then(response => response.json()) as any[];
+    const marker = pdf ? "WAL_RECOVERY_TARGET" : "Durable Capture";
+    const recalled = await fetch(`${harness.apiBaseUrl}/search?q=${encodeURIComponent(marker)}`).then(response => response.json()) as any[];
     expect(recalled).toContainEqual(expect.objectContaining({ id: knowledgeItemId,
-        excerpts: expect.arrayContaining([expect.objectContaining({ text: expect.stringContaining("WAL_RECOVERY_TARGET"), pageNumber: 1 })]) }));
+        excerpts: expect.arrayContaining([expect.objectContaining({ text: expect.stringContaining(marker), ...(pdf ? { pageNumber: 1 } : {}) })]) }));
 }, 20_000);
+
+}

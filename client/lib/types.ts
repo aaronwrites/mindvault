@@ -39,6 +39,13 @@ export type KnowledgeItem = {
   availability: KnowledgeItemAvailability;
   organizationCondition: "processing" | "complete" | "incomplete";
   recognitionSummary: string | null;
+  recognitionSummaryProvenance?: {
+    contract: string | null;
+    sourceSnapshotId: number;
+    isCurrent: boolean;
+    evidenceCoverage: EvidenceCoverage;
+    extractionCoverage: KnowledgeItem["extractionCoverage"] | null;
+  } | null;
   topicTags: string[];
   latestAttempt: {
     id: number;
