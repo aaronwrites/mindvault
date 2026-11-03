@@ -1,7 +1,7 @@
 import { ItemTitleEditor } from "@/components/item-title-editor";
 import { useState } from "react";
 import { PdfExtractionCoverage } from "@/components/pdf-extraction-coverage";
-import { Badge } from "@/components/ui/badge";
+import { ItemTagsEditor } from "@/components/item-tags-editor";
 import { Button } from "@/components/ui/button";
 import { OriginalFilePlaceholder, SourcePreviewFacts, SourcePreviewMedia, formatByteSize } from "@/components/source-preview";
 import { isItemProcessing, itemHasLimitations, knowledgeItemTitle } from "@/components/knowledge-item-card";
@@ -51,7 +51,7 @@ export function KnowledgeItemDetails({ knowledgeItem: item, ...actions }: { know
       {item.evidenceCoverage === "metadata-only" && <p className="text-sm text-muted-foreground">Only the website’s description was available. This preview does not describe the full page content.</p>}
       {item.extractionCoverage && <p className="text-sm text-muted-foreground">This preview uses available PDF text. It may omit unread pages and does not interpret diagrams or charts. See Details for coverage.</p>}
     </section>
-    {item.topicTags.length > 0 && <section aria-label="Tags"><h3 className="mb-2 font-medium">Tags</h3><ul className="flex flex-wrap gap-2">{item.topicTags.map(tag => <li key={tag}><Badge variant="secondary">{tag}</Badge></li>)}</ul></section>}
+    <ItemTagsEditor item={item} />
     {item.captureContexts.length > 0 && <section aria-label="Saved notes and selections" className="space-y-2">{item.captureContexts.map((context, index) => <p key={index} className="text-sm"><span className="font-medium">{context.kind === "personal-note" ? "Your note" : "Selected text"}: </span>{context.summary}</p>)}</section>}
     <details open={expanded} onToggle={event => setExpanded(event.currentTarget.open)} className="space-y-3 border-t pt-4">
       <summary className="cursor-pointer font-medium">Details</summary>

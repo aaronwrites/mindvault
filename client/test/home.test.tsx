@@ -24,6 +24,7 @@ const { default: userEvent } = await import("@testing-library/user-event");
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 
+const updateKnowledgeItemTags = mock<(id: number, changes: { add: string[]; remove: string[] }) => Promise<KnowledgeItem>>();
 const updateKnowledgeItemTitle = mock<(id: number, customTitle: string | null) => Promise<KnowledgeItem>>();
 const getKnowledgeItem = mock<(id: number) => Promise<KnowledgeItem>>();
 const getKnowledgeItems = mock<() => Promise<KnowledgeItem[]>>();
@@ -49,6 +50,7 @@ const permanentlyDeleteKnowledgeItem = mock<PermanentlyDeleteKnowledgeItem>();
 const searchKnowledgeItems = mock<(query: string) => Promise<RecallKnowledgeItem[]>>();
 const askVault = mock<(request: SynthesisRequest) => Promise<SynthesisResult>>();
 mock.module("@/lib/api", () => ({
+  updateKnowledgeItemTags,
   updateKnowledgeItemTitle,
   getKnowledgeItem,
   getKnowledgeItems,
@@ -110,6 +112,7 @@ function renderHome() {
 
 beforeEach(() => {
   window.history.replaceState(null, "", "/");
+  updateKnowledgeItemTags.mockReset();
   updateKnowledgeItemTitle.mockReset();
   getKnowledgeItem.mockReset();
   getKnowledgeItem.mockResolvedValue(processingItem);
@@ -1272,4 +1275,70 @@ test("title edits update Recall cards and existing citation labels without chang
   await user.click(screen.getByRole("button", { name: "Close" }));
   expect(await screen.findByRole("heading", { name: "My reference", level: 3 })).toBeTruthy();
   expect(screen.getAllByText("Source evidence stays intact.").length).toBeGreaterThan(0);
+});
+
+test("tag corrections validate, retain failed drafts, and update cards and details", async () => {
+  const item = { ...readyItem, topicTags: ["Machine Learning", "Neural Networks"] };
+  getKnowledgeItems.mockResolvedValue([item]);
+  getKnowledgeItem.mockResolvedValue(item);
+  updateKnowledgeItemTags.mockRejectedValueOnce(new Error("Unavailable"));
+  updateKnowledgeItemTags.mockResolvedValueOnce({ ...item, topicTags: ["Deep Learning", "Neural Networks"] });
+  renderHome();
+  await openCard();
+  const dialog = screen.getByRole("dialog");
+  const user = userEvent.setup({ document: dom.window.document });
+  await user.click(within(dialog).getByRole("button", { name: "Edit tags" }));
+  await user.click(within(dialog).getByRole("button", { name: "Replace Machine Learning" }));
+  const input = within(dialog).getByRole("textbox", { name: "Tag name" });
+  await user.clear(input);
+  await user.click(within(dialog).getByRole("button", { name: "Save tag" }));
+  expect(within(dialog).getByRole("alert").textContent).toContain("1–100");
+  await user.type(input, "Deep Learning");
+  await user.click(within(dialog).getByRole("button", { name: "Save tag" }));
+  await waitFor(() => expect(within(dialog).getByRole("alert").textContent).toContain("try again"));
+  expect((input as HTMLInputElement).value).toBe("Deep Learning");
+  await user.click(within(dialog).getByRole("button", { name: "Save tag" }));
+  await screen.findByText("Tags saved.");
+  expect(updateKnowledgeItemTags).toHaveBeenLastCalledWith(item.id, { add: ["Deep Learning"], remove: ["Machine Learning"] });
+  expect(within(dialog).queryByText("Machine Learning")).toBeNull();
+  expect(screen.getAllByText("Deep Learning").length).toBeGreaterThan(1);
+  updateKnowledgeItemTags.mockResolvedValueOnce({ ...item, topicTags: ["Deep Learning"] });
+  await user.click(within(dialog).getByRole("button", { name: "Remove Neural Networks" }));
+  await waitFor(() => expect(within(dialog).queryByText("Neural Networks")).toBeNull());
+  expect(updateKnowledgeItemTags).toHaveBeenLastCalledWith(item.id, { add: [], remove: ["Neural Networks"] });
+  await user.click(within(dialog).getByRole("button", { name: "Add tag" }));
+  await user.type(within(dialog).getByRole("textbox", { name: "Tag name" }), "ML");
+  updateKnowledgeItemTags.mockResolvedValueOnce({ ...item, topicTags: ["Deep Learning", "Machine Learning"] });
+  await user.click(within(dialog).getByRole("button", { name: "Save tag" }));
+  await within(dialog).findByText("Machine Learning");
+  expect(updateKnowledgeItemTags).toHaveBeenLastCalledWith(item.id, { add: ["ML"], remove: [] });
+});
+
+test("tag corrections update existing Recall cards while preserving matching excerpts", async () => {
+  const item = { ...readyItem, topicTags: ["Databases"] };
+  getKnowledgeItems.mockResolvedValue([item]);
+  getKnowledgeItem.mockResolvedValue(item);
+  searchKnowledgeItems.mockResolvedValue([matchingItem(item, "The matching source evidence.")]);
+  updateKnowledgeItemTags.mockImplementation(async () => {
+    const updated = { ...item, topicTags: ["PostgreSQL"] };
+    getKnowledgeItems.mockResolvedValue([updated]);
+    getKnowledgeItem.mockResolvedValue(updated);
+    searchKnowledgeItems.mockResolvedValue([matchingItem(updated, "The matching source evidence.")]);
+    return updated;
+  });
+  const user = userSetup(); renderHome();
+  await user.type(screen.getByLabelText("Search your saves"), "evidence{Enter}");
+  await screen.findByText("The matching source evidence.");
+  await openCard();
+  const dialog = screen.getByRole("dialog");
+  await user.click(within(dialog).getByRole("button", { name: "Edit tags" }));
+  await user.click(within(dialog).getByRole("button", { name: "Replace Databases" }));
+  const input = within(dialog).getByRole("textbox", { name: "Tag name" });
+  await user.clear(input); await user.type(input, "PostgreSQL");
+  await user.click(within(dialog).getByRole("button", { name: "Save tag" }));
+  await within(dialog).findByText("PostgreSQL");
+  await user.click(within(dialog).getByRole("button", { name: "Close" }));
+  expect(await screen.findByText("PostgreSQL")).toBeTruthy();
+  expect(screen.queryByText("Databases")).toBeNull();
+  expect(screen.getByText("The matching source evidence.")).toBeTruthy();
 });

@@ -1,7 +1,7 @@
 import { eq, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as schema from "../../db/schema";
-import { captures, extractedSources, knowledgeItems, processingAttempts, sourceSnapshots, sources, webpageSources } from "../../db/schema";
+import { captures, extractedSources, topicTagCorrections, knowledgeItems, processingAttempts, sourceSnapshots, sources, webpageSources } from "../../db/schema";
 import { normalizeCaptureUrl } from "../capture/normalize-capture-url";
 
 type Database = NodePgDatabase<typeof schema>;
@@ -48,6 +48,13 @@ export async function reconcileExtractedSourceIdentity(
         await transaction.update(knowledgeItems).set({ customTitle: sql`COALESCE(${knowledgeItems.customTitle}, ${sourceItem.customTitle})` })
             .where(eq(knowledgeItems.id, identifiedItem.id));
     }
+    // Serialize with corrections on the survivor; its existing choices take precedence.
+    await transaction.select({ id: knowledgeItems.id }).from(knowledgeItems)
+        .where(eq(knowledgeItems.id, identifiedItem.id)).for("update");
+    const corrections = await transaction.select().from(topicTagCorrections)
+        .where(eq(topicTagCorrections.knowledgeItemId, sourceItem.id));
+    if (corrections.length) await transaction.insert(topicTagCorrections)
+        .values(corrections.map(correction => ({ ...correction, knowledgeItemId: identifiedItem.id }))).onConflictDoNothing();
     await transaction.update(captures).set({ sourceId: identifiedSource.id, knowledgeItemId: identifiedItem.id })
         .where(eq(captures.sourceId, source.id));
     await transaction.update(processingAttempts).set({ knowledgeItemId: identifiedItem.id })

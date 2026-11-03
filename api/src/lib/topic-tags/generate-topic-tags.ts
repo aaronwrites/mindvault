@@ -1,4 +1,4 @@
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as schema from "../../db/schema";
 import { captureContexts, captures, knowledgeItemTopicTags, knowledgeItems, processingAttempts, sourceSnapshots, sources, topicTagAliases, topicTags, type EvidenceCoverage, type PdfEvidence } from "../../db/schema";
@@ -84,7 +84,9 @@ function normalizeGeneratedTags(tags: GeneratedTopicTag[]): NormalizedTopicTag[]
     return [...normalized.values()];
 }
 
-async function findOrCreateTopicTag(database: Database, tag: NormalizedTopicTag): Promise<number> {
+export async function findOrCreateTopicTag(database: Database, tag: NormalizedTopicTag): Promise<number> {
+    // Serialize vocabulary writes so aliases cannot race into distinct identities.
+    await database.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended('topic-tag-vocabulary', 0))`);
     const aliasRows = await database.select({ topicTagId: topicTagAliases.topicTagId })
         .from(topicTagAliases)
         .where(inArray(topicTagAliases.normalizedAlias, tag.aliases.map(alias => alias.normalizedAlias)));

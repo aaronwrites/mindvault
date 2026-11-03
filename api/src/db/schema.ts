@@ -221,6 +221,13 @@ export const knowledgeItemTopicTags = pgTable("knowledge_item_topic_tags", {
     generatedAt: timestamp("generated_at").notNull().defaultNow(),
 }, table => [primaryKey({ columns: [table.knowledgeItemId, table.topicTagId] })]);
 
+// Local user choices override generated assignments without changing the vocabulary.
+export const topicTagCorrections = pgTable("topic_tag_corrections", {
+    knowledgeItemId: integer("knowledge_item_id").notNull().references(() => knowledgeItems.id, { onDelete: "cascade" }),
+    topicTagId: integer("topic_tag_id").notNull().references(() => topicTags.id, { onDelete: "cascade" }),
+    choice: text("choice", { enum: ["added", "rejected"] }).notNull(),
+}, table => [primaryKey({ columns: [table.knowledgeItemId, table.topicTagId] })]);
+
 export const passages = pgTable("passages", {
     id: serial("id").primaryKey(),
     sourceSnapshotId: integer("source_snapshot_id").references(() => sourceSnapshots.id, { onDelete: "cascade" }),

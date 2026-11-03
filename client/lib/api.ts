@@ -203,3 +203,13 @@ export async function updateKnowledgeItemTitle(id: number, customTitle: string |
   if (!response.ok) throw new Error("Couldn’t save the title. Please try again.");
   return response.json();
 }
+
+export async function updateKnowledgeItemTags(id: number, changes: { add: string[]; remove: string[] }): Promise<KnowledgeItem> {
+  const response = await fetch(`${API_URL}/knowledge-items/${id}/tags`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(changes),
+  });
+  if (!response.ok) throw new Error("Couldn’t save the tags. Please try again.");
+  return response.json();
+}

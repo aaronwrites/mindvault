@@ -1,5 +1,7 @@
+import { findOrCreateTopicTag } from "../lib/topic-tags/generate-topic-tags";
+import { displayTopicTagName, normalizeTopicTagAlias } from "../lib/topic-tags/normalize-topic-tag";
 import { and, eq } from "drizzle-orm";
-import { updateTitleSchema } from "../schemas/knowledge-item";
+import { updateTagsSchema, updateTitleSchema } from "../schemas/knowledge-item";
 import type { Request, Response } from "express";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as schema from "../db/schema";
@@ -137,5 +139,33 @@ export function updateKnowledgeItemTitleController(database: NodePgDatabase<type
         const item = await getKnowledgeItem(database, id, embeddingRepresentation);
         if (!item) return res.status(404).json({ error: "Knowledge Item not found" });
         return res.json(item);
+    };
+}
+
+export function updateKnowledgeItemTagsController(database: NodePgDatabase<typeof schema>, embeddingRepresentation: EmbeddingProvider["representation"]) {
+    return async (req: Request, res: Response) => {
+        const id = Number(req.params.id);
+        if (!Number.isSafeInteger(id) || id < 1) return res.status(404).json({ error: "Knowledge Item not found" });
+        const parsed = updateTagsSchema.safeParse(req.body);
+        if (!parsed.success) return res.status(400).json({ error: "Use tag names of 1–100 characters without line breaks or control characters." });
+        const found = await database.transaction(async transaction => {
+            // Serialize edits without blocking generated assignments’ foreign-key checks.
+            const [item] = await transaction.select({ id: schema.knowledgeItems.id }).from(schema.knowledgeItems)
+                .where(and(eq(schema.knowledgeItems.id, id), eq(schema.knowledgeItems.lifecycleState, "active"))).for("no key update");
+            if (!item) return false;
+            // Add wins when both operations resolve to the same canonical identity.
+            for (const [choice, names] of [["rejected", parsed.data.remove], ["added", parsed.data.add]] as const) {
+                for (const name of names) {
+                    const canonicalName = displayTopicTagName(name);
+                    const normalizedName = normalizeTopicTagAlias(name);
+                    const topicTagId = await findOrCreateTopicTag(transaction, { canonicalName, normalizedName, aliases: [{ alias: canonicalName, normalizedAlias: normalizedName }] });
+                    await transaction.insert(schema.topicTagCorrections).values({ knowledgeItemId: id, topicTagId, choice })
+                        .onConflictDoUpdate({ target: [schema.topicTagCorrections.knowledgeItemId, schema.topicTagCorrections.topicTagId], set: { choice } });
+                }
+            }
+            return true;
+        });
+        if (!found) return res.status(404).json({ error: "Knowledge Item not found" });
+        return res.json(await getKnowledgeItem(database, id, embeddingRepresentation));
     };
 }

@@ -23,6 +23,7 @@ import {
     originalFiles,
     originalFileOperations,
     knowledgeItemTopicTags,
+    topicTagCorrections,
     topicTags,
     type EvidenceCoverage,
 } from "../../db/schema";
@@ -187,9 +188,20 @@ async function presentKnowledgeItems(
         topicTagsByItem.set(tag.knowledgeItemId, tags);
     }
 
+    const generatedTopicTagsByItem = new Map(topicTagsByItem);
+    const corrections = await database.select({ knowledgeItemId: topicTagCorrections.knowledgeItemId, canonicalName: topicTags.canonicalName, choice: topicTagCorrections.choice })
+        .from(topicTagCorrections).innerJoin(topicTags, eq(topicTags.id, topicTagCorrections.topicTagId))
+        .where(inArray(topicTagCorrections.knowledgeItemId, itemIds));
+    for (const correction of corrections) {
+        const tags = new Set(topicTagsByItem.get(correction.knowledgeItemId) ?? []);
+        if (correction.choice === "added") tags.add(correction.canonicalName);
+        else tags.delete(correction.canonicalName);
+        topicTagsByItem.set(correction.knowledgeItemId, [...tags].sort());
+    }
+
     const availabilityByItem = await availabilityByKnowledgeItem(database, rows, latestAttempts, embeddingRepresentation);
     const displayedLatestAttemptStatuses = await latestAttemptStatuses(database, latestAttempts);
-    const organizationConditions = await organizationConditionsByKnowledgeItem(database, rows, attemptRows, latestAttempts, topicTagsByItem);
+    const organizationConditions = await organizationConditionsByKnowledgeItem(database, rows, attemptRows, latestAttempts, generatedTopicTagsByItem);
 
     return rows.map(({ knowledgeItem, source, webpageSource, originalFile }) => {
         const latestAttempt = latestAttempts.get(knowledgeItem.id);
