@@ -12,6 +12,7 @@ export const API_URL =
 
 export const knowledgeItemKeys = {
   all: ["knowledge-items"] as const,
+  detail: (id: number | null) => ["knowledge-items", "detail", id] as const,
   trash: ["knowledge-items", "trash"] as const,
 };
 export const recallKeys = {
@@ -184,4 +185,11 @@ export async function permanentlyDeleteKnowledgeItem(knowledgeItemId: number): P
   });
   if (!response.ok) throw new Error(await getErrorMessage(response, "Could not permanently delete this Knowledge Item."));
   return response.status === 204 ? undefined : response.json();
+}
+
+
+export async function getKnowledgeItem(id: number): Promise<KnowledgeItem> {
+  const response = await fetch(`${API_URL}/knowledge-items/${id}`);
+  if (!response.ok) throw new Error("Could not load saved details. Please try again.");
+  return response.json();
 }

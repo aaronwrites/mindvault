@@ -14,7 +14,7 @@ const originLabels = {
   "personal-note": "Your note",
 } as const;
 
-export function RecallResultCard({ result }: { result: RecallKnowledgeItem }) {
+export function RecallResultCard({ result, onOpen }: { result: RecallKnowledgeItem; onOpen?: (id: number) => void }) {
   return (
     <Card className="h-full">
       <SourcePreviewMedia preview={result.sourcePreview} />
@@ -22,6 +22,7 @@ export function RecallResultCard({ result }: { result: RecallKnowledgeItem }) {
         <Badge variant="outline" className="w-fit">Grounded match</Badge>
         <CardTitle><h3>{result.source.filename ?? sourcePreviewTitle(result.sourcePreview, result.source.submittedUrl)}</h3></CardTitle>
         <CardAction>
+          {onOpen && <Button variant="outline" onClick={() => onOpen(result.id)}>View details</Button>}
           <Button
             variant="ghost"
             size="icon"
@@ -50,7 +51,7 @@ export function RecallResultCard({ result }: { result: RecallKnowledgeItem }) {
         </section>
         {result.recognitionSummary && (
           <section aria-label="Generated Recognition Summary" className="space-y-1">
-            <p className="text-xs font-medium text-muted-foreground">Generated recognition summary</p>
+            <p className="text-xs font-medium text-muted-foreground">Preview</p>
             <p className="text-sm text-muted-foreground">{result.recognitionSummary}</p>
           </section>
         )}

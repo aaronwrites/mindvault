@@ -3,7 +3,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { CaptureForm } from "@/components/capture-form";
-import { KnowledgeItemCard } from "@/components/knowledge-item-card";
+import { KnowledgeItemDialog } from "@/components/knowledge-item-dialog";
+import { useItemNavigation } from "@/lib/use-item-navigation";
+import { KnowledgeItemCard, isItemProcessing } from "@/components/knowledge-item-card";
 import { originalFileTitle, sourcePreviewTitle } from "@/components/source-preview";
 import { RecallResultCard } from "@/components/recall-result-card";
 import { SearchForm } from "@/components/search-form";
@@ -24,6 +26,7 @@ type ConversationTurn = {
 
 export default function Home() {
   const queryClient = useQueryClient();
+  const { itemId, openItem, closeItem, returnFocus } = useItemNavigation();
   const [searchQuery, setSearchQuery] = useState("");
   const [showTrash, setShowTrash] = useState(false);
   const [permanentDeletionTarget, setPermanentDeletionTarget] = useState<KnowledgeItem | null>(null);
@@ -33,14 +36,7 @@ export default function Home() {
     queryKey: knowledgeItemKeys.all,
     queryFn: getKnowledgeItems,
     refetchInterval: (query) =>
-      query.state.data?.some(
-        (item) =>
-          item.availability === "processing" ||
-          (item.availability === "ready" && (
-            item.organizationCondition !== "complete" ||
-            (item.latestAttempt?.status === "pending" || item.latestAttempt?.status === "running")
-          )),
-      )
+      query.state.data?.some(item => isItemProcessing(item) || item.organizationCondition === "incomplete")
         ? 2_000
         : false,
     refetchIntervalInBackground: true,
@@ -52,6 +48,10 @@ export default function Home() {
     }
   }, [knowledgeItemsQuery.dataUpdatedAt, queryClient]);
   const knowledgeItems = knowledgeItemsQuery.data ?? [];
+  function actionErrorForSelectedItem() {
+    return [refreshMutation, retryMutation, trashMutation, restoreMutation, permanentlyDeleteMutation]
+      .find(mutation => mutation.variables === itemId && mutation.error)?.error?.message;
+  }
   const trashQuery = useQuery({ queryKey: knowledgeItemKeys.trash, queryFn: getTrashedKnowledgeItems, enabled: showTrash, refetchInterval: query => query.state.data?.some(item => item.lifecycleState === "pending-permanent-deletion") ? 2_000 : false });
   const trashedKnowledgeItems = trashQuery.data ?? [];
   const permanentDeletionLabel = permanentDeletionTarget
@@ -60,6 +60,7 @@ export default function Home() {
       : sourcePreviewTitle(permanentDeletionTarget.sourcePreview, permanentDeletionTarget.source.submittedUrl)
     : "this Knowledge Item";
   async function updateKnowledgeItemAfterProcessingAttempt({ knowledgeItem }: { knowledgeItem: KnowledgeItem }) {
+    queryClient.setQueryData(knowledgeItemKeys.detail(knowledgeItem.id), knowledgeItem);
     queryClient.setQueryData<KnowledgeItem[]>(
       knowledgeItemKeys.all,
       (current) =>
@@ -83,6 +84,7 @@ export default function Home() {
   const trashMutation = useMutation({
     mutationFn: trashKnowledgeItem,
     onSuccess: async (_, id) => {
+      closeItem(id);
       queryClient.setQueryData<KnowledgeItem[]>(knowledgeItemKeys.all, current => (current ?? []).filter(item => item.id !== id));
       await Promise.all([queryClient.invalidateQueries({ queryKey: knowledgeItemKeys.trash }), queryClient.invalidateQueries({ queryKey: recallKeys.all })]);
     },
@@ -90,6 +92,7 @@ export default function Home() {
   const restoreMutation = useMutation({
     mutationFn: restoreKnowledgeItem,
     onSuccess: async ({ knowledgeItem }, id) => {
+      closeItem(id);
       queryClient.setQueryData<KnowledgeItem[]>(knowledgeItemKeys.trash, current => (current ?? []).filter(item => item.id !== id));
       queryClient.setQueryData<KnowledgeItem[]>(knowledgeItemKeys.all, current => [knowledgeItem, ...(current ?? []).filter(item => item.id !== knowledgeItem.id)]);
       await Promise.all([queryClient.invalidateQueries({ queryKey: knowledgeItemKeys.all }), queryClient.invalidateQueries({ queryKey: knowledgeItemKeys.trash }), queryClient.invalidateQueries({ queryKey: recallKeys.all })]);
@@ -97,7 +100,8 @@ export default function Home() {
   });
   const permanentlyDeleteMutation = useMutation({
     mutationFn: permanentlyDeleteKnowledgeItem,
-    onSuccess: async () => {
+    onSuccess: async (_, id) => {
+      closeItem(id);
       await queryClient.invalidateQueries({ queryKey: knowledgeItemKeys.trash });
     },
   });
@@ -132,7 +136,7 @@ export default function Home() {
     );
   }
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col gap-12 px-6 py-12 sm:px-10 lg:py-20">
+    <main className="mx-auto flex min-h-screen w-full max-w-7xl flex-col gap-8 px-6 py-12 sm:px-10 lg:py-20">
       <header className="space-y-3">
         <p className="text-sm font-semibold uppercase tracking-[0.2em] text-muted-foreground">
           MindVault
@@ -143,55 +147,13 @@ export default function Home() {
         <p className="max-w-2xl text-lg leading-8 text-muted-foreground">
           Capture useful knowledge without interrupting your flow.
         </p>
+        <nav aria-label="Your vault" className="flex flex-wrap gap-2">
+          <Button variant="outline" render={<a href="#capture-heading" />} nativeButton={false}>Save something</Button>
+          <Button variant="ghost" render={<a href="#recall-heading" />} nativeButton={false}>Find a save</Button>
+          <Button variant="ghost" render={<a href="#synthesis-heading" />} nativeButton={false}>Ask</Button>
+        </nav>
       </header>
-      {!showTrash && <CaptureForm onCaptured={showCapturedItem} />}
-      {!showTrash && <section aria-labelledby="recall-heading" className="space-y-4">
-        <div>
-          <h2 id="recall-heading" className="text-2xl font-semibold tracking-tight">Recall your Knowledge Items</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Search by meaning or exact language such as an error message, command, or identifier.</p>
-        </div>
-        <SearchForm onSearch={setSearchQuery} onClear={() => setSearchQuery("")} isSearching={recallQuery.isFetching} />
-        {searchQuery && recallQuery.isPending && <Card role="status"><CardContent className="py-3 text-center text-muted-foreground">Searching your captured knowledge…</CardContent></Card>}
-        {searchQuery && recallQuery.error && <Alert variant="destructive"><AlertDescription>{recallQuery.error.message}</AlertDescription></Alert>}
-        {searchQuery && !recallQuery.isPending && !recallQuery.error && recallQuery.data?.length === 0 && (
-          <Card><CardContent className="py-3 text-center text-muted-foreground">No Ready Knowledge Items matched that recall. Try a related idea or the exact wording you remember.</CardContent></Card>
-        )}
-        {recallQuery.data && recallQuery.data.length > 0 && (
-          <div className="grid gap-4 md:grid-cols-2">{recallQuery.data.map(result => <RecallResultCard key={result.id} result={result} />)}</div>
-        )}
-      </section>}
-      {!showTrash && <section aria-labelledby="synthesis-heading" className="space-y-4">
-        <div>
-          <h2 id="synthesis-heading" className="text-2xl font-semibold tracking-tight">Ask your vault</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Answers use only matching captured evidence and cite the Knowledge Items that support them.</p>
-          <p className="mt-1 text-sm text-muted-foreground">Questions, matching evidence, and current-session context are processed locally by Ollama. Original Files are not sent to the models.</p>
-        </div>
-        <SynthesisForm onAsk={askQuestion} isAsking={synthesisMutation.isPending} question={synthesisQuestion} onQuestionChange={setSynthesisQuestion} />
-        {synthesisMutation.isPending && <Card role="status"><CardContent className="py-3 text-center text-muted-foreground">Finding relevant captured evidence…</CardContent></Card>}
-        {synthesisMutation.error && <Alert variant="destructive"><AlertDescription>{synthesisMutation.error.message}</AlertDescription></Alert>}
-        {conversationTurns.length > 0 && <section aria-label="Current conversation" className="space-y-4">
-          {conversationTurns.map((turn, index) => <Card key={`${turn.question}-${index}`}>
-            <CardContent className="space-y-4 py-5">
-              <p className="text-sm font-medium">You asked: {turn.question}</p>
-              <p>{turn.result.answer}</p>
-              {turn.result.insufficientEvidence ? <p className="text-sm text-muted-foreground">Capture more relevant knowledge, then ask again.</p> : <section aria-label="Supporting Knowledge Items" className="space-y-3">
-                <p className="text-sm font-medium">Supporting Knowledge Items</p>
-                <ul className="space-y-3">
-                  {turn.result.citations.map((citation, index) => <li key={`${citation.knowledgeItemId}-${citation.sourceSnapshotId ?? "context"}-${index}`} className="space-y-1 text-sm">
-                    <a className="font-medium underline underline-offset-4" href={`#knowledge-item-${citation.knowledgeItemId}`}>View {citation.title}</a>
-                    <blockquote className="border-l-2 pl-3 text-muted-foreground">{citation.excerpt}</blockquote>
-                    <PdfPageReference pageNumber={citation.pageNumber} pageLabel={citation.pageLabel} openOriginalFile={citation.openOriginalFile} />
-                    <PdfExtractionCoverage coverage={citation.extractionCoverage} />
-                    {citation.origin === "personal-note" && <p className="text-muted-foreground">Based on your Personal Note.</p>}
-                    {citation.origin === "selected-source-text" && <p className="text-muted-foreground">Based on selected Source text.</p>}
-                    {citation.evidenceCoverage === "metadata-only" && <p className="text-muted-foreground">Based on source-provided metadata only.</p>}
-                  </li>)}
-                </ul>
-              </section>}
-            </CardContent>
-          </Card>)}
-        </section>}
-      </section>}
+
       <section aria-labelledby="knowledge-items-heading" className="space-y-5">
         <div>
           <div>
@@ -199,18 +161,18 @@ export default function Home() {
               id="knowledge-items-heading"
               className="text-2xl font-semibold tracking-tight"
             >
-              {showTrash ? "Trash" : "Your Knowledge Items"}
+              {showTrash ? "Trash" : "Your saves"}
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
               {showTrash ? `${trashedKnowledgeItems.length} ${trashedKnowledgeItems.length === 1 ? "item" : "items"} retained in Trash.` : `${knowledgeItems.length} ${knowledgeItems.length === 1 ? "item" : "items"} captured`}
             </p>
-            <Button variant="outline" className="mt-3" onClick={() => setShowTrash(value => !value)}>{showTrash ? "Back to Knowledge Items" : "View Trash"}</Button>
+            <Button variant="outline" className="mt-3" onClick={() => setShowTrash(value => !value)}>{showTrash ? "Back to saves" : "View Trash"}</Button>
           </div>
         </div>
         {(showTrash ? trashQuery.isPending : knowledgeItemsQuery.isPending) && (
           <Card role="status">
             <CardContent className="py-3 text-center text-muted-foreground">
-              Loading Knowledge Items…
+              Loading your saves…
             </CardContent>
           </Card>
         )}
@@ -239,30 +201,88 @@ export default function Home() {
           (showTrash ? trashedKnowledgeItems : knowledgeItems).length === 0 && (
             <Card>
               <CardContent className="py-3 text-center text-muted-foreground">
-                {showTrash ? "Trash is empty. Items you move here can be restored." : "Your vault is empty. Capture your first link above."}
+                {showTrash ? "Trash is empty. Items you move here can be restored." : "Your vault is empty. Save a link or file below."}
               </CardContent>
             </Card>
           )}
-        <div className="grid gap-4 md:grid-cols-2">
-          {(showTrash ? trashedKnowledgeItems : knowledgeItems).map((knowledgeItem) => (
-            <div id={`knowledge-item-${knowledgeItem.id}`} key={knowledgeItem.id}>
+        <div className="columns-1 gap-4 sm:columns-2 lg:columns-3 xl:columns-4">
+          {[...(showTrash ? trashedKnowledgeItems : knowledgeItems)].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)).map((knowledgeItem) => (
+            <div id={`knowledge-item-${knowledgeItem.id}`} key={knowledgeItem.id} className="break-inside-avoid">
             <KnowledgeItemCard
               knowledgeItem={knowledgeItem}
-              onRefresh={(knowledgeItemId) => refreshMutation.mutate(knowledgeItemId)}
-              onRetry={(knowledgeItemId) => retryMutation.mutate(knowledgeItemId)}
-              onTrash={(knowledgeItemId) => trashMutation.mutate(knowledgeItemId)}
-              onRestore={(knowledgeItemId) => restoreMutation.mutate(knowledgeItemId)}
-              onPermanentlyDelete={confirmPermanentDeletion}
-              isRefreshing={refreshMutation.isPending && refreshMutation.variables === knowledgeItem.id}
-              isRetrying={retryMutation.isPending && retryMutation.variables === knowledgeItem.id}
-              isTrashing={trashMutation.isPending && trashMutation.variables === knowledgeItem.id}
-              isRestoring={restoreMutation.isPending && restoreMutation.variables === knowledgeItem.id}
-              isPermanentlyDeleting={permanentlyDeleteMutation.isPending && permanentlyDeleteMutation.variables === knowledgeItem.id}
+              onOpen={openItem}
             />
             </div>
           ))}
         </div>
       </section>
+      {!showTrash && <section aria-labelledby="recall-heading" className="space-y-4">
+        <div>
+          <h2 id="recall-heading" className="text-2xl font-semibold tracking-tight">Find something you saved</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Search by meaning or exact language such as an error message, command, or identifier.</p>
+        </div>
+        <SearchForm onSearch={setSearchQuery} onClear={() => setSearchQuery("")} isSearching={recallQuery.isFetching} />
+        {searchQuery && recallQuery.isPending && <Card role="status"><CardContent className="py-3 text-center text-muted-foreground">Searching your captured knowledge…</CardContent></Card>}
+        {searchQuery && recallQuery.error && <Alert variant="destructive"><AlertDescription>{recallQuery.error.message}</AlertDescription></Alert>}
+        {searchQuery && !recallQuery.isPending && !recallQuery.error && recallQuery.data?.length === 0 && (
+          <Card><CardContent className="py-3 text-center text-muted-foreground">No Ready Knowledge Items matched that recall. Try a related idea or the exact wording you remember.</CardContent></Card>
+        )}
+        {recallQuery.data && recallQuery.data.length > 0 && (
+          <div className="grid gap-4 md:grid-cols-2">{recallQuery.data.map(result => <RecallResultCard key={result.id} result={result} onOpen={openItem} />)}</div>
+        )}
+      </section>}
+      {!showTrash && <section aria-labelledby="synthesis-heading" className="space-y-4">
+        <div>
+          <h2 id="synthesis-heading" className="text-2xl font-semibold tracking-tight">Ask your vault</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Answers use only matching captured evidence and cite the Knowledge Items that support them.</p>
+          <p className="mt-1 text-sm text-muted-foreground">Questions, matching evidence, and current-session context are processed locally by Ollama. Original Files are not sent to the models.</p>
+        </div>
+        <SynthesisForm onAsk={askQuestion} isAsking={synthesisMutation.isPending} question={synthesisQuestion} onQuestionChange={setSynthesisQuestion} />
+        {synthesisMutation.isPending && <Card role="status"><CardContent className="py-3 text-center text-muted-foreground">Finding relevant captured evidence…</CardContent></Card>}
+        {synthesisMutation.error && <Alert variant="destructive"><AlertDescription>{synthesisMutation.error.message}</AlertDescription></Alert>}
+        {conversationTurns.length > 0 && <section aria-label="Current conversation" className="space-y-4">
+          {conversationTurns.map((turn, index) => <Card key={`${turn.question}-${index}`}>
+            <CardContent className="space-y-4 py-5">
+              <p className="text-sm font-medium">You asked: {turn.question}</p>
+              <p>{turn.result.answer}</p>
+              {turn.result.insufficientEvidence ? <p className="text-sm text-muted-foreground">Capture more relevant knowledge, then ask again.</p> : <section aria-label="Supporting Knowledge Items" className="space-y-3">
+                <p className="text-sm font-medium">Supporting Knowledge Items</p>
+                <ul className="space-y-3">
+                  {turn.result.citations.map((citation, index) => <li key={`${citation.knowledgeItemId}-${citation.sourceSnapshotId ?? "context"}-${index}`} className="space-y-1 text-sm">
+                    <Button variant="link" onClick={() => openItem(citation.knowledgeItemId)}>View {citation.title}</Button>
+                    <blockquote className="border-l-2 pl-3 text-muted-foreground">{citation.excerpt}</blockquote>
+                    <PdfPageReference pageNumber={citation.pageNumber} pageLabel={citation.pageLabel} openOriginalFile={citation.openOriginalFile} />
+                    <PdfExtractionCoverage coverage={citation.extractionCoverage} />
+                    {citation.origin === "personal-note" && <p className="text-muted-foreground">Based on your Personal Note.</p>}
+                    {citation.origin === "selected-source-text" && <p className="text-muted-foreground">Based on selected Source text.</p>}
+                    {citation.evidenceCoverage === "metadata-only" && <p className="text-muted-foreground">Based on source-provided metadata only.</p>}
+                  </li>)}
+                </ul>
+              </section>}
+            </CardContent>
+          </Card>)}
+        </section>}
+      </section>}
+      {!showTrash && <CaptureForm onCaptured={showCapturedItem} />}
+      <KnowledgeItemDialog
+        itemId={itemId}
+        trashedItem={trashedKnowledgeItems.find(item => item.id === itemId)}
+        onClose={closeItem}
+        returnFocus={returnFocus}
+        actionError={actionErrorForSelectedItem()}
+        actions={{
+          onRefresh: id => refreshMutation.mutate(id),
+          onRetry: id => retryMutation.mutate(id),
+          onTrash: id => trashMutation.mutate(id),
+          onRestore: id => restoreMutation.mutate(id),
+          onPermanentlyDelete: confirmPermanentDeletion,
+          isRefreshing: refreshMutation.isPending && refreshMutation.variables === itemId,
+          isRetrying: retryMutation.isPending && retryMutation.variables === itemId,
+          isTrashing: trashMutation.isPending && trashMutation.variables === itemId,
+          isRestoring: restoreMutation.isPending && restoreMutation.variables === itemId,
+          isPermanentlyDeleting: permanentlyDeleteMutation.isPending && permanentlyDeleteMutation.variables === itemId,
+        }}
+      />
       <AlertDialog open={permanentDeletionTarget !== null} onOpenChange={open => { if (!open) setPermanentDeletionTarget(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
