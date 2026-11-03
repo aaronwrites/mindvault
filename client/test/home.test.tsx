@@ -150,6 +150,7 @@ describe("collection-wide Synthesis", () => {
     const user = userEvent.setup({ document: dom.window.document });
     renderHome();
 
+    await user.click(screen.getByRole("button", { name: "Ask" }));
     expect(await screen.findByText("Questions, matching evidence, and current-session context are processed locally by Ollama. Original Files are not sent to the models.")).toBeTruthy();
     await user.type(await screen.findByLabelText("Ask a question about your captured knowledge"), "How do read models stay current?");
     await user.click(screen.getByRole("button", { name: "Ask your vault" }));
@@ -166,7 +167,7 @@ describe("collection-wide Synthesis", () => {
       conversation: [{ question: "How do read models stay current?", answer: initialAnswer.answer.slice(0, 4000) }],
     }));
     expect(await screen.findByText("It does that by applying changes from the publisher.")).toBeTruthy();
-    expect(screen.getByText("Based on your Personal Note.")).toBeTruthy();
+    expect(screen.getByText("Based on your personal note.")).toBeTruthy();
 
     askVault.mockRejectedValue(new Error("Answer generation is temporarily unavailable. Please try again."));
     await user.type(question, "And when does it fail?");
@@ -213,6 +214,7 @@ test("Synthesis shows distinct PDF page citations and keeps evidence visible aft
     })) });
   const user = userEvent.setup({ document: dom.window.document });
   renderHome();
+  await user.click(screen.getByRole("button", { name: "Ask" }));
   const question = await screen.findByLabelText("Ask a question about your captured knowledge");
   await user.type(question, "How do I recover?");
   await user.click(screen.getByRole("button", { name: "Ask your vault" }));
@@ -1015,12 +1017,15 @@ test("removal clears earlier answers and ignores in-flight answers based on remo
   let finishAnswer!: (result: SynthesisResult) => void;
   askVault.mockResolvedValueOnce(answer).mockImplementationOnce(() => new Promise(resolve => { finishAnswer = resolve; })).mockResolvedValueOnce({ ...answer, answer: "Fresh answer." });
   const user = userSetup(); renderHome();
+  await user.click(screen.getByRole("button", { name: "Ask" }));
   const input = screen.getByLabelText("Ask a question about your captured knowledge");
   await user.type(input, "first question"); await user.click(screen.getByRole("button", { name: "Ask your vault" }));
   await screen.findByText(answer.answer);
   await user.type(input, "follow up"); await user.click(screen.getByRole("button", { name: "Ask your vault" }));
+  await user.keyboard("{Escape}");
   await user.click(screen.getByRole("button", { name: "Move example.com to Trash" }));
   await screen.findByRole("button", { name: "Undo removal of example.com" });
+  await user.click(screen.getByRole("button", { name: "Ask" }));
   expect(screen.queryByText(answer.answer)).toBeNull();
   await act(async () => finishAnswer({ ...answer, answer: "Late stale answer." }));
   expect(screen.queryByText("Late stale answer.")).toBeNull();
@@ -1041,4 +1046,99 @@ test("removing a search result while the library first loads resumes a complete 
   await user.click(screen.getByRole("button", { name: "Clear search" }));
   expect(await screen.findByRole("button", { name: "View proposal.pdf" })).toBeTruthy();
   expect(screen.queryByText("Loading your saves…")).toBeNull();
+});
+
+test("Ask opens only on request, closes by keyboard or touch, and preserves search and draft", async () => {
+  getKnowledgeItems.mockResolvedValue([readyItem]);
+  searchKnowledgeItems.mockResolvedValue([]);
+  const user = userSetup(); renderHome();
+  expect(screen.queryByRole("dialog")).toBeNull();
+  expect(Boolean(screen.queryByLabelText("Ask a question about your captured knowledge"))).toBe(false);
+  await user.type(screen.getByLabelText("Search your saves"), "replication{Enter}");
+  await screen.findByText(/No matches here/);
+  expect(askVault).not.toHaveBeenCalled();
+  const ask = screen.getByRole("button", { name: "Ask" });
+  ask.focus(); await user.keyboard("{Enter}");
+  const panel = await screen.findByRole("dialog", { name: "Ask your vault" });
+  await user.type(within(panel).getByRole("textbox"), "Unfinished question");
+  await user.keyboard("{Escape}");
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  await waitFor(() => expect(document.activeElement).toBe(ask));
+  expect((screen.getByLabelText("Search your saves") as HTMLInputElement).value).toBe("replication");
+  await user.click(ask);
+  expect((await screen.findByRole("textbox", { name: "Ask a question about your captured knowledge" }) as HTMLTextAreaElement).value).toBe("Unfinished question");
+  await user.click(screen.getByRole("button", { name: "Close" }));
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  expect(askVault).not.toHaveBeenCalled();
+});
+
+test("Ask keeps pending requests across closing, offers retry after failure, and explains insufficient evidence", async () => {
+  getKnowledgeItems.mockResolvedValue([]);
+  let rejectAnswer!: (error: Error) => void;
+  askVault.mockImplementationOnce(() => new Promise((_, reject) => { rejectAnswer = reject; }))
+    .mockResolvedValueOnce({ answer: "Your saves do not explain this topic.", insufficientEvidence: true, citations: [] });
+  const user = userSetup(); renderHome();
+  await user.click(screen.getByRole("button", { name: "Ask" }));
+  await user.type(screen.getByRole("textbox"), "How does this work?");
+  await user.click(screen.getByRole("button", { name: "Ask your vault" }));
+  expect(screen.getByRole("status").textContent).toContain("Finding relevant captured evidence");
+  expect((screen.getByRole("textbox") as HTMLTextAreaElement).disabled).toBe(true);
+  await user.keyboard("{Escape}");
+  await waitFor(() => expect(Boolean(screen.queryByRole("dialog"))).toBe(false));
+  await user.click(screen.getByRole("button", { name: "Ask" }));
+  expect((screen.getByRole("button", { name: "Finding evidence…" }) as HTMLButtonElement).disabled).toBe(true);
+  expect(askVault).toHaveBeenCalledTimes(1);
+  await act(async () => rejectAnswer(new Error("private model diagnostic")));
+  expect((await screen.findByRole("alert")).textContent).toContain("Answer generation is temporarily unavailable. Please try again.");
+  expect(Boolean(screen.queryByText("private model diagnostic"))).toBe(false);
+  expect((screen.getByRole("textbox") as HTMLTextAreaElement).value).toBe("How does this work?");
+  await user.click(screen.getByRole("button", { name: "Ask your vault" }));
+  expect(await screen.findByText("Your saves do not explain this topic.")).toBeTruthy();
+  expect(screen.getByText(/There isn’t enough evidence in your saves/)).toBeTruthy();
+  expect(Boolean(screen.queryByRole("region", { name: "Supporting saves" }))).toBe(false);
+  await user.keyboard("{Escape}");
+  await user.click(screen.getByRole("button", { name: "Ask" }));
+  expect(await screen.findByText("Your saves do not explain this topic.")).toBeTruthy();
+});
+
+test("a citation outside filtered board results opens details and returns to the conversation and search", async () => {
+  getKnowledgeItems.mockResolvedValue([readyItem]);
+  searchKnowledgeItems.mockResolvedValue([]);
+  getKnowledgeItem.mockResolvedValue(fileItem);
+  askVault.mockResolvedValueOnce({ answer: "The proposal recommends durable storage.", insufficientEvidence: false, citations: [{
+    knowledgeItemId: 9, sourceSnapshotId: 4, title: "proposal.pdf", origin: "source-snapshot", originalUrl: null,
+    evidenceCoverage: "primary-content", excerpt: "Retain the original document.", pageNumber: 2, pageLabel: "1",
+    openOriginalFile: "/knowledge-items/9/original-file/open?page=2",
+    extractionCoverage: { pageCount: 3, pages: [{ pageNumber: 3, outcome: "unprocessed", reason: "OCR work limit reached" }] },
+  }] });
+  const user = userSetup(); renderHome();
+  await user.type(screen.getByLabelText("Search your saves"), "unrelated{Enter}");
+  await screen.findByText(/No matches here/);
+  await user.click(screen.getByRole("button", { name: "Ask" }));
+  await user.type(screen.getByRole("textbox"), "What does the proposal recommend?");
+  await user.click(screen.getByRole("button", { name: "Ask your vault" }));
+  const citation = await screen.findByRole("button", { name: "View proposal.pdf" });
+  const conversation = screen.getByRole("region", { name: "Current conversation" });
+  conversation.parentElement!.scrollTop = 180;
+  expect(screen.getByRole("button", { name: "Open PDF at page 2" }).getAttribute("href")).toBe("http://localhost:4000/knowledge-items/9/original-file/open?page=2");
+  expect(screen.getByText(/printed label: 1/)).toBeTruthy();
+  expect(screen.getByText(/Incomplete extraction: page 3/)).toBeTruthy();
+  citation.focus(); await user.keyboard("{Enter}");
+  const details = await screen.findByRole("dialog", { name: "proposal.pdf" });
+  expect(getKnowledgeItem).toHaveBeenCalledWith(9);
+  expect(within(details).getByRole("button", { name: "Open original" }).getAttribute("href")).toBe("http://localhost:4000/knowledge-items/9/original-file/open");
+  await user.keyboard("{Escape}");
+  await waitFor(() => expect(Boolean(screen.queryByRole("dialog", { name: "proposal.pdf" }))).toBe(false));
+  expect(screen.getByRole("dialog", { name: "Ask your vault" })).toBeTruthy();
+  await waitFor(() => expect(document.activeElement === citation).toBe(true));
+  expect(conversation.parentElement!.scrollTop).toBe(180);
+  await user.click(citation);
+  await screen.findByRole("dialog", { name: "proposal.pdf" });
+  await act(async () => window.history.back());
+  await waitFor(() => expect(Boolean(screen.queryByRole("dialog", { name: "proposal.pdf" }))).toBe(false));
+  expect(screen.getByText("The proposal recommends durable storage.")).toBeTruthy();
+  await user.click(screen.getByRole("button", { name: "Close" }));
+  await waitFor(() => expect(Boolean(screen.queryByRole("dialog"))).toBe(false));
+  expect((screen.getByLabelText("Search your saves") as HTMLInputElement).value).toBe("unrelated");
+  expect(screen.getByText(/No matches here/)).toBeTruthy();
 });

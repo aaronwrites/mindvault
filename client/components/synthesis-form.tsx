@@ -14,16 +14,18 @@ export function SynthesisForm({ onAsk, isAsking, question, onQuestionChange }: {
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const trimmedQuestion = question.trim();
-    if (trimmedQuestion) onAsk(trimmedQuestion);
+    if (trimmedQuestion && !isAsking) onAsk(trimmedQuestion);
   }
 
   return (
     <form onSubmit={submit} className="space-y-3">
       <Textarea
         aria-label="Ask a question about your captured knowledge"
+        maxLength={2_000}
+        disabled={isAsking}
         value={question}
         onChange={event => onQuestionChange(event.target.value)}
-        placeholder="Ask across the knowledge you have captured"
+        placeholder="Ask about something you’ve saved"
       />
       <Button type="submit" disabled={isAsking || !question.trim()}>
         {isAsking ? "Finding evidence…" : "Ask your vault"}

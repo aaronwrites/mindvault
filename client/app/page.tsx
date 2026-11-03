@@ -12,9 +12,8 @@ import { KnowledgeItemCard, isItemProcessing, knowledgeItemTitle } from "@/compo
 import { originalFileTitle, sourcePreviewTitle } from "@/components/source-preview";
 import { RecallResultCard } from "@/components/recall-result-card";
 import { SearchForm } from "@/components/search-form";
-import { PdfPageReference } from "@/components/pdf-page-reference";
-import { PdfExtractionCoverage } from "@/components/pdf-extraction-coverage";
-import { SynthesisForm } from "@/components/synthesis-form";
+import { Dialog, DialogTrigger } from "@/components/ui/dialog";
+import { AskPanel, type ConversationTurn } from "@/components/ask-panel";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -22,12 +21,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { askVault, getKnowledgeItems, getTrashedKnowledgeItems, knowledgeItemKeys, recallKeys, refreshKnowledgeItem, retryKnowledgeItem, searchKnowledgeItems, } from "@/lib/api";
-import type { KnowledgeItem, SynthesisResult } from "@/lib/types";
-
-type ConversationTurn = {
-  question: string;
-  result: SynthesisResult;
-};
+import type { KnowledgeItem } from "@/lib/types";
 
 const lifecycleCopy = {
   trash: { pending: "Moving", verb: "move", suffix: " to Trash", retry: "removal" },
@@ -47,6 +41,7 @@ export default function Home() {
   const [highlightedItemId, setHighlightedItemId] = useState<number | null>(null);
   const [showTrash, setShowTrash] = useState(false);
   const [permanentDeletionTarget, setPermanentDeletionTarget] = useState<KnowledgeItem | null>(null);
+  const [askOpen, setAskOpen] = useState(false);
   const [synthesisQuestion, setSynthesisQuestion] = useState("");
   const [conversationTurns, setConversationTurns] = useState<ConversationTurn[]>([]);
   const knowledgeItemsQuery = useQuery({
@@ -120,6 +115,7 @@ export default function Home() {
     retry: false,
   });
   function askQuestion(question: string) {
+    if (synthesisMutation.isPending) return;
     const version = conversationVersion.current;
     synthesisMutation.mutate({
       question,
@@ -171,7 +167,29 @@ export default function Home() {
   const selectedActionError = selectedNotice?.failed
     ? `Couldn’t ${lifecycleCopy[selectedNotice.operation].verb} this save${lifecycleCopy[selectedNotice.operation].suffix}. Please try again.`
     : actionErrorForSelectedItem();
+  const itemDetails = (
+    <KnowledgeItemDialog
+        itemId={itemId !== null && lifecycle.removedIds.has(itemId) && !showTrash ? null : itemId}
+        trashedItem={trashedKnowledgeItems.find(item => item.id === itemId)}
+        onClose={closeItem}
+        returnFocus={returnFocus}
+        actionError={selectedActionError}
+        actions={{
+          onRefresh: id => refreshMutation.mutate(id),
+          onRetry: id => retryMutation.mutate(id),
+          onTrash: id => void lifecycle.run("trash", id, itemTitle(id)),
+          onRestore: id => void lifecycle.run("restore", id, itemTitle(id)),
+          onPermanentlyDelete: confirmPermanentDeletion,
+          isRefreshing: refreshMutation.isPending && refreshMutation.variables === itemId,
+          isRetrying: retryMutation.isPending && retryMutation.variables === itemId,
+          isTrashing: lifecycle.isPending(itemId),
+          isRestoring: lifecycle.isPending(itemId),
+          isPermanentlyDeleting: lifecycle.isPending(itemId),
+        }}
+      />
+  );
   return (
+    <Dialog open={askOpen} onOpenChange={setAskOpen}>
     <main className="mx-auto flex min-h-screen w-full max-w-7xl flex-col gap-8 px-6 py-12 sm:px-10 lg:py-20">
       <header className="space-y-3">
         <p className="text-sm font-semibold uppercase tracking-[0.2em] text-muted-foreground">
@@ -206,7 +224,7 @@ export default function Home() {
         {!showTrash && <div className="flex flex-wrap items-center gap-2">
           <div className="min-w-0 flex-1"><SearchForm query={searchText} onQueryChange={setSearchText} onSearch={setSearchQuery} onClear={clearSearch} isSearching={recallQuery.isFetching} /></div>
           <Button variant="outline" aria-expanded={filtersOpen} aria-controls="board-filters" onClick={() => setFiltersOpen(value => !value)}>Filter{sourceFilter !== "all" ? " · 1" : ""}</Button>
-          <Button variant="ghost" render={<a href="#synthesis-heading" />} nativeButton={false}>Ask</Button>
+          <DialogTrigger render={<Button variant="ghost" />}>Ask</DialogTrigger>
         </div>}
         {!showTrash && filtersOpen && <div id="board-filters" className="space-y-3 rounded-xl border p-4">
           <p className="text-sm text-muted-foreground">{searchQuery ? "Filter these search results by how you saved them. Search returns the most relevant matches, not every saved item." : "Filter your saves by how you saved them."}</p>
@@ -274,57 +292,15 @@ export default function Home() {
         </div>
       </section>
       </UniversalCaptureArea>
-      {!showTrash && <section aria-labelledby="synthesis-heading" className="space-y-4">
-        <div>
-          <h2 id="synthesis-heading" className="text-2xl font-semibold tracking-tight">Ask your vault</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Answers use only matching captured evidence and cite the Knowledge Items that support them.</p>
-          <p className="mt-1 text-sm text-muted-foreground">Questions, matching evidence, and current-session context are processed locally by Ollama. Original Files are not sent to the models.</p>
-        </div>
-        <SynthesisForm onAsk={askQuestion} isAsking={synthesisMutation.isPending} question={synthesisQuestion} onQuestionChange={setSynthesisQuestion} />
-        {synthesisMutation.isPending && <Card role="status"><CardContent className="py-3 text-center text-muted-foreground">Finding relevant captured evidence…</CardContent></Card>}
-        {synthesisMutation.error && <Alert variant="destructive"><AlertDescription>{synthesisMutation.error.message}</AlertDescription></Alert>}
-        {conversationTurns.length > 0 && <section aria-label="Current conversation" className="space-y-4">
-          {conversationTurns.map((turn, index) => <Card key={`${turn.question}-${index}`}>
-            <CardContent className="space-y-4 py-5">
-              <p className="text-sm font-medium">You asked: {turn.question}</p>
-              <p>{turn.result.answer}</p>
-              {turn.result.insufficientEvidence ? <p className="text-sm text-muted-foreground">Capture more relevant knowledge, then ask again.</p> : <section aria-label="Supporting Knowledge Items" className="space-y-3">
-                <p className="text-sm font-medium">Supporting Knowledge Items</p>
-                <ul className="space-y-3">
-                  {turn.result.citations.map((citation, index) => <li key={`${citation.knowledgeItemId}-${citation.sourceSnapshotId ?? "context"}-${index}`} className="space-y-1 text-sm">
-                    <Button variant="link" onClick={() => openItem(citation.knowledgeItemId)}>View {citation.title}</Button>
-                    <blockquote className="border-l-2 pl-3 text-muted-foreground">{citation.excerpt}</blockquote>
-                    <PdfPageReference pageNumber={citation.pageNumber} pageLabel={citation.pageLabel} openOriginalFile={citation.openOriginalFile} />
-                    <PdfExtractionCoverage coverage={citation.extractionCoverage} />
-                    {citation.origin === "personal-note" && <p className="text-muted-foreground">Based on your Personal Note.</p>}
-                    {citation.origin === "selected-source-text" && <p className="text-muted-foreground">Based on selected Source text.</p>}
-                    {citation.evidenceCoverage === "metadata-only" && <p className="text-muted-foreground">Based on source-provided metadata only.</p>}
-                  </li>)}
-                </ul>
-              </section>}
-            </CardContent>
-          </Card>)}
-        </section>}
-      </section>}
-      <KnowledgeItemDialog
-        itemId={itemId !== null && lifecycle.removedIds.has(itemId) && !showTrash ? null : itemId}
-        trashedItem={trashedKnowledgeItems.find(item => item.id === itemId)}
-        onClose={closeItem}
-        returnFocus={returnFocus}
-        actionError={selectedActionError}
-        actions={{
-          onRefresh: id => refreshMutation.mutate(id),
-          onRetry: id => retryMutation.mutate(id),
-          onTrash: id => void lifecycle.run("trash", id, itemTitle(id)),
-          onRestore: id => void lifecycle.run("restore", id, itemTitle(id)),
-          onPermanentlyDelete: confirmPermanentDeletion,
-          isRefreshing: refreshMutation.isPending && refreshMutation.variables === itemId,
-          isRetrying: retryMutation.isPending && retryMutation.variables === itemId,
-          isTrashing: lifecycle.isPending(itemId),
-          isRestoring: lifecycle.isPending(itemId),
-          isPermanentlyDeleting: lifecycle.isPending(itemId),
-        }}
-      />
+      {askOpen ? <AskPanel
+        question={synthesisQuestion}
+        onQuestionChange={setSynthesisQuestion}
+        onAsk={askQuestion}
+        isAsking={synthesisMutation.isPending}
+        error={synthesisMutation.error}
+        conversationTurns={conversationTurns}
+        openItem={openItem}
+      >{itemDetails}</AskPanel> : itemDetails}
       <AlertDialog open={permanentDeletionTarget !== null} onOpenChange={open => { if (!open) setPermanentDeletionTarget(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -338,5 +314,6 @@ export default function Home() {
         </AlertDialogContent>
       </AlertDialog>
     </main>
+    </Dialog>
   );
 }
