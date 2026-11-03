@@ -1,3 +1,4 @@
+import { ItemQuickActions } from "@/components/item-quick-actions";
 import { PdfPageReference } from "@/components/pdf-page-reference";
 import { PdfExtractionCoverage } from "@/components/pdf-extraction-coverage";
 import { API_URL } from "@/lib/api";
@@ -14,10 +15,10 @@ const originLabels = {
   "personal-note": "Your note",
 } as const;
 
-export function RecallResultCard({ result, onOpen }: { result: RecallKnowledgeItem; onOpen?: (id: number) => void }) {
+export function RecallResultCard({ result, onOpen, onTrash }: { result: RecallKnowledgeItem; onOpen?: (id: number) => void; onTrash?: (id: number, title: string) => void }) {
   const title = result.source.filename !== undefined ? originalFileTitle(result.source.filename, result.source.kind) : sourcePreviewTitle(result.sourcePreview, result.source.submittedUrl);
   return (
-    <Card className="relative mb-4 break-inside-avoid" onClick={event => {
+    <Card className="group/card relative mb-4 break-inside-avoid" onClick={event => {
       // Let links and buttons perform their own actions; text above the
       // full-card button should still open the same details.
       if (event.target instanceof Element && !event.target.closest('a, button, input, textarea, select, [role="button"]')) {
@@ -29,6 +30,7 @@ export function RecallResultCard({ result, onOpen }: { result: RecallKnowledgeIt
       <CardHeader>
         <CardTitle><h3 className="break-words text-lg font-medium">{title}</h3></CardTitle>
         <CardAction className="relative z-20">
+          {onTrash && <ItemQuickActions item={result} title={title} onTrash={onTrash} />}
           {onOpen && <Button variant="outline" onClick={() => onOpen(result.id)}>View details</Button>}
           <Button
             variant="ghost"

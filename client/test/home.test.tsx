@@ -12,12 +12,13 @@ Object.assign(globalThis, {
   HTMLElement: dom.window.HTMLElement,
   Element: dom.window.Element,
   Node: dom.window.Node,
+  getComputedStyle: dom.window.getComputedStyle.bind(dom.window),
   requestAnimationFrame: (callback: FrameRequestCallback) => setTimeout(callback, 0),
   cancelAnimationFrame: (id: number) => clearTimeout(id),
   IS_REACT_ACT_ENVIRONMENT: true,
 });
 
-const { act, cleanup, fireEvent, render, screen, waitFor } =
+const { act, cleanup, fireEvent, render, screen, waitFor, within } =
   await import("@testing-library/react");
 const { default: userEvent } = await import("@testing-library/user-event");
 const { QueryClient, QueryClientProvider } =
@@ -411,7 +412,7 @@ test("moves a save to Trash, restores it, and confirms permanent deletion separa
   await user.click(screen.getByRole("button", { name: "Move to Trash" }));
   await waitFor(() => expect(Boolean(screen.queryByRole("dialog"))).toBe(false));
   expect(trashKnowledgeItem.mock.calls[0]?.[0]).toBe(9);
-  await user.click(screen.getByRole("button", { name: "View Trash" }));
+  await openTrash(user);
   await openCard("proposal.pdf");
   await user.click(screen.getByRole("button", { name: "Delete permanently" }));
   await screen.findByRole("alertdialog");
@@ -816,7 +817,7 @@ test("Trash disables board shortcuts while Add remains available and search surv
   const user = userSetup(); renderHome();
   await user.type(screen.getByLabelText("Search your saves"), "database{Enter}");
   await screen.findByText("Keep query evidence");
-  await user.click(screen.getByRole("button", { name: "View Trash" }));
+  await openTrash(user);
   expect(screen.getByRole("button", { name: "Add" })).toBeTruthy();
   fireEvent.paste(screen.getByRole("main"), { clipboardData: { getData: () => "https://example.com/another" } });
   expect(createCapture).not.toHaveBeenCalled();
@@ -831,7 +832,7 @@ test("an existing save restored through Add leaves Trash and reveals the active 
   getKnowledgeItems.mockResolvedValue([]); getTrashedKnowledgeItems.mockResolvedValue([trashed]);
   createCapture.mockResolvedValue({ captureId: 2, sourceId: 1, knowledgeItemId: 1, processingAttemptId: null, availability: "ready", organizationCondition: "complete", reused: true, restoredFromTrash: true, knowledgeItem: readyItem });
   const user = userSetup(); renderHome();
-  await user.click(screen.getByRole("button", { name: "View Trash" }));
+  await openTrash(user);
   await screen.findByRole("button", { name: "View example.com" });
   await user.click(screen.getByRole("button", { name: "Add" }));
   await user.type(screen.getByLabelText("Link"), readyItem.source.submittedUrl);
@@ -841,7 +842,7 @@ test("an existing save restored through Add leaves Trash and reveals the active 
   expect(screen.getAllByRole("button", { name: "View example.com" })).toHaveLength(1);
   expect(screen.getByText("Already saved")).toBeTruthy();
   getTrashedKnowledgeItems.mockResolvedValue([]);
-  await user.click(screen.getByRole("button", { name: "View Trash" }));
+  await openTrash(user);
   expect(await screen.findByText("Trash is empty. Items you move here can be restored.")).toBeTruthy();
 });
 
@@ -870,4 +871,174 @@ test("Recall excerpt and provenance clicks open details while PDF links keep the
   expect(onOpen).toHaveBeenCalledTimes(2);
   await user.click(view.getByRole("button", { name: "View example.com" }));
   expect(onOpen).toHaveBeenCalledTimes(3);
+});
+
+test("card keyboard actions remove without opening details and Undo restores that save", async () => {
+  getKnowledgeItems.mockResolvedValue([readyItem]);
+  trashKnowledgeItem.mockResolvedValue();
+  restoreKnowledgeItem.mockResolvedValue({ knowledgeItem: readyItem });
+  const user = userSetup(); renderHome();
+  await screen.findByRole("button", { name: "View example.com" });
+  const remove = screen.getByRole("button", { name: "Move example.com to Trash" });
+  remove.focus(); await user.keyboard("{Enter}");
+  expect(await screen.findByText("Moved “example.com” to Trash.")).toBeTruthy();
+  expect(screen.queryByRole("dialog")).toBeNull();
+  expect(screen.queryByRole("button", { name: "View example.com" })).toBeNull();
+  await user.click(screen.getByRole("button", { name: "Undo removal of example.com" }));
+  expect(await screen.findByRole("button", { name: "View example.com" })).toBeTruthy();
+  expect(restoreKnowledgeItem.mock.calls[0]?.[0]).toBe(1);
+});
+
+async function openTrash(user: ReturnType<typeof userSetup>) {
+  await user.click(screen.getByRole("button", { name: "Board menu" }));
+  await user.click(await screen.findByRole("menuitem", { name: "View Trash" }));
+}
+
+test("the card menu exposes original and removal actions for touch without opening details", async () => {
+  getKnowledgeItems.mockResolvedValue([fileItem]); trashKnowledgeItem.mockResolvedValue();
+  const user = userSetup(); renderHome();
+  await user.click(await screen.findByRole("button", { name: "Actions for proposal.pdf" }));
+  const original = await screen.findByRole("menuitem", { name: "Open original" });
+  expect(original.getAttribute("href")).toBe("http://localhost:4000/knowledge-items/9/original-file/open");
+  await user.click(screen.getByRole("menuitem", { name: "Move to Trash" }));
+  await screen.findByText("Moved “proposal.pdf” to Trash.");
+  expect(trashKnowledgeItem.mock.calls[0]?.[0]).toBe(9);
+  expect(screen.queryByRole("dialog")).toBeNull();
+});
+
+test("independent removals finish out of order and failed Undo retries the correct item", async () => {
+  getKnowledgeItems.mockResolvedValue([readyItem, fileItem]);
+  let finishFirst!: () => void;
+  trashKnowledgeItem.mockImplementationOnce(() => new Promise(resolve => { finishFirst = resolve; })).mockResolvedValueOnce();
+  restoreKnowledgeItem.mockRejectedValueOnce(new Error("private storage error")).mockResolvedValueOnce({ knowledgeItem: fileItem });
+  const user = userSetup(); renderHome();
+  await user.click(await screen.findByRole("button", { name: "Move example.com to Trash" }));
+  await user.click(screen.getByRole("button", { name: "Move proposal.pdf to Trash" }));
+  await screen.findByRole("button", { name: "Undo removal of proposal.pdf" });
+  await act(async () => finishFirst());
+  expect(await screen.findByRole("button", { name: "Undo removal of example.com" })).toBeTruthy();
+  await user.click(screen.getByRole("button", { name: "Undo removal of proposal.pdf" }));
+  expect(await screen.findByText("Couldn’t restore “proposal.pdf”. Please try again.")).toBeTruthy();
+  expect(screen.queryByText("private storage error")).toBeNull();
+  await user.click(screen.getByRole("button", { name: "Try restore again for proposal.pdf" }));
+  expect(await screen.findByRole("button", { name: "View proposal.pdf" })).toBeTruthy();
+  expect(restoreKnowledgeItem.mock.calls.map(call => call[0])).toEqual([9, 9]);
+  expect(screen.queryByRole("button", { name: "View example.com" })).toBeNull();
+  expect(screen.getByRole("button", { name: "Undo removal of example.com" })).toBeTruthy();
+});
+
+test("a failed removal stays in details with safe recovery and a successful retry returns focus to the board", async () => {
+  getKnowledgeItems.mockResolvedValue([readyItem]); getKnowledgeItem.mockResolvedValue(readyItem);
+  trashKnowledgeItem.mockRejectedValueOnce(new Error("private SQL error")).mockResolvedValueOnce();
+  const user = userSetup(); renderHome(); await openCard();
+  await user.click(screen.getByRole("button", { name: "Move to Trash" }));
+  await waitFor(() => expect(screen.getByRole("dialog").textContent).toContain("Couldn’t move this save to Trash. Please try again."));
+  expect(screen.queryByText("private SQL error")).toBeNull();
+  await user.click(screen.getByRole("button", { name: "Move to Trash" }));
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Your saves" })));
+  expect(screen.queryByRole("button", { name: "View example.com" })).toBeNull();
+});
+
+test("permanent deletion is confirmed, retains pending feedback, and exposes cleanup failure for retry", async () => {
+  const trashed: KnowledgeItem = { ...fileItem, lifecycleState: "trashed", trashedAt: "2026-11-03T10:00:00Z" };
+  const pending: KnowledgeItem = { ...trashed, lifecycleState: "pending-permanent-deletion", deletion: { status: "pending", failureReason: null } };
+  getKnowledgeItems.mockResolvedValue([]); getTrashedKnowledgeItems.mockResolvedValue([trashed]);
+  permanentlyDeleteKnowledgeItem.mockImplementationOnce(async () => { getTrashedKnowledgeItems.mockResolvedValue([pending]); return { deletionPending: true }; });
+  const user = userSetup(); renderHome(); await openTrash(user); await openCard("proposal.pdf");
+  await user.click(screen.getByRole("button", { name: "Delete permanently" }));
+  const confirmation = await screen.findByRole("alertdialog");
+  expect(permanentlyDeleteKnowledgeItem).not.toHaveBeenCalled();
+  await user.click(within(confirmation).getByRole("button", { name: "Delete permanently" }));
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  expect(await screen.findByText("Deleting permanently…")).toBeTruthy();
+  expect(permanentlyDeleteKnowledgeItem.mock.calls[0]?.[0]).toBe(9);
+  getTrashedKnowledgeItems.mockResolvedValue([{ ...pending, deletion: { status: "failed", failureReason: "private storage credentials" } }]);
+  expect(await screen.findByText("Deletion didn’t finish. Open details to retry.", {}, { timeout: 4500 })).toBeTruthy();
+  await openCard("proposal.pdf");
+  expect(screen.queryByRole("button", { name: "Restore" })).toBeNull();
+  expect(screen.queryByText("private storage credentials")).toBeNull();
+  permanentlyDeleteKnowledgeItem.mockResolvedValueOnce(undefined);
+  getTrashedKnowledgeItems.mockResolvedValue([]);
+  await user.click(screen.getByRole("button", { name: "Retry deletion" }));
+  const retry = await screen.findByRole("alertdialog");
+  await user.click(within(retry).getByRole("button", { name: "Delete permanently" }));
+  expect(await screen.findByText("Trash is empty. Items you move here can be restored.")).toBeTruthy();
+});
+
+test("Trash restore and deletion request failures keep the save recoverable", async () => {
+  const trashed: KnowledgeItem = { ...fileItem, lifecycleState: "trashed", trashedAt: "2026-11-03T10:00:00Z" };
+  getKnowledgeItems.mockResolvedValue([]); getTrashedKnowledgeItems.mockResolvedValue([trashed]);
+  restoreKnowledgeItem.mockRejectedValueOnce(new Error("private restore error"));
+  permanentlyDeleteKnowledgeItem.mockRejectedValueOnce(new Error("private delete error"));
+  const user = userSetup(); renderHome(); await openTrash(user); await openCard("proposal.pdf");
+  await user.click(screen.getByRole("button", { name: "Restore" }));
+  await waitFor(() => expect(screen.getByRole("dialog").textContent).toContain("Couldn’t restore this save. Please try again."));
+  await user.click(screen.getByRole("button", { name: "Delete permanently" }));
+  const confirm = await screen.findByRole("alertdialog");
+  await user.click(within(confirm).getByRole("button", { name: "Delete permanently" }));
+  await waitFor(() => expect(screen.getByRole("dialog").textContent).toContain("Couldn’t delete this save. Please try again."));
+  expect(screen.queryByText(/private (restore|delete) error/)).toBeNull();
+  restoreKnowledgeItem.mockResolvedValue({ knowledgeItem: fileItem }); getTrashedKnowledgeItems.mockResolvedValue([]); getKnowledgeItems.mockResolvedValue([fileItem]);
+  await user.click(screen.getByRole("button", { name: "Restore" }));
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  await user.click(screen.getByRole("button", { name: "Back to saves" }));
+  expect(await screen.findByRole("button", { name: "View proposal.pdf" })).toBeTruthy();
+});
+
+test("failed Trash browsing has safe recovery without losing the board", async () => {
+  getKnowledgeItems.mockResolvedValue([readyItem]);
+  getTrashedKnowledgeItems.mockRejectedValueOnce(new Error("private database error")).mockResolvedValueOnce([]);
+  const user = userSetup(); renderHome(); await openTrash(user);
+  expect(await screen.findByText("Couldn’t load Trash. Please try again.")).toBeTruthy();
+  expect(screen.queryByText("private database error")).toBeNull();
+  await user.click(screen.getByRole("button", { name: "Try loading Trash again" }));
+  expect(await screen.findByText("Trash is empty. Items you move here can be restored.")).toBeTruthy();
+});
+
+test("new search responses cannot reintroduce a removed save or its stale details", async () => {
+  getKnowledgeItems.mockResolvedValue([readyItem]); trashKnowledgeItem.mockResolvedValue();
+  searchKnowledgeItems.mockResolvedValue([matchingItem(readyItem, "Stale matching evidence")]);
+  const user = userSetup(); renderHome();
+  await user.click(await screen.findByRole("button", { name: "Move example.com to Trash" }));
+  await screen.findByRole("button", { name: "Undo removal of example.com" });
+  await user.type(screen.getByLabelText("Search your saves"), "database{Enter}");
+  await waitFor(() => expect(searchKnowledgeItems).toHaveBeenCalled());
+  expect(screen.queryByText("Stale matching evidence")).toBeNull();
+  await act(async () => { window.history.pushState(null, "", "#item=1"); window.dispatchEvent(new dom.window.PopStateEvent("popstate")); });
+  expect(screen.queryByRole("dialog")).toBeNull();
+});
+
+test("removal clears earlier answers and ignores in-flight answers based on removed knowledge", async () => {
+  getKnowledgeItems.mockResolvedValue([readyItem]); trashKnowledgeItem.mockResolvedValue();
+  const answer: SynthesisResult = { answer: "Earlier saved evidence.", insufficientEvidence: false, citations: [] };
+  let finishAnswer!: (result: SynthesisResult) => void;
+  askVault.mockResolvedValueOnce(answer).mockImplementationOnce(() => new Promise(resolve => { finishAnswer = resolve; })).mockResolvedValueOnce({ ...answer, answer: "Fresh answer." });
+  const user = userSetup(); renderHome();
+  const input = screen.getByLabelText("Ask a question about your captured knowledge");
+  await user.type(input, "first question"); await user.click(screen.getByRole("button", { name: "Ask your vault" }));
+  await screen.findByText(answer.answer);
+  await user.type(input, "follow up"); await user.click(screen.getByRole("button", { name: "Ask your vault" }));
+  await user.click(screen.getByRole("button", { name: "Move example.com to Trash" }));
+  await screen.findByRole("button", { name: "Undo removal of example.com" });
+  expect(screen.queryByText(answer.answer)).toBeNull();
+  await act(async () => finishAnswer({ ...answer, answer: "Late stale answer." }));
+  expect(screen.queryByText("Late stale answer.")).toBeNull();
+  await user.click(screen.getByRole("button", { name: "Ask your vault" }));
+  await screen.findByText("Fresh answer.");
+  expect(askVault.mock.calls.at(-1)?.[0].conversation).toEqual([]);
+});
+
+test("removing a search result while the library first loads resumes a complete board", async () => {
+  getKnowledgeItems.mockImplementationOnce(() => new Promise(() => {})).mockResolvedValue([fileItem]);
+  searchKnowledgeItems.mockResolvedValueOnce([matchingItem(readyItem, "Remove this match")]).mockResolvedValue([]);
+  trashKnowledgeItem.mockResolvedValue();
+  const user = userSetup(); renderHome();
+  await user.type(screen.getByLabelText("Search your saves"), "database{Enter}");
+  await screen.findByText("Remove this match");
+  await user.click(screen.getByRole("button", { name: "Move example.com to Trash" }));
+  await screen.findByRole("button", { name: "Undo removal of example.com" });
+  await user.click(screen.getByRole("button", { name: "Clear search" }));
+  expect(await screen.findByRole("button", { name: "View proposal.pdf" })).toBeTruthy();
+  expect(screen.queryByText("Loading your saves…")).toBeNull();
 });

@@ -22,8 +22,9 @@ export function useItemNavigation() {
     window.history.pushState({ ...window.history.state, mindvaultDetail: true }, "", `#item=${id}`);
     setItemId(id);
   }
-  function closeItem(expectedId?: number) {
+  function closeItem(expectedId?: number, fallbackFocus?: HTMLElement | null) {
     if (expectedId !== undefined && itemFromLocation() !== expectedId) return;
+    if (fallbackFocus) returnFocus.current = fallbackFocus;
     if (window.history.state?.mindvaultDetail) window.history.back();
     else {
       window.history.replaceState(window.history.state, "", window.location.pathname + window.location.search);

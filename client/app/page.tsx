@@ -1,11 +1,14 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useItemLifecycle } from "@/lib/use-item-lifecycle";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { MoreHorizontal } from "lucide-react";
 import { UniversalCaptureArea } from "@/components/universal-capture-area";
 import { KnowledgeItemDialog } from "@/components/knowledge-item-dialog";
 import { useItemNavigation } from "@/lib/use-item-navigation";
-import { KnowledgeItemCard, isItemProcessing } from "@/components/knowledge-item-card";
+import { KnowledgeItemCard, isItemProcessing, knowledgeItemTitle } from "@/components/knowledge-item-card";
 import { originalFileTitle, sourcePreviewTitle } from "@/components/source-preview";
 import { RecallResultCard } from "@/components/recall-result-card";
 import { SearchForm } from "@/components/search-form";
@@ -18,12 +21,18 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { askVault, getKnowledgeItems, getTrashedKnowledgeItems, knowledgeItemKeys, permanentlyDeleteKnowledgeItem, recallKeys, refreshKnowledgeItem, restoreKnowledgeItem, retryKnowledgeItem, searchKnowledgeItems, trashKnowledgeItem } from "@/lib/api";
-import type { KnowledgeItem, RecallKnowledgeItem, SynthesisResult } from "@/lib/types";
+import { askVault, getKnowledgeItems, getTrashedKnowledgeItems, knowledgeItemKeys, recallKeys, refreshKnowledgeItem, retryKnowledgeItem, searchKnowledgeItems, } from "@/lib/api";
+import type { KnowledgeItem, SynthesisResult } from "@/lib/types";
 
 type ConversationTurn = {
   question: string;
   result: SynthesisResult;
+};
+
+const lifecycleCopy = {
+  trash: { pending: "Moving", verb: "move", suffix: " to Trash", retry: "removal" },
+  restore: { pending: "Restoring", verb: "restore", suffix: "", retry: "restore" },
+  delete: { pending: "Deleting", verb: "delete", suffix: "", retry: "deletion" },
 };
 
 function newestFirst(a: KnowledgeItem, b: KnowledgeItem) { return Date.parse(b.createdAt) - Date.parse(a.createdAt); }
@@ -57,7 +66,7 @@ export default function Home() {
   }, [knowledgeItemsQuery.dataUpdatedAt, queryClient]);
   const knowledgeItems = knowledgeItemsQuery.data ?? [];
   function actionErrorForSelectedItem() {
-    return [refreshMutation, retryMutation, trashMutation, restoreMutation, permanentlyDeleteMutation]
+    return [refreshMutation, retryMutation]
       .find(mutation => mutation.variables === itemId && mutation.error)?.error?.message;
   }
   const trashQuery = useQuery({ queryKey: knowledgeItemKeys.trash, queryFn: getTrashedKnowledgeItems, enabled: showTrash, refetchInterval: query => query.state.data?.some(item => item.lifecycleState === "pending-permanent-deletion") ? 2_000 : false });
@@ -89,32 +98,20 @@ export default function Home() {
     mutationFn: retryKnowledgeItem,
     onSuccess: updateKnowledgeItemAfterProcessingAttempt,
   });
-  const trashMutation = useMutation({
-    mutationFn: trashKnowledgeItem,
-    onSuccess: async (_, id) => {
-      closeItem(id);
-      await queryClient.cancelQueries({ queryKey: recallKeys.all });
-      queryClient.setQueriesData<RecallKnowledgeItem[]>({ queryKey: recallKeys.all }, current => current?.filter(item => item.id !== id));
-      queryClient.setQueryData<KnowledgeItem[]>(knowledgeItemKeys.all, current => (current ?? []).filter(item => item.id !== id));
-      await Promise.all([queryClient.invalidateQueries({ queryKey: knowledgeItemKeys.trash }), queryClient.invalidateQueries({ queryKey: recallKeys.all })]);
-    },
+  const synthesisMutation = useMutation({
+    mutationFn: askVault,
   });
-  const restoreMutation = useMutation({
-    mutationFn: restoreKnowledgeItem,
-    onSuccess: async ({ knowledgeItem }, id) => {
-      closeItem(id);
-      queryClient.setQueryData<KnowledgeItem[]>(knowledgeItemKeys.trash, current => (current ?? []).filter(item => item.id !== id));
-      queryClient.setQueryData<KnowledgeItem[]>(knowledgeItemKeys.all, current => [knowledgeItem, ...(current ?? []).filter(item => item.id !== knowledgeItem.id)]);
-      await Promise.all([queryClient.invalidateQueries({ queryKey: knowledgeItemKeys.all }), queryClient.invalidateQueries({ queryKey: knowledgeItemKeys.trash }), queryClient.invalidateQueries({ queryKey: recallKeys.all })]);
-    },
+  const conversationVersion = useRef(0);
+  const lifecycle = useItemLifecycle(id => {
+    closeItem(id, document.getElementById("knowledge-items-heading"));
+    conversationVersion.current += 1;
+    setConversationTurns([]);
+    synthesisMutation.reset();
   });
-  const permanentlyDeleteMutation = useMutation({
-    mutationFn: permanentlyDeleteKnowledgeItem,
-    onSuccess: async (_, id) => {
-      closeItem(id);
-      await queryClient.invalidateQueries({ queryKey: knowledgeItemKeys.trash });
-    },
-  });
+  function itemTitle(id: number) {
+    const item = queryClient.getQueryData<KnowledgeItem>(knowledgeItemKeys.detail(id)) ?? knowledgeItems.find(item => item.id === id) ?? trashedKnowledgeItems.find(item => item.id === id);
+    return item ? knowledgeItemTitle(item) : "this save";
+  }
   function confirmPermanentDeletion(knowledgeItem: KnowledgeItem) { setPermanentDeletionTarget(knowledgeItem); }
   const recallQuery = useQuery({
     queryKey: recallKeys.search(searchQuery),
@@ -122,15 +119,14 @@ export default function Home() {
     enabled: Boolean(searchQuery) && !showTrash,
     retry: false,
   });
-  const synthesisMutation = useMutation({
-    mutationFn: askVault,
-  });
   function askQuestion(question: string) {
+    const version = conversationVersion.current;
     synthesisMutation.mutate({
       question,
       conversation: conversationTurns.slice(-6).map(turn => ({ question: turn.question, answer: turn.result.answer.slice(0, 4_000) })),
     }, {
       onSuccess: result => {
+        if (version !== conversationVersion.current) return;
         setConversationTurns(turns => [...turns, { question, result }]);
         setSynthesisQuestion("");
       },
@@ -149,6 +145,7 @@ export default function Home() {
   }
   function clearSearch() { setSearchQuery(""); setSearchText(""); }
   async function revealDuplicate(knowledgeItem: KnowledgeItem) {
+    lifecycle.markActive(knowledgeItem.id);
     await showCapturedItem(knowledgeItem);
     queryClient.setQueryData<KnowledgeItem[]>(knowledgeItemKeys.trash, current => current?.filter(item => item.id !== knowledgeItem.id));
     clearSearch();
@@ -167,7 +164,13 @@ export default function Home() {
   const boardQuery = showTrash ? trashQuery : searchQuery ? recallQuery : knowledgeItemsQuery;
   const visibleItems = (showTrash ? [...trashedKnowledgeItems].sort(newestFirst)
     : searchQuery ? recallQuery.data ?? [] : [...knowledgeItems].sort(newestFirst))
+    .filter(item => showTrash || !lifecycle.removedIds.has(item.id))
     .filter(item => showTrash || sourceFilter === "all" || (sourceFilter === "files" ? item.source.filename !== undefined : item.source.filename === undefined));
+  const activeItemCount = knowledgeItems.filter(item => !lifecycle.removedIds.has(item.id)).length;
+  const selectedNotice = lifecycle.notices.find(notice => notice.id === itemId);
+  const selectedActionError = selectedNotice?.failed
+    ? `Couldn’t ${lifecycleCopy[selectedNotice.operation].verb} this save${lifecycleCopy[selectedNotice.operation].suffix}. Please try again.`
+    : actionErrorForSelectedItem();
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-7xl flex-col gap-8 px-6 py-12 sm:px-10 lg:py-20">
       <header className="space-y-3">
@@ -182,6 +185,22 @@ export default function Home() {
         </p>
       </header>
 
+      <div aria-label="Save actions" className="space-y-2">
+        {lifecycle.notices.map(notice => {
+          const copy = lifecycleCopy[notice.operation];
+          return <Alert key={notice.id} role={notice.failed ? "alert" : "status"} variant={notice.failed ? "destructive" : "default"}>
+            <AlertDescription className="flex flex-wrap items-center gap-2">
+              <span>{notice.pending ? `${copy.pending} “${notice.title}”…` : notice.failed ? `Couldn’t ${copy.verb} “${notice.title}”${copy.suffix}. Please try again.` : `Moved “${notice.title}” to Trash.`}</span>
+              {!notice.pending && (notice.failed ? <Button variant="outline" onClick={() => {
+                if (notice.operation === "delete") {
+                  const item = trashedKnowledgeItems.find(item => item.id === notice.id);
+                  if (item) confirmPermanentDeletion(item);
+                } else void lifecycle.run(notice.operation, notice.id, notice.title);
+              }}>Try {copy.retry} again for {notice.title}</Button> : <Button variant="outline" aria-label={`Undo removal of ${notice.title}`} onClick={() => void lifecycle.run("restore", notice.id, notice.title)}>Undo</Button>)}
+            </AlertDescription>
+          </Alert>;
+        })}
+      </div>
       <UniversalCaptureArea onSaved={showCapturedItem} onDuplicate={revealDuplicate} disabled={showTrash}>
       <div className="mb-6 space-y-3">
         {!showTrash && <div className="flex flex-wrap items-center gap-2">
@@ -201,14 +220,18 @@ export default function Home() {
           <div>
             <h2
               id="knowledge-items-heading"
+              tabIndex={-1}
               className="text-2xl font-semibold tracking-tight"
             >
               {showTrash ? "Trash" : searchQuery ? "Search results" : "Your saves"}
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              {showTrash ? `${trashedKnowledgeItems.length} ${trashedKnowledgeItems.length === 1 ? "item" : "items"} retained in Trash.` : searchQuery ? `Matches for “${searchQuery}”, ordered by relevance` : `${knowledgeItems.length} ${knowledgeItems.length === 1 ? "save" : "saves"}`}
+              {showTrash ? `${trashedKnowledgeItems.length} ${trashedKnowledgeItems.length === 1 ? "item" : "items"} retained in Trash.` : searchQuery ? `Matches for “${searchQuery}”, ordered by relevance` : `${activeItemCount} ${activeItemCount === 1 ? "save" : "saves"}`}
             </p>
-            <Button variant="outline" className="mt-3" onClick={() => setShowTrash(value => !value)}>{showTrash ? "Back to saves" : "View Trash"}</Button>
+            {showTrash ? <Button variant="outline" className="mt-3" onClick={() => setShowTrash(false)}>Back to saves</Button> : <DropdownMenu>
+              <DropdownMenuTrigger render={<Button variant="ghost" size="icon" aria-label="Board menu" />}><MoreHorizontal /></DropdownMenuTrigger>
+              <DropdownMenuContent><DropdownMenuItem onClick={() => { closeItem(); setShowTrash(true); }}>View Trash</DropdownMenuItem></DropdownMenuContent>
+            </DropdownMenu>}
           </div>
         </div>
         {boardQuery.isPending && (
@@ -221,8 +244,9 @@ export default function Home() {
         {(boardQuery.error && (showTrash || !searchQuery)) && (
           <Alert variant="destructive">
             <AlertDescription>
-              {boardQuery.error?.message}
+              {showTrash ? "Couldn’t load Trash. Please try again." : boardQuery.error?.message}
             </AlertDescription>
+            {showTrash && <Button variant="outline" onClick={() => void trashQuery.refetch()}>Try loading Trash again</Button>}
           </Alert>
         )}
         {refreshMutation.error && (
@@ -235,9 +259,6 @@ export default function Home() {
             <AlertDescription>{retryMutation.error.message}</AlertDescription>
           </Alert>
         )}
-        {trashMutation.error && <Alert variant="destructive"><AlertDescription>{trashMutation.error.message}</AlertDescription></Alert>}
-        {restoreMutation.error && <Alert variant="destructive"><AlertDescription>{restoreMutation.error.message}</AlertDescription></Alert>}
-        {permanentlyDeleteMutation.error && <Alert variant="destructive"><AlertDescription>{permanentlyDeleteMutation.error.message}</AlertDescription></Alert>}
         {!showTrash && searchQuery && recallQuery.error && <Alert variant="destructive"><AlertDescription>Couldn’t search your saves. Please try again.</AlertDescription><Button variant="outline" onClick={() => void recallQuery.refetch()}>Try search again</Button></Alert>}
         {!boardQuery.isPending &&
           !boardQuery.error &&
@@ -247,7 +268,7 @@ export default function Home() {
         <div className="columns-1 gap-4 sm:columns-2 lg:columns-3 xl:columns-4">
           {visibleItems.map(knowledgeItem => (
             <div id={`knowledge-item-${knowledgeItem.id}`} key={knowledgeItem.id} tabIndex={-1} aria-label={highlightedItemId === knowledgeItem.id ? "Already saved item" : undefined} className={`break-inside-avoid rounded-2xl ${highlightedItemId === knowledgeItem.id ? "ring-2 ring-primary ring-offset-4" : ""}`}>
-              {"excerpts" in knowledgeItem ? <RecallResultCard result={knowledgeItem} onOpen={openItem} /> : <KnowledgeItemCard knowledgeItem={knowledgeItem} onOpen={openItem} />}
+              {"excerpts" in knowledgeItem ? <RecallResultCard result={knowledgeItem} onOpen={openItem} onTrash={(id, title) => void lifecycle.run("trash", id, title)} /> : <KnowledgeItemCard knowledgeItem={knowledgeItem} onOpen={openItem} onTrash={(id, title) => void lifecycle.run("trash", id, title)} />}
             </div>
           ))}
         </div>
@@ -286,22 +307,22 @@ export default function Home() {
         </section>}
       </section>}
       <KnowledgeItemDialog
-        itemId={itemId}
+        itemId={itemId !== null && lifecycle.removedIds.has(itemId) && !showTrash ? null : itemId}
         trashedItem={trashedKnowledgeItems.find(item => item.id === itemId)}
         onClose={closeItem}
         returnFocus={returnFocus}
-        actionError={actionErrorForSelectedItem()}
+        actionError={selectedActionError}
         actions={{
           onRefresh: id => refreshMutation.mutate(id),
           onRetry: id => retryMutation.mutate(id),
-          onTrash: id => trashMutation.mutate(id),
-          onRestore: id => restoreMutation.mutate(id),
+          onTrash: id => void lifecycle.run("trash", id, itemTitle(id)),
+          onRestore: id => void lifecycle.run("restore", id, itemTitle(id)),
           onPermanentlyDelete: confirmPermanentDeletion,
           isRefreshing: refreshMutation.isPending && refreshMutation.variables === itemId,
           isRetrying: retryMutation.isPending && retryMutation.variables === itemId,
-          isTrashing: trashMutation.isPending && trashMutation.variables === itemId,
-          isRestoring: restoreMutation.isPending && restoreMutation.variables === itemId,
-          isPermanentlyDeleting: permanentlyDeleteMutation.isPending && permanentlyDeleteMutation.variables === itemId,
+          isTrashing: lifecycle.isPending(itemId),
+          isRestoring: lifecycle.isPending(itemId),
+          isPermanentlyDeleting: lifecycle.isPending(itemId),
         }}
       />
       <AlertDialog open={permanentDeletionTarget !== null} onOpenChange={open => { if (!open) setPermanentDeletionTarget(null); }}>
@@ -312,7 +333,7 @@ export default function Home() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction variant="destructive" onClick={() => { if (permanentDeletionTarget) permanentlyDeleteMutation.mutate(permanentDeletionTarget.id); setPermanentDeletionTarget(null); }}>Delete permanently</AlertDialogAction>
+            <AlertDialogAction variant="destructive" onClick={() => { if (permanentDeletionTarget) void lifecycle.run("delete", permanentDeletionTarget.id, knowledgeItemTitle(permanentDeletionTarget)); setPermanentDeletionTarget(null); }}>Delete permanently</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
