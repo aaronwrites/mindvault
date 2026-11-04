@@ -5,6 +5,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { OutlinedPanel } from "@/components/outlined-panel";
 import { knowledgeItemKeys, recallKeys, maintainPersonalNote, type PersonalNoteChange } from "@/lib/api";
 import type { KnowledgeItem, RecallKnowledgeItem } from "@/lib/types";
 
@@ -41,8 +42,8 @@ export function ItemNotesEditor({ item }: { item: KnowledgeItem }) {
   const notes = item.captureContexts.filter(context => context.kind === "personal-note");
   const selections = item.captureContexts.filter(context => context.kind === "selected-source-text");
   return <>
-    <section aria-label="Your notes" className="space-y-3">
-      <h3 className="font-medium">Your notes</h3>
+    <OutlinedPanel title="Your notes" aria-label="Your notes" className="space-y-3">
+      {notes.length === 0 && !editing && <p className="text-sm leading-relaxed text-muted-foreground">What made this worth saving? Leave a thought for your future self.</p>}
       {notes.map(note => <div key={note.id} className="space-y-2">
         <p className="whitespace-pre-wrap break-words text-sm">{note.text}</p>
         {editable && <div className="flex gap-2">
@@ -61,11 +62,10 @@ export function ItemNotesEditor({ item }: { item: KnowledgeItem }) {
       {item.noteIndexing === "processing" && <p role="status" className="text-sm text-muted-foreground">Updating search for your notes…</p>}
       {item.noteIndexing === "incomplete" && <div><p className="text-sm">Your notes are saved, but search couldn’t be updated.</p>{editable && <Button variant="outline" disabled={mutation.isPending} onClick={() => save({ action: "retry" })}>Retry note search</Button>}</div>}
       {notice && <p role="status" className="text-sm text-muted-foreground">{notice}</p>}
-    </section>
-    {selections.length > 0 && <section aria-label="Selected text" className="space-y-2">
-      <h3 className="font-medium">Selected text</h3>
+    </OutlinedPanel>
+    {selections.length > 0 && <OutlinedPanel title="Selected text" aria-label="Selected text" className="space-y-2">
       <p className="text-xs text-muted-foreground">Saved from the source.</p>
-      {selections.map(selection => <blockquote key={selection.id} className="whitespace-pre-wrap break-words border-l-2 pl-3 text-sm">{selection.text}</blockquote>)}
-    </section>}
+      {selections.map(selection => <blockquote key={selection.id} className="whitespace-pre-wrap break-words border-l pl-3 text-sm">{selection.text}</blockquote>)}
+    </OutlinedPanel>}
   </>;
 }

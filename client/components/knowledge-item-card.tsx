@@ -35,7 +35,7 @@ export function KnowledgeItemCard({ knowledgeItem: item, onOpen, onTrash }: {
   return (
     <ImageTitleCard item={item} title={title} onOpen={onOpen} onTrash={item.lifecycleState === "active" ? onTrash : undefined}>
       <CardHoverSummary status={item.lifecycleState === "pending-permanent-deletion" ? item.deletion?.status === "failed" ? "Deletion failed" : "Deleting" : status.label}
-        summary={description?.label === "TL;DR" ? description.text : null} />
+        summary={description?.text ?? null} label={description?.label} processing={isItemProcessing(item)} organizationIncomplete={item.organizationCondition === "incomplete"} />
     </ImageTitleCard>
   );
 }

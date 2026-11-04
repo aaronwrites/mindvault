@@ -3,8 +3,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { useItemLifecycle } from "@/lib/use-item-lifecycle";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal } from "lucide-react";
+import { MessageCircle, Bookmark, FileText, LayoutGrid, Link2 } from "lucide-react";
+import { LibrarySkeleton } from "@/components/processing-indicator";
+import { ThemeToggle } from "@/components/theme-toggle";
+import { CollectionGrid } from "@/components/collection-grid";
 import { UniversalCaptureArea } from "@/components/universal-capture-area";
 import { KnowledgeItemDialog } from "@/components/knowledge-item-dialog";
 import { useItemNavigation } from "@/lib/use-item-navigation";
@@ -17,7 +19,6 @@ import { AskPanel, type ConversationTurn } from "@/components/ask-panel";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { askVault, getKnowledgeItems, getTrashedKnowledgeItems, knowledgeItemKeys, recallKeys, refreshKnowledgeItem, retryKnowledgeItem, searchKnowledgeItems, } from "@/lib/api";
@@ -36,7 +37,6 @@ export default function Home() {
   const { itemId, openItem, closeItem, returnFocus } = useItemNavigation();
   const [searchQuery, setSearchQuery] = useState("");
   const [searchText, setSearchText] = useState("");
-  const [filtersOpen, setFiltersOpen] = useState(false);
   const [sourceFilter, setSourceFilter] = useState("all");
   const [highlightedItemId, setHighlightedItemId] = useState<number | null>(null);
   const [showTrash, setShowTrash] = useState(false);
@@ -193,17 +193,19 @@ export default function Home() {
   );
   return (
     <Dialog open={askOpen} onOpenChange={setAskOpen}>
-    <main className="mx-auto flex min-h-screen w-[75vw] max-w-none flex-col gap-6 py-6 sm:py-8">
-      <header className={isFirstUseEmpty ? "space-y-3 py-4" : undefined}>
-        <h1 className={isFirstUseEmpty ? "max-w-2xl text-4xl font-semibold tracking-tight text-balance sm:text-5xl" : "text-2xl font-semibold tracking-tight"}>
-          {isFirstUseEmpty ? "Save it now. Find it when it matters." : "MindVault"}
-        </h1>
-        {isFirstUseEmpty && <p className="max-w-2xl text-lg leading-8 text-muted-foreground">
-          Save useful information without interrupting your flow.
-        </p>}
+    <main className="vault-shell min-h-screen">
+      <UniversalCaptureArea onSaved={showCapturedItem} onDuplicate={revealDuplicate} disabled={showTrash}>
+      {captureControls => <>
+      <header className="vault-header">
+        <h1 className="vault-wordmark">MindVault</h1>
+        <div className="header-actions">
+          <DialogTrigger render={<Button variant="ghost" className="h-11" />}><MessageCircle aria-hidden="true" />Ask</DialogTrigger>
+          {captureControls}
+          <ThemeToggle onTrash={() => { closeItem(); setShowTrash(true); }} />
+        </div>
       </header>
-
-      {lifecycle.notices.length > 0 && <div aria-label="Save actions" className="space-y-2">
+      {isFirstUseEmpty && <div className="vault-intro"><h2>Save it now. Find it when it matters.</h2><p>Paste a link or drop files here. Your collection grows one good idea at a time.</p></div>}
+      {lifecycle.notices.length > 0 && <div aria-label="Save actions" className="mt-5 space-y-2">
         {lifecycle.notices.map(notice => {
           const copy = lifecycleCopy[notice.operation];
           return <Alert key={notice.id} role={notice.failed ? "alert" : "status"} variant={notice.failed ? "destructive" : "default"}>
@@ -219,47 +221,32 @@ export default function Home() {
           </Alert>;
         })}
       </div>}
-      <UniversalCaptureArea onSaved={showCapturedItem} onDuplicate={revealDuplicate} disabled={showTrash}>
-      <div className="mb-6 space-y-3">
-        {!showTrash && <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
-          <div className="w-full min-w-0 flex-1"><SearchForm query={searchText} onQueryChange={setSearchText} onSearch={setSearchQuery} onClear={clearSearch} isSearching={recallQuery.isFetching} /></div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" className="h-11 min-w-11" aria-expanded={filtersOpen} aria-controls="board-filters" onClick={() => setFiltersOpen(value => !value)}>Filter{sourceFilter !== "all" ? " · 1" : ""}</Button>
-            <DialogTrigger render={<Button variant="ghost" className="h-11 min-w-11" />}>Ask</DialogTrigger>
-          </div>
-        </div>}
-        {!showTrash && filtersOpen && <div id="board-filters" className="space-y-3 rounded-xl border p-4">
-          <p className="text-sm text-muted-foreground">{searchQuery ? "Filter these search results by how you saved them. Search returns the most relevant matches, not every saved item." : "Filter your saves by how you saved them."}</p>
-          <RadioGroup aria-label="Saved as" value={sourceFilter} onValueChange={value => setSourceFilter(String(value))} className="flex flex-wrap gap-5">
-            {[["all", "All saves"], ["links", "Links"], ["files", "Files"]].map(([value, label]) => <div key={value} className="flex items-center gap-2"><RadioGroupItem id={`filter-${value}`} value={value} /><Label htmlFor={`filter-${value}`}>{label}</Label></div>)}
-          </RadioGroup>
-        </div>}
-      </div>
+      {!showTrash && <div className="library-tools">
+        <SearchForm query={searchText} onQueryChange={setSearchText} onSearch={setSearchQuery} onClear={clearSearch} isSearching={recallQuery.isFetching} />
+        <RadioGroup aria-label="Saved as" value={sourceFilter} onValueChange={value => setSourceFilter(String(value))} className="source-filters">
+          {([["all", "All", LayoutGrid], ["links", "Links", Link2], ["files", "Files", FileText]] as const).map(([value, label, Icon]) => <label key={value} className="source-filter" data-selected={sourceFilter === value}>
+            <RadioGroupItem id={`filter-${value}`} value={value} className="sr-only absolute" /><Icon aria-hidden="true" className="size-4 shrink-0" />{label}
+          </label>)}
+        </RadioGroup>
+      </div>}
       <section aria-labelledby="knowledge-items-heading" className="space-y-5">
-        <div className="flex items-start justify-between gap-4">
+        <div className="board-heading flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <h2
+            <div className="flex flex-wrap items-center gap-3"><h2
               id="knowledge-items-heading"
               tabIndex={-1}
-              className="text-2xl font-semibold tracking-tight"
+              className="collection-heading"
             >
               {showTrash ? "Trash" : searchQuery ? "Search results" : "Your saves"}
-            </h2>
+            </h2>{!showTrash && !searchQuery && <span className="board-count">{activeItemCount}</span>}</div>
             <p className="mt-1 text-sm text-muted-foreground">
-              {showTrash ? `${trashedKnowledgeItems.length} ${trashedKnowledgeItems.length === 1 ? "item" : "items"} retained in Trash.` : searchQuery ? `Matches for “${searchQuery}”, ordered by relevance` : `${activeItemCount} ${activeItemCount === 1 ? "save" : "saves"}`}
+              {showTrash ? `${trashedKnowledgeItems.length} ${trashedKnowledgeItems.length === 1 ? "item" : "items"} retained in Trash.` : searchQuery ? `Matches for “${searchQuery}”, ordered by relevance` : ""}
             </p>
           </div>
-          {showTrash ? <Button variant="outline" onClick={() => setShowTrash(false)}>Back to saves</Button> : <DropdownMenu>
-              <DropdownMenuTrigger render={<Button variant="ghost" size="icon" className="size-11" aria-label="Board menu" />}><MoreHorizontal /></DropdownMenuTrigger>
-              <DropdownMenuContent><DropdownMenuItem onClick={() => { closeItem(); setShowTrash(true); }}>View Trash</DropdownMenuItem></DropdownMenuContent>
-            </DropdownMenu>}
+          {showTrash && <Button variant="outline" onClick={() => setShowTrash(false)}>Back to saves</Button>}
         </div>
         {boardQuery.isPending && (
-          <Card role="status">
-            <CardContent className="py-3 text-center text-muted-foreground">
-              {searchQuery && !showTrash ? "Searching your saves…" : "Loading your saves…"}
-            </CardContent>
-          </Card>
+          <LibrarySkeleton label={searchQuery && !showTrash ? "Searching your saves…" : "Loading your saves…"} />
         )}
         {(boardQuery.error && (showTrash || !searchQuery)) && (
           <Alert variant="destructive">
@@ -272,17 +259,26 @@ export default function Home() {
         {!showTrash && searchQuery && recallQuery.error && <Alert variant="destructive"><AlertDescription>Couldn’t search your saves. Please try again.</AlertDescription><Button variant="outline" onClick={() => void recallQuery.refetch()}>Try search again</Button></Alert>}
         {!boardQuery.isPending &&
           !boardQuery.error &&
-          visibleItems.length === 0 && <Card><CardContent className="py-3 text-center text-muted-foreground">
+          visibleItems.length === 0 && <Card className="empty-collection"><CardContent className="py-3 text-center text-muted-foreground"><Bookmark aria-hidden="true" className="size-8" />
             {showTrash ? "Trash is empty. Items you move here can be restored." : searchQuery ? "No matches here. Try another idea or clear your filters." : sourceFilter !== "all" ? "No saves match this filter." : "Your vault is empty. Use Add to save a link or file."}
           </CardContent></Card>}
-        <div className="columns-1 gap-4 sm:columns-2 lg:columns-3 xl:columns-4">
+        <CollectionGrid list={showTrash || Boolean(searchQuery)}>
           {visibleItems.map(knowledgeItem => (
-            <div id={`knowledge-item-${knowledgeItem.id}`} key={knowledgeItem.id} tabIndex={-1} aria-label={highlightedItemId === knowledgeItem.id ? "Already saved item" : undefined} className={`break-inside-avoid rounded-2xl ${highlightedItemId === knowledgeItem.id ? "ring-2 ring-primary ring-offset-4" : ""}`}>
-              {"excerpts" in knowledgeItem ? <RecallResultCard result={knowledgeItem} knowledgeItem={knowledgeItems.find(item => item.id === knowledgeItem.id)} onOpen={openItem} onTrash={(id, title) => void lifecycle.run("trash", id, title)} /> : <KnowledgeItemCard knowledgeItem={knowledgeItem} onOpen={openItem} onTrash={(id, title) => void lifecycle.run("trash", id, title)} />}
+            <div id={`knowledge-item-${knowledgeItem.id}`} key={knowledgeItem.id} tabIndex={-1} aria-label={highlightedItemId === knowledgeItem.id ? "Already saved item" : undefined} className={`collection-cell ${highlightedItemId === knowledgeItem.id ? "ring-2 ring-primary ring-offset-4" : ""}`}>
+              {showTrash && !("excerpts" in knowledgeItem) ? <article className="trash-row">
+                <FileText aria-hidden="true" className="size-5 shrink-0 text-muted-foreground" />
+                <div className="min-w-0 flex-1"><h3><Button variant="link" className="trash-title" onClick={() => openItem(knowledgeItem.id)} aria-label={`View ${knowledgeItemTitle(knowledgeItem)}`}>{knowledgeItemTitle(knowledgeItem)}</Button></h3>
+                  <p className="text-xs text-muted-foreground">{knowledgeItem.lifecycleState === "pending-permanent-deletion" ? knowledgeItem.deletion?.status === "failed" ? "Deletion failed" : "Deleting" : "In Trash"}</p>
+                </div>
+                <div className="trash-actions">
+                  {knowledgeItem.lifecycleState === "trashed" ? <><Button variant="outline" disabled={lifecycle.isPending(knowledgeItem.id)} onClick={() => void lifecycle.run("restore", knowledgeItem.id, knowledgeItemTitle(knowledgeItem))}>Restore</Button><Button variant="destructive" disabled={lifecycle.isPending(knowledgeItem.id)} onClick={() => confirmPermanentDeletion(knowledgeItem)}>Delete permanently</Button></> : knowledgeItem.deletion?.status === "failed" && <Button variant="outline" onClick={() => confirmPermanentDeletion(knowledgeItem)}>Retry deletion</Button>}
+                </div>
+              </article> : "excerpts" in knowledgeItem ? <RecallResultCard result={knowledgeItem} knowledgeItem={knowledgeItems.find(item => item.id === knowledgeItem.id)} onOpen={openItem} onTrash={(id, title) => void lifecycle.run("trash", id, title)} /> : <KnowledgeItemCard knowledgeItem={knowledgeItem} onOpen={openItem} onTrash={(id, title) => void lifecycle.run("trash", id, title)} />}
             </div>
           ))}
-        </div>
+        </CollectionGrid>
       </section>
+      </>}
       </UniversalCaptureArea>
       {askOpen ? <AskPanel
         question={synthesisQuestion}

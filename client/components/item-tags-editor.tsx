@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { OutlinedPanel } from "@/components/outlined-panel";
 import { knowledgeItemKeys, recallKeys, updateKnowledgeItemTags } from "@/lib/api";
 import type { KnowledgeItem, RecallKnowledgeItem } from "@/lib/types";
 
@@ -40,10 +41,10 @@ export function ItemTagsEditor({ item }: { item: KnowledgeItem }) {
     mutation.mutate({ add, remove });
   }
   const editable = item.lifecycleState === "active";
-  return <section aria-label="Tags" className="space-y-2">
-    <h3 className="font-medium">Tags</h3>
+  return <OutlinedPanel title="Tags" aria-label="Tags" className="space-y-2">
+    {item.topicTags.length === 0 && <p className="text-sm text-muted-foreground">{item.organizationCondition === "processing" ? "Finding where this fits…" : "No tags yet. Add a connection."}</p>}
     <ul className="flex flex-wrap gap-2">{item.topicTags.map(tag => <li key={tag} className="flex flex-wrap items-center gap-1">
-      <Badge variant="secondary">{tag}</Badge>
+      <Badge variant="secondary" className="topic-tag">{tag}</Badge>
       {editing && <>
         <Button variant="ghost" size="sm" disabled={mutation.isPending} aria-label={`Replace ${tag}`} onClick={() => { setDraft(tag); setReplacing(tag); setError(""); setNotice(""); }}>Replace</Button>
         <Button variant="ghost" size="sm" disabled={mutation.isPending} aria-label={`Remove ${tag}`} onClick={() => save([], [tag])}>Remove</Button>
@@ -61,5 +62,5 @@ export function ItemTagsEditor({ item }: { item: KnowledgeItem }) {
     </>}
     {error && <p id={`tag-error-${item.id}`} role="alert" className="text-sm">{error}</p>}
     {notice && <p role="status" className="text-sm text-muted-foreground">{notice}</p>}
-  </section>;
+  </OutlinedPanel>;
 }

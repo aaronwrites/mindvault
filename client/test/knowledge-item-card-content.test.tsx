@@ -20,10 +20,9 @@ const item: KnowledgeItem = {
 test("cards prefer a current primary-content TL;DR over the publisher description", () => {
   expect(knowledgeItemCardDescription(item)).toEqual({ label: "TL;DR", text: item.recognitionSummary! });
   const markup = renderToStaticMarkup(<KnowledgeItemCard knowledgeItem={{ ...item, topicTags: ["Databases"] }} onOpen={() => {}} />);
-  expect(markup).toContain("TL;DR: ");
-  expect(markup).toContain("line-clamp-2");
+  expect(markup).toContain("TL;DR");
   expect(markup).not.toContain("Databases");
-  expect(markup).toContain("bg-emerald-100");
+  expect(markup).toContain('role="status"');
   expect(markup).toContain(item.recognitionSummary!);
   expect(markup).not.toContain(item.sourcePreview!.description!);
 });

@@ -1,9 +1,18 @@
-import type { ReactNode } from "react";
+"use client";
+
+import { useState, type ReactNode } from "react";
 import { ItemQuickActions } from "@/components/item-quick-actions";
-import { OriginalFilePlaceholder, SourcePreviewMedia } from "@/components/source-preview";
+import { SourcePreviewMedia, formatByteSize } from "@/components/source-preview";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import type { KnowledgeItem, RecallKnowledgeItem } from "@/lib/types";
+import { FileText } from "lucide-react";
+
+export function itemSourceName(item: KnowledgeItem | RecallKnowledgeItem) {
+  if (item.source.filename !== undefined) return item.source.kind.toUpperCase();
+  if (item.sourcePreview?.websiteName) return item.sourcePreview.websiteName;
+  try { return new URL(item.source.submittedUrl).hostname.replace(/^www\./, ""); } catch { return "Saved link"; }
+}
 
 export function ImageTitleCard({ item, title, onOpen, onTrash, children }: {
   item: KnowledgeItem | RecallKnowledgeItem;
@@ -12,24 +21,18 @@ export function ImageTitleCard({ item, title, onOpen, onTrash, children }: {
   onTrash?: (id: number, title: string) => void;
   children?: ReactNode;
 }) {
-  return <Card className="group/card relative mb-6 gap-2 overflow-visible rounded-none bg-transparent py-0 shadow-none ring-0 dark:ring-0" onClick={event => {
-    if (event.target instanceof Element && !event.target.closest('a, button, input, textarea, select, [role="button"], [role="menuitem"]')) onOpen?.(item.id);
-  }}>
-    {onOpen && <Button variant="ghost" className="absolute inset-0 z-10 size-full cursor-pointer rounded-xl hover:bg-transparent active:translate-y-0 dark:hover:bg-transparent" aria-label={`View ${title}`} onClick={() => onOpen(item.id)} />}
-    <div className="relative overflow-hidden rounded-xl">
-      <div className="bg-muted [&>img]:aspect-[4/3] [&>img]:object-contain [&>div]:aspect-[4/3]">
-        {item.source.filename !== undefined && !item.sourcePreview?.previewImageUrl
-          ? <OriginalFilePlaceholder sourceKind={item.source.kind} />
-          : <SourcePreviewMedia preview={item.sourcePreview} />}
-      </div>
-      <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-black/65 opacity-0 transition-opacity duration-200 group-hover/card:opacity-100 group-focus-within/card:opacity-100 group-has-[[aria-expanded=true]]/card:opacity-100 motion-reduce:transition-none" />
-      {children && <div className="pointer-events-none absolute inset-0 z-20 flex flex-col justify-end p-4 pt-16 text-white opacity-0 transition-opacity duration-200 group-hover/card:opacity-100 group-focus-within/card:opacity-100 group-has-[[aria-expanded=true]]/card:opacity-100 motion-reduce:transition-none">
-        <div className="pointer-events-auto min-h-0 space-y-3 overflow-hidden text-sm [--muted-foreground:var(--color-white)] [&_a]:text-white [&_button]:border-white/40 [&_button]:bg-black/50 [&_button]:text-white [&_button:hover]:bg-black/70">
-          {children}
-        </div>
-      </div>}
+  const file = item.source.filename !== undefined;
+  const [failedImage, setFailedImage] = useState<string | null>(null);
+  const image = !file && Boolean(item.sourcePreview?.previewImageUrl) && item.sourcePreview?.previewImagePresentation !== "icon" && failedImage !== item.sourcePreview?.previewImageUrl;
+  return <Card data-treatment={file ? "document" : image ? "image" : "text"} className="vault-card group/card relative gap-0 overflow-hidden py-0 shadow-none ring-0 dark:ring-0">
+    {onOpen && <Button variant="ghost" className="card-open absolute inset-0 z-10 size-full cursor-pointer hover:bg-transparent active:translate-y-0 dark:hover:bg-transparent" aria-label={`View ${title}`} onClick={() => onOpen(item.id)} />}
+    {image && <div className="vault-card-media overflow-hidden"><div className="vault-card-image"><SourcePreviewMedia preview={item.sourcePreview} onUnavailable={() => setFailedImage(item.sourcePreview?.previewImageUrl ?? null)} /></div></div>}
+    <div className="card-caption">
+      {file && <p className="document-format"><FileText aria-hidden="true" className="size-4" />{item.source.kind.toUpperCase()}{formatByteSize(item.source.byteSize) && <span>{formatByteSize(item.source.byteSize)}</span>}</p>}
+      <h3 className="card-title">{title}</h3>
+      {!file && <p className="card-source">{itemSourceName(item)}</p>}
+      {children}
     </div>
-    {onTrash && <div className="pointer-events-auto absolute top-3 right-3 z-20"><ItemQuickActions item={item} title={title} onTrash={onTrash} /></div>}
-    <h3 className="break-words px-0.5 text-base leading-snug font-medium">{title}</h3>
+    {onTrash && <div className="card-actions absolute right-2 top-2 z-20"><ItemQuickActions item={item} title={title} onTrash={onTrash} /></div>}
   </Card>;
 }

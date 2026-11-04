@@ -1,13 +1,17 @@
 import { ItemNotesEditor } from "@/components/item-notes-editor";
-import { ItemTitleEditor } from "@/components/item-title-editor";
 import { useState } from "react";
 import { PdfExtractionCoverage } from "@/components/pdf-extraction-coverage";
 import { ItemTagsEditor } from "@/components/item-tags-editor";
 import { Button } from "@/components/ui/button";
-import { OriginalFilePlaceholder, SourcePreviewFacts, SourcePreviewMedia, formatByteSize } from "@/components/source-preview";
+import { SourcePreviewFacts, SourcePreviewMedia, formatByteSize } from "@/components/source-preview";
 import { isItemProcessing, itemHasLimitations, knowledgeItemTitle } from "@/components/knowledge-item-card";
 import { API_URL } from "@/lib/api";
 import type { KnowledgeItem } from "@/lib/types";
+import { ChevronDown, ExternalLink, Download, Trash2 } from "lucide-react";
+import { OutlinedPanel } from "@/components/outlined-panel";
+import { ItemStatusBadge } from "@/components/card-hover-summary";
+import { ProcessingIndicator } from "@/components/processing-indicator";
+import { knowledgeItemCardStatus } from "@/lib/knowledge-item-status";
 
 export type KnowledgeItemActions = {
   onRefresh: (id: number) => void;
@@ -25,6 +29,11 @@ export type KnowledgeItemActions = {
 export function KnowledgeItemDetails({ knowledgeItem: item, ...actions }: { knowledgeItem: KnowledgeItem } & KnowledgeItemActions) {
   const limited = itemHasLimitations(item);
   const [expanded, setExpanded] = useState(limited);
+  const [previouslyLimited, setPreviouslyLimited] = useState(limited);
+  if (previouslyLimited !== limited) {
+    setPreviouslyLimited(limited);
+    if (limited) setExpanded(true);
+  }
   const { source } = item;
   const file = source.filename !== undefined;
   const canProcess = !file || source.kind === "pdf";
@@ -42,26 +51,40 @@ export function KnowledgeItemDetails({ knowledgeItem: item, ...actions }: { know
   const summaryCoverage = provenance?.extractionCoverage ?? item.extractionCoverage;
   const title = knowledgeItemTitle(item);
   const openUrl = file ? source.originalFileActions?.open && `${API_URL}${source.originalFileActions.open}` : source.submittedUrl;
-  return <div className="space-y-6">
-    {file ? <OriginalFilePlaceholder sourceKind={source.kind} /> : <SourcePreviewMedia preview={item.sourcePreview} />}
-    <div className="flex flex-wrap gap-2">
-      {openUrl && <Button variant="outline" render={<a href={openUrl} target="_blank" rel="noopener noreferrer" />} nativeButton={false}>Open original</Button>}
-      {source.originalFileActions && <Button variant="outline" aria-label={`Download original file: ${title}`} render={<a href={`${API_URL}${source.originalFileActions.download}`} target="_blank" rel="noopener noreferrer" />} nativeButton={false}>Download</Button>}
+  return <div className="item-details">
+    <aside className="item-source-column">
+      {!file && item.sourcePreview?.previewImageUrl && <div className="detail-source-image"><SourcePreviewMedia preview={item.sourcePreview} /></div>}
+      {file && <div className="document-preview"><p className="document-format">{source.kind.toUpperCase()} DOCUMENT</p><p className="document-filename">{source.filename}</p><p className="text-xs text-muted-foreground">{formatByteSize(source.byteSize)}</p></div>}
+      <div className="item-source-strip">
+      <div className="min-w-0 flex-1 space-y-2">
+        <ItemStatusBadge expanded status={item.lifecycleState === "pending-permanent-deletion" ? item.deletion?.status === "failed" ? "Deletion failed" : "Deleting" : knowledgeItemCardStatus(item).label} />
+        <p className="truncate text-sm text-muted-foreground">{file ? source.filename : item.sourcePreview?.websiteName ?? source.submittedUrl}</p>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {openUrl && <Button render={<a href={openUrl} target="_blank" rel="noopener noreferrer" />} nativeButton={false}>Open original<ExternalLink aria-hidden="true" /></Button>}
+        {source.originalFileActions && <Button variant="outline" aria-label={`Download original file: ${title}`} render={<a href={`${API_URL}${source.originalFileActions.download}`} target="_blank" rel="noopener noreferrer" />} nativeButton={false}><Download aria-hidden="true" />Download</Button>}
+      </div>
     </div>
-    {item.lifecycleState === "active" && <ItemTitleEditor item={item} />}
-    <section aria-label={summaryLabel} className="space-y-2">
-      <h3 className="font-medium">{summaryLabel}</h3>
-      <p className="text-sm text-muted-foreground">{item.recognitionSummary ?? item.sourcePreview?.description ?? (processing ? "Your save is safe. A preview is being prepared." : "No text preview is available yet.")}</p>
+    </aside>
+    <div className="item-reading-column">
+    {processing && <ProcessingIndicator className="item-processing" label={item.availability === "ready" ? "Updating in the background. Saved content is still searchable." : "Safely saved. Preparing for search."} />}
+    <OutlinedPanel title={summaryLabel} aria-label={summaryLabel} className="detail-summary">
+      <p className="summary-copy">{item.recognitionSummary ?? item.sourcePreview?.description ?? (processing ? "Your save is safe. A preview is being prepared." : "No text preview is available yet.")}</p>
       {item.recognitionSummary && <p className="text-xs text-muted-foreground">{tldr ? "Generated from available source text." : "Generated description; a verified summary of the current content is not available yet."}</p>}
       {item.recognitionSummary && provenance && !provenance.isCurrent && <p className="text-sm text-muted-foreground">This preview describes an earlier saved version. The latest content is still searchable.</p>}
       {item.evidenceCoverage === "metadata-only" && <p className="text-sm text-muted-foreground">Only the website’s description was available. This preview does not describe the full page content.</p>}
       {summaryCoverage && <p className="text-sm text-muted-foreground">{summaryLabel} uses available PDF text. It may omit unread pages and does not interpret diagrams or charts. See Details for coverage.</p>}
       {provenance && !provenance.isCurrent && provenance.extractionCoverage && <PdfExtractionCoverage coverage={provenance.extractionCoverage} />}
-    </section>
-    <ItemTagsEditor item={item} />
-    <ItemNotesEditor item={item} />
-    <details open={expanded} onToggle={event => setExpanded(event.currentTarget.open)} className="space-y-3 border-t pt-4">
-      <summary className="cursor-pointer font-medium">Details</summary>
+    </OutlinedPanel>
+    <div className="detail-workspace">
+      <div className="detail-notes"><ItemNotesEditor item={item} /></div>
+      <div className="detail-organization">
+        <ItemTagsEditor item={item} />
+      </div>
+    </div>
+    <details open={expanded} onToggle={event => setExpanded(event.currentTarget.open)} className="detail-metadata">
+      <summary className="section-label flex cursor-pointer items-center gap-2 font-semibold">Details<ChevronDown aria-hidden="true" className="size-3.5" /></summary>
+      <div className="space-y-3 pt-4">
       <p className="text-sm text-muted-foreground">Saved {new Date(item.createdAt).toLocaleString()}</p>
       {file ? <p className="break-words text-sm text-muted-foreground">{source.filename} · {source.mediaType}{formatByteSize(source.byteSize) && ` · ${formatByteSize(source.byteSize)}`}</p> : <SourcePreviewFacts preview={item.sourcePreview} submittedUrl={source.submittedUrl} />}
       <PdfExtractionCoverage coverage={item.extractionCoverage} />
@@ -79,12 +102,17 @@ export function KnowledgeItemDetails({ knowledgeItem: item, ...actions }: { know
         {failed ? <Button variant="outline" disabled={actions.isRetrying} onClick={() => actions.onRetry(item.id)}>{actions.isRetrying ? "Retrying…" : "Retry processing"}</Button> :
           (item.availability === "ready" || (file && source.kind === "pdf" && item.availability === "unsupported")) && <Button variant="outline" disabled={actions.isRefreshing || processing} onClick={() => actions.onRefresh(item.id)}>{actions.isRefreshing ? "Starting…" : item.availability === "unsupported" ? "Process PDF" : "Refresh"}</Button>}
       </div>}
+      </div>
     </details>
-    <div className="flex flex-wrap gap-2 border-t pt-4">
-      {item.lifecycleState === "active" ? <Button variant="ghost" disabled={actions.isTrashing} onClick={() => actions.onTrash(item.id)}>Move to Trash</Button> : item.lifecycleState === "trashed" ? <>
+    <div className="detail-footer">
+
+      <div className="flex flex-wrap gap-2">
+      {item.lifecycleState === "active" ? <Button variant="ghost" className="text-muted-foreground hover:text-destructive" disabled={actions.isTrashing} onClick={() => actions.onTrash(item.id)}><Trash2 aria-hidden="true" />{actions.isTrashing ? "Moving…" : "Move to Trash"}</Button> : item.lifecycleState === "trashed" ? <>
         <Button variant="outline" disabled={actions.isRestoring} onClick={() => actions.onRestore(item.id)}>Restore</Button>
         <Button variant="destructive" disabled={actions.isPermanentlyDeleting} onClick={() => actions.onPermanentlyDelete(item)}>Delete permanently</Button>
       </> : item.deletion?.status === "failed" && <Button variant="outline" disabled={actions.isPermanentlyDeleting} onClick={() => actions.onPermanentlyDelete(item)}>Retry deletion</Button>}
+      </div>
+    </div>
     </div>
   </div>;
 }

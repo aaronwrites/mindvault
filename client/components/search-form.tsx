@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent } from "react";
-import { Search, X } from "lucide-react";
+import { Search, X, LoaderCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -28,28 +28,27 @@ export function SearchForm({ query, onQueryChange, onSearch, onClear, isSearchin
   }
 
   return (
-    <form onSubmit={handleSubmit} role="search" className="space-y-1.5" aria-busy={isSearching}>
+    <form onSubmit={handleSubmit} role="search" className="collection-search" aria-busy={isSearching}>
       <div className="flex gap-2">
         <div className="relative min-w-0 flex-1">
-          <Input
+          <Search aria-hidden="true" className="pointer-events-none absolute top-5 left-4 z-10 size-4 text-muted-foreground" /><Input
             aria-label="Search your saves"
             value={query}
             onChange={(event) => { onQueryChange(event.target.value); if (!event.target.value.trim()) onClear(); }}
-            placeholder="Search by meaning"
-            className="h-11 pr-11" maxLength={500}
+            placeholder="What do you remember?"
+            className="h-14 pl-12 pr-12" maxLength={500}
           />
           {query && (
-            <Button type="button" variant="ghost" size="icon" className="absolute right-0 top-0 size-11" onClick={clearSearch} aria-label="Clear search">
+            <Button type="button" variant="ghost" size="icon" className="absolute right-1 top-1.5 size-11" onClick={clearSearch} aria-label="Clear search">
               <X />
             </Button>
           )}
         </div>
-        <Button type="submit" className="h-11 w-11 shrink-0 sm:w-32" disabled={!query.trim()}>
-          <Search />
+        <Button type="submit" className="h-14 w-14 shrink-0 sm:w-28" disabled={!query.trim()}>
+          {isSearching ? <LoaderCircle aria-hidden="true" className="animate-spin motion-reduce:animate-none" /> : <Search aria-hidden="true" />}
           <span className="sr-only sm:not-sr-only">{isSearching ? "Searching…" : "Search"}</span>
         </Button>
       </div>
-      <p className="text-sm text-muted-foreground">Try “container orchestration”.</p>
     </form>
   );
 }

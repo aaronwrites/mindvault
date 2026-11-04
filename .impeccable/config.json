@@ -1,0 +1,21 @@
+{
+  "buildPath": "code",
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "bounce-easing",
+        "value": "status-bounce",
+        "createdAt": "2026-11-03T12:21:33.025Z",
+        "reason": "User confirmed: requested a bouncy animation when status dots expand."
+      },
+      {
+        "rule": "bounce-easing",
+        "value": "cubic-bezier(.34, 1.56, .64, 1)",
+        "createdAt": "2026-11-03T12:21:33.111Z",
+        "reason": "User confirmed: requested a bouncy animation when status dots expand."
+      }
+    ]
+  }
+}

@@ -1,33 +1,34 @@
-import { FileText, Globe2 } from "lucide-react";
+"use client";
+
+import { FileText } from "lucide-react";
+import { useState } from "react";
 import type { KnowledgeItem } from "@/lib/types";
 
 type SourcePreview = KnowledgeItem["sourcePreview"];
 
-export function SourcePreviewMedia({ preview }: { preview: SourcePreview }) {
-  if (preview?.previewImageUrl) {
+export function SourcePreviewMedia({ preview, onUnavailable }: { preview: SourcePreview; onUnavailable?: () => void }) {
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
+  if (preview?.previewImageUrl && failedUrl !== preview.previewImageUrl) {
+    const failed = () => { setFailedUrl(preview.previewImageUrl); onUnavailable?.(); };
     // Retained API media is already bounded and validated; Next's optimizer cannot fetch this private API endpoint.
     if (preview.previewImagePresentation === "icon") {
       return (
         <div className="flex aspect-[16/7] items-center justify-center bg-muted">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={preview.previewImageUrl} alt={preview.previewImageAlt ?? "Website icon"} className="size-16 max-h-16 max-w-16 object-contain [image-rendering:auto]" />
+          <img src={preview.previewImageUrl} onError={failed} alt={preview.previewImageAlt ?? "Website icon"} className="size-16 max-h-16 max-w-16 object-contain" />
         </div>
       );
     }
     // eslint-disable-next-line @next/next/no-img-element
-    return <img src={preview.previewImageUrl} alt={preview.previewImageAlt ?? ""} className="aspect-[16/7] w-full object-cover" />;
+    return <img src={preview.previewImageUrl} onError={failed} alt={preview.previewImageAlt ?? ""} className="source-image h-auto w-full" />;
   }
 
-  return (
-    <div role="img" aria-label="Webpage preview placeholder" className="flex aspect-[16/7] items-center justify-center bg-muted text-muted-foreground">
-      <Globe2 aria-hidden="true" className="size-10" />
-    </div>
-  );
+  return null;
 }
 
 export function OriginalFilePlaceholder({ sourceKind }: { sourceKind: string }) {
   const label = `${sourceKindLabel(sourceKind)} file placeholder`;
-  return <div role="img" aria-label={label} className="flex aspect-[16/7] items-center justify-center bg-muted text-muted-foreground"><FileText aria-hidden="true" className="size-10" /></div>;
+  return <div role="img" aria-label={label} className="source-placeholder flex aspect-[16/7] items-center justify-center"><FileText aria-hidden="true" className="size-10" /><span aria-hidden="true">{sourceKindLabel(sourceKind)} DOCUMENT</span></div>;
 }
 
 export function SourcePreviewFacts({ preview, submittedUrl }: { preview: SourcePreview; submittedUrl: string }) {

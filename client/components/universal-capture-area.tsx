@@ -1,7 +1,8 @@
 "use client";
 
 import { type FormEvent, type ReactNode, useEffect, useEffectEvent, useRef, useState } from "react";
-import { Plus } from "lucide-react";
+import { Plus, ArrowUpRight } from "lucide-react";
+import { ProcessingIndicator } from "@/components/processing-indicator";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -23,7 +24,7 @@ function isEditable(target: EventTarget | null) {
 }
 
 export function UniversalCaptureArea({ children, onSaved, onDuplicate, disabled = false }: {
-  children: ReactNode;
+  children: ReactNode | ((captureControls: ReactNode) => ReactNode);
   onSaved: (item: KnowledgeItem) => void | Promise<void>;
   onDuplicate: (item: KnowledgeItem) => void | Promise<void>;
   disabled?: boolean;
@@ -178,20 +179,19 @@ export function UniversalCaptureArea({ children, onSaved, onDuplicate, disabled 
     return () => { for (const name of events) document.removeEventListener(name, handle); };
   }, []);
 
-  return <div className={disabled ? "relative min-h-64" : "relative min-h-64 rounded-xl border border-dashed border-border p-3 sm:p-4"}>
-    <Dialog open={open} onOpenChange={setOpen}>
-      <div className="mb-3 flex flex-wrap items-center justify-end gap-x-3 gap-y-2">
-        {!disabled && <p className="mr-auto text-sm text-muted-foreground">Paste a link or drop files</p>}
-        <DialogTrigger render={<Button variant="outline" className="h-11 min-w-11" />}><Plus aria-hidden="true" />Add</DialogTrigger>
+  const captureControls = <Dialog open={open} onOpenChange={setOpen}>
+      <div className="capture-controls">
+        {!disabled && <p className="capture-hint">Paste a link or drop files</p>}
+        <DialogTrigger render={<Button className="h-11 px-4" />}><Plus aria-hidden="true" />Add</DialogTrigger>
       </div>
-      <DialogContent>
-        <DialogHeader><DialogTitle>Add to your vault</DialogTitle><DialogDescription>Save a link or choose files.{!disabled && " You can also paste a link or drop files onto the board."}</DialogDescription></DialogHeader>
-        <form onSubmit={saveLink} className="space-y-3">
-          <Label htmlFor="save-link">Link</Label>
+      <DialogContent className="capture-dialog">
+        <DialogHeader className="pr-12"><DialogTitle>Add to your vault</DialogTitle><DialogDescription>Save a link or choose files.{!disabled && " You can also paste a link or drop files onto the board."}</DialogDescription></DialogHeader>
+        <form onSubmit={saveLink} className="capture-link-section space-y-3">
+          <Label htmlFor="save-link" className="section-label">Link</Label>
           <Input id="save-link" type="url" required value={url} onChange={event => setUrl(event.target.value)} placeholder="https://example.com/article" />
-          <Button type="submit">Save link</Button>
+          <Button type="submit">Save link<ArrowUpRight aria-hidden="true" /></Button>
         </form>
-        <div className="space-y-3"><Label htmlFor="save-files">Choose files</Label>
+        <div className="capture-file-section space-y-3"><Label htmlFor="save-files" className="section-label">Choose files</Label>
           <p id="file-support" className="text-sm text-muted-foreground">Text PDFs and scanned PDFs with printed English text can be searched. Other files are retained for opening or downloading; understanding their contents is not available yet. Executables and archives aren’t accepted.</p>
           <Input id="save-files" type="file" multiple aria-describedby="file-support" onChange={event => {
           const files = Array.from(event.target.files ?? []);
@@ -200,22 +200,24 @@ export function UniversalCaptureArea({ children, onSaved, onDuplicate, disabled 
         }} /></div>
         {notice && <p role="alert">{notice}</p>}
       </DialogContent>
-    </Dialog>
+    </Dialog>;
+  return <div className="capture-workspace">
+    {typeof children === "function" ? children(captureControls) : captureControls}
     <div aria-live="polite" aria-atomic="false" className={entries.length || (!open && notice) ? "my-3 space-y-2 text-sm" : "space-y-2 text-sm"}>
       {!open && notice && <p role="alert">{notice}</p>}
       {entries.map(entry => {
         const file = typeof entry.source !== "string";
         const label = typeof entry.source === "string" ? entry.source : entry.source.name;
-        return <div key={entry.id} className="flex flex-wrap items-center gap-2" role={entry.status === "failed" ? "alert" : "status"}>
-          <span className="break-all">{entry.status === "duplicate" ? <><span>Already saved</span>{` — ${label}`}</> : entry.status === "saving" ? `${file ? "Uploading" : "Saving link"} ${label}…`
+        return <div key={entry.id} data-state={entry.status} className="capture-entry flex flex-wrap items-center gap-2" role={entry.status === "saving" ? undefined : entry.status === "failed" ? "alert" : "status"}>
+          {entry.status === "saving" ? <ProcessingIndicator kind="capture" label={`${file ? "Uploading" : "Saving link"} ${label}…`} className="min-w-0 flex-1 break-all" /> : <span className="min-w-0 flex-1 break-all">{entry.status === "duplicate" ? <><span>Already saved</span>{` — ${label}`}</>
             : entry.status === "failed" ? `Couldn’t save ${label}. ${entry.guidance ?? `Check your connection and try again${file ? ", or choose the file again with Add" : ", or check that the link is public"}.`}`
-            : `Saved — ${label}`}</span>
+            : `Saved — ${label}`}</span>}
           {entry.status === "failed" && <Button size="sm" variant="outline" aria-label={`Retry ${label}`} onClick={() => void save(entry)}>Retry</Button>}
           {entry.status !== "saving" && <Button size="sm" variant="ghost" aria-label={`Dismiss save message for ${label}`} onClick={() => setEntries(current => current.filter(saved => saved.id !== entry.id))}>Dismiss</Button>}
         </div>;
       })}
     </div>
-    {children}
+    {typeof children !== "function" && children}
     {dragging && !disabled && !open && <div role="status" className="pointer-events-none fixed inset-4 z-40 flex items-center justify-center rounded-2xl border-2 border-dashed border-primary bg-background/95 text-lg font-medium">Drop files to save</div>}
   </div>;
 }
