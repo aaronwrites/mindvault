@@ -9,5 +9,8 @@ TASKS.md
 
 .scratch
 
+.impeccable
+images/
+
 # Local database safety backups
 .backups/
